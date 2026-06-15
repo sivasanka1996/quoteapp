@@ -26,6 +26,43 @@
 }
 .home-btn-add:hover { background: #333; }
 
+/* APK download banner */
+.home-apk-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  background: #f0f9f4;
+  border: 1.5px solid #9bd3b3;
+  border-radius: 14px;
+  text-decoration: none;
+  color: #1a1a1a;
+}
+.home-apk-banner:hover {
+  background: #e4f5ec;
+}
+.home-apk-icon {
+  font-size: 1.6rem;
+  flex-shrink: 0;
+}
+.home-apk-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #0a6b3c;
+}
+.home-apk-sub {
+  font-size: 0.78rem;
+  color: #888;
+  margin-top: 2px;
+}
+.home-apk-arrow {
+  margin-left: auto;
+  font-size: 1.2rem;
+  color: #0a6b3c;
+  font-weight: 700;
+}
+
 .home-search-wrap {
   margin-bottom: 16px;
 }

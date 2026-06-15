@@ -40,6 +40,16 @@ export function HomeScreen({ onSelectCustomer }: Props) {
         </button>
       </header>
 
+      {/* Android app download banner */}
+      <a className="home-apk-banner" href="/quoteapp.apk" download="QuotationApp.apk">
+        <span className="home-apk-icon">📲</span>
+        <div>
+          <div className="home-apk-title">Download Android App</div>
+          <div className="home-apk-sub">Install directly on your phone</div>
+        </div>
+        <span className="home-apk-arrow">↓</span>
+      </a>
+
       <div className="home-search-wrap">
         <input
           className="home-search"
