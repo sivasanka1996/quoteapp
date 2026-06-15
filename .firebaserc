@@ -1,5 +1,7 @@
 {
   "projects": {
-    "default": "YOUR_PROJECT_ID"
-  }
+    "default": "quoteapp-3f48e"
+  },
+  "targets": {},
+  "etags": {}
 }
