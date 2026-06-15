@@ -85,7 +85,7 @@ jobs:
       - name: Build APK
         run: |
           cd twa
-          echo "n" | bubblewrap build --skipPwaValidation
+          printf "n\n${JAVA_HOME}\n" | bubblewrap build --skipPwaValidation
         env:
           JAVA_HOME: ${{ env.JAVA_HOME }}
 
