@@ -27,7 +27,6 @@ jobs:
           mkdir -p twa-project/app/src/main/res/values
           mkdir -p twa-project/app/src/main/res/xml
           mkdir -p twa-project/app/src/main/java/com/quoteapp/app
-          mkdir -p twa-project/gradle/wrapper
 
       - name: Write build files
         run: |
@@ -124,24 +123,16 @@ jobs:
           </resources>
           EOF
 
-          # gradle wrapper properties
-          cat > twa-project/gradle/wrapper/gradle-wrapper.properties << 'EOF'
-          distributionBase=GRADLE_USER_HOME
-          distributionPath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-8.4-bin.zip
-          zipStoreBase=GRADLE_USER_HOME
-          zipStorePath=wrapper/dists
-          EOF
-
-          # download gradle wrapper
-          cd twa-project
-          wget -q https://raw.githubusercontent.com/gradle/gradle/master/gradlew -O gradlew
-          chmod +x gradlew
+      - name: Install Gradle
+        run: |
+          wget -q https://services.gradle.org/distributions/gradle-8.4-bin.zip -O gradle.zip
+          unzip -q gradle.zip -d /opt/gradle
+          echo "/opt/gradle/gradle-8.4/bin" >> $GITHUB_PATH
 
       - name: Build APK
         run: |
           cd twa-project
-          ./gradlew assembleRelease --no-daemon
+          gradle assembleRelease --no-daemon
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
 
