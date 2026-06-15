@@ -1,7 +1,7 @@
 name: Build Android APK
 
 on:
-  workflow_dispatch: # run manually from GitHub Actions tab
+  workflow_dispatch:
 
 jobs:
   build:
@@ -15,14 +15,10 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install Bubblewrap
-        run: npm install -g @bubblewrap/cli
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android build tools
-        run: sdkmanager "build-tools;34.0.0" "platforms;android-34"
+      - name: Install Bubblewrap and expect
+        run: |
+          npm install -g @bubblewrap/cli
+          sudo apt-get install -y expect
 
       - name: Write TWA manifest
         run: |
@@ -76,15 +72,19 @@ jobs:
             -keypass android \
             -dname "CN=QuoteApp, OU=QuoteApp, O=QuoteApp, L=Hyderabad, S=Telangana, C=IN"
 
-      - name: Build APK
+      - name: Build APK with expect
         run: |
           cd twa
-          # Y = let Bubblewrap install JDK
-          # n = don't install Android SDK (we already have it)
-          # $ANDROID_SDK_ROOT = path to existing SDK
-          printf "Y\nn\n${ANDROID_SDK_ROOT}\n\n\n\n\n\n" | bubblewrap build --skipPwaValidation
-        env:
-          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+          expect -c '
+            set timeout 600
+            spawn bubblewrap build --skipPwaValidation
+            expect {
+              "install the JDK" { send "Y\r"; exp_continue }
+              "install the Android SDK" { send "Y\r"; exp_continue }
+              "keystore" { send "\r"; exp_continue }
+              eof
+            }
+          '
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
