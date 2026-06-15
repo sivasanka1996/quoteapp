@@ -11,8 +11,10 @@ Built by Siva for his dad. Non-technical end user — mobile-first, big touch ta
 ## Live URLs
 
 - **App:** https://quoteapp-3f48e.web.app
-- **GitHub:** https://github.com/sivasanka1996/quoteapp
+- **GitHub:** https://github.com/sivasanka1996/quoteapp (public repo)
 - **Firebase project:** quoteapp-3f48e
+- **Android APK:** https://github.com/sivasanka1996/quoteapp/releases/download/v1.0/app-debug.apk
+- **GitHub Release:** https://github.com/sivasanka1996/quoteapp/releases/tag/v1.0
 
 ---
 
@@ -23,6 +25,7 @@ Built by Siva for his dad. Non-technical end user — mobile-first, big touch ta
 - **Hosting:** Firebase Hosting (HTTPS, required for camera/mic)
 - **CI/CD:** GitHub Actions → auto-deploys to Firebase on every push to `main`
 - **PWA:** vite-plugin-pwa, installable on Android/iOS home screen
+- **Android APK:** Built via GitHub Actions (Build Android APK workflow) using Gradle + TWA
 
 ---
 
@@ -44,7 +47,9 @@ Push to `main` → GitHub Actions runs tests → builds → deploys to Firebase 
 Secrets required in GitHub repo settings:
 - `FIREBASE_TOKEN` — from `firebase login:ci`
 
-Manual APK build: Actions → **Build Android APK** → Run workflow → download artifact.
+Manual APK build: Actions → **Build Android APK** → Run workflow → download artifact → attach to GitHub Release.
+
+**Note:** Firebase Spark plan blocks executable files — APK cannot be hosted on Firebase Hosting. It is hosted on GitHub Releases instead. The home screen banner links directly to the release asset.
 
 ---
 
@@ -62,19 +67,18 @@ HomeScreen (search/add customers)
 ```
 src/
   AppRouter.tsx          — view manager (home/customer/quote screens)
-  HomeScreen.tsx/css     — customer search + add customer
+  HomeScreen.tsx/css     — customer search + add customer + APK download banner
   CustomerScreen.tsx/css — quote history per customer
   QuoteEditor.tsx        — main quote editing UI (cards, blanket discount, profit summary)
   CustomerView.tsx/css   — customer-facing PDF view with column toggles
   CompanySettings.tsx    — company name/address/phone/GSTIN/logo (localStorage)
-  QuoteDrawer.tsx        — legacy local quote save/load (kept but Firestore is primary)
   App.tsx                — re-exports AppRouter
   firebase.ts            — Firebase init + Firestore db export
   types.ts               — shared TypeScript types (UILine, Customer, QuoteDoc)
   useCustomers.ts        — Firestore CRUD for customers collection
   useQuotes.ts           — Firestore CRUD for quotes collection (filtered by customerId)
   useCompanySettings.ts  — company details in localStorage
-  useQuoteStorage.ts     — legacy localStorage quote storage
+  useQuoteStorage.ts     — legacy localStorage quote storage (kept, not primary)
   calc/engine.ts         — PURE calc functions (no UI, no network)
   calc/engine.test.ts    — 21 tests verifying fixture numbers
   format.ts              — Indian number formatting (lakh/crore)
@@ -150,12 +154,13 @@ Discount fields are plain numbers (e.g. `"64.7"`, `"2"`). The engine builds `"64
 - Company header (name, address, phone, GSTIN, logo) on customer PDF
 - Column toggles on customer PDF (show/hide Qty, List price, Discount, Rate, Amount)
 - Everything is free — Spark plan Firebase, no Blaze
+- APK hosted on GitHub Releases (not Firebase — Spark blocks executables)
 
 ---
 
 ## Firestore rules
 
-Currently open (test mode — expires 2026-07-15):
+Currently open (test mode):
 ```
 allow read, write: if true;
 ```
@@ -165,38 +170,54 @@ File: `firestore.rules` — deployed automatically with `firebase deploy`.
 
 ---
 
-## What's built (Phase 1 status)
+## Current build status — WHAT IS DONE
 
 - [x] Calc engine — 26 tests passing
-- [x] Quote editor — card UI, blanket discount, profit summary
-- [x] Customer PDF — column toggles, company header, print to PDF
-- [x] Firebase Hosting + GitHub Actions auto-deploy
-- [x] PWA — installable on phone
-- [x] Customer management — home screen, customer quotes, Firestore
-- [x] Company settings — localStorage, logo upload
-- [x] Android APK — built via GitHub Actions (Build Android APK workflow)
-- [ ] Image reading — needs Gemini API key + Cloudflare Worker/Netlify function
-- [ ] Voice — Web Speech API
-- [ ] Auth + security rules — before handover to Dad
+- [x] Quote editor — card UI, blanket discount (apply to all / selected), profit summary
+- [x] Discount inputs — plain number fields (Discount % + Extra disc %), no % symbol to type
+- [x] Customer PDF — column toggles, company header (logo/name/address/GSTIN), print to PDF
+- [x] Firebase Hosting + GitHub Actions auto-deploy on push to main
+- [x] PWA — installable on phone (manifest, icons, service worker)
+- [x] Customer management — home screen search/add, customer quote history, Firestore sync
+- [x] Company settings — name, address, phone, GSTIN, logo upload, saved to localStorage
+- [x] Save & persist — quotes saved to Firestore per customer, not localStorage
+- [x] Android APK — built via GitHub Actions using Gradle/TWA, hosted on GitHub Releases v1.0
+- [x] APK download banner on home screen — green banner linking to GitHub Release
 
 ---
 
-## What's next
+## WHAT TO BUILD NEXT (in order)
 
-**Step 4 — Image reading:**
-- Swappable reader module (one file, engine can change)
-- Gemini free tier behind a serverless function (Cloudflare Workers or Netlify — no card needed)
-- The key MUST NOT be in frontend — function holds it server-side
-- Frontend calls our function → function calls Gemini → returns structured item list
+### Step 4 — Image reading (next up)
+- Upload / camera capture of handwritten or printed item list
+- Send image to Gemini free tier via a serverless function
+- **The Gemini API key MUST NOT be in frontend code** — use Cloudflare Workers or Netlify Functions (free, no card needed) as a proxy
+- Build reader as a SWAPPABLE module (one file) so engine can change later
+- Handle Telugu and English handwriting
+- Return structured item list into the editable quote table
+- Graceful handling when reading is partial or fails (manual entry fallback)
 
-**Step 5 — Voice:**
-- Browser Web Speech API (free)
-- Always show "I heard: … — apply?" confirmation before changing any number
+**Setup needed before coding:**
+1. Get Gemini API key from Google AI Studio (free tier)
+2. Create Cloudflare Worker or Netlify Function as the proxy
+3. Store key as a runtime secret in the function — never in frontend
+
+### Step 5 — Voice
+- Mic button, browser Web Speech API (free), Telugu + English
+- ALWAYS show "I heard: … — apply?" confirmation before changing any number
 - Undo on last voice action
+- Supports adding items and editing fields
+
+### Before handover to Dad
+- Add Firebase Authentication (Google sign-in or phone OTP)
+- Lock Firestore rules to authenticated users only
+- Test on his actual phone/browser
+- Walk him through camera + mic permissions (one-time)
+- Confirm customer PDF hides cost/profit before he sends one
 
 ---
 
-## Firebase config (web SDK — safe to be in frontend)
+## Firebase config (web SDK — safe to be public)
 
 ```typescript
 const firebaseConfig = {
@@ -217,3 +238,13 @@ const firebaseConfig = {
 Cost-side rounding sequence is TUNABLE — confirm with Siva against a real quote from Dad.
 Customer (sell) side numbers match exactly with clean direct rates.
 Do not burn time forcing cost totals to the rupee until the rounding sequence is confirmed.
+
+---
+
+## APK build notes
+
+- Built with Gradle using TWA (Trusted Web Activity) — wraps the hosted web app
+- Android project files generated in CI, no Android project committed to repo
+- Uses `assembleDebug` — works for direct sideload install, not Play Store
+- To rebuild: Actions → Build Android APK → Run workflow → attach new APK to a new GitHub Release
+- Firebase Spark blocks hosting `.apk` files — always use GitHub Releases for APK distribution
