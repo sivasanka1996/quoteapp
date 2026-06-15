@@ -113,6 +113,12 @@ jobs:
           </resources>
           EOF
 
+          # gradle.properties
+          cat > twa-project/gradle.properties << 'EOF'
+          android.useAndroidX=true
+          android.enableJetifier=true
+          EOF
+
           # styles.xml
           cat > twa-project/app/src/main/res/values/styles.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
