@@ -22,6 +22,29 @@ header h1 {
   font-size: 1.6rem;
   margin: 0;
 }
+.header-left {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.quote-name-tag {
+  font-size: 0.85rem;
+  color: #666;
+  font-weight: 500;
+}
+.btn-quotes {
+  padding: 9px 14px;
+  border: 1.5px solid #ccc;
+  border-radius: 8px;
+  background: #fff;
+  color: #444;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.btn-quotes:hover {
+  background: #f5f5f5;
+}
 .header-right {
   display: flex;
   align-items: center;

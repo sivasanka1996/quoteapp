@@ -9,6 +9,8 @@ import { formatINR, formatPct } from "./format";
 import { CustomerView, type CustomerLine } from "./CustomerView";
 import { CompanySettingsPanel } from "./CompanySettings";
 import { useCompanySettings } from "./useCompanySettings";
+import { QuoteDrawer } from "./QuoteDrawer";
+import { useQuoteStorage } from "./useQuoteStorage";
 import "./App.css";
 
 // --- Editable line shape ---
@@ -140,7 +142,11 @@ function App() {
   const [blanket, setBlanket] = useState<Blanket>({ side: "cost", disc1: "", disc2: "" });
   const [showCustomer, setShowCustomer] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showQuotes, setShowQuotes] = useState(false);
+  const [quoteName, setQuoteName] = useState("");
   const { settings: company, update: updateCompany } = useCompanySettings();
+  const { quotes, save, remove, update: updateQuote } = useQuoteStorage();
+  const [currentQuoteId, setCurrentQuoteId] = useState<string | null>(null);
 
   const { results, totals } = useMemo(() => {
     const { lines: results, totals } = calcQuote(lines.map(toLineInput));
@@ -184,6 +190,23 @@ function App() {
   const allSelected = lines.length > 0 && selected.size === lines.length;
   const someSelected = selected.size > 0 && !allSelected;
 
+  function handleSave(name: string) {
+    if (currentQuoteId) {
+      updateQuote(currentQuoteId, name, lines);
+    } else {
+      const entry = save(name, lines);
+      setCurrentQuoteId(entry.id);
+    }
+    setQuoteName(name);
+  }
+
+  function handleLoad(quote: { id: string; name: string; lines: unknown }) {
+    setLines(quote.lines as typeof lines);
+    setCurrentQuoteId(quote.id);
+    setQuoteName(quote.name);
+    setSelected(new Set());
+  }
+
   // Build customer-view line data
   const customerLines: CustomerLine[] = lines.map((l, i) => {
     const listPrice = parseFloat(l.sellList) || null;
@@ -221,9 +244,15 @@ function App() {
   return (
     <div className="app">
       <header>
-        <h1>Quotation</h1>
+        <div className="header-left">
+          <h1>Quotation</h1>
+          {quoteName && <span className="quote-name-tag">{quoteName}</span>}
+        </div>
         <div className="header-right">
           <span className="view-tag">His View</span>
+          <button className="btn-quotes" onClick={() => setShowQuotes(true)}>
+            🗂 Quotes
+          </button>
           <button className="btn-settings" onClick={() => setShowSettings(true)}>
             ⚙ Company
           </button>
@@ -339,6 +368,17 @@ function App() {
           settings={company}
           onChange={updateCompany}
           onClose={() => setShowSettings(false)}
+        />
+      )}
+
+      {showQuotes && (
+        <QuoteDrawer
+          quotes={quotes}
+          currentName={quoteName}
+          onSave={handleSave}
+          onLoad={handleLoad}
+          onDelete={remove}
+          onClose={() => setShowQuotes(false)}
         />
       )}
     </div>

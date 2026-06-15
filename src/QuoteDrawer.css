@@ -1,0 +1,150 @@
+.qd-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.qd-panel {
+  background: #fff;
+  border-radius: 20px 20px 0 0;
+  width: 100%;
+  max-width: 600px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.qd-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid #eee;
+}
+.qd-header h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+.qd-close {
+  border: none;
+  background: none;
+  font-size: 1.1rem;
+  cursor: pointer;
+  color: #666;
+  padding: 4px 8px;
+}
+
+/* Save row */
+.qd-save-row {
+  display: flex;
+  gap: 10px;
+  padding: 14px 20px;
+  border-bottom: 1px solid #eee;
+}
+.qd-name-input {
+  flex: 1;
+  padding: 11px 12px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-family: inherit;
+}
+.qd-name-input:focus {
+  outline: none;
+  border-color: #1a1a1a;
+}
+.qd-btn-save {
+  padding: 11px 22px;
+  border: none;
+  border-radius: 8px;
+  background: #1a1a1a;
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.qd-btn-save:hover {
+  background: #333;
+}
+
+/* List */
+.qd-list {
+  overflow-y: auto;
+  flex: 1;
+  padding: 8px 0;
+}
+.qd-empty {
+  text-align: center;
+  color: #aaa;
+  padding: 32px;
+  font-size: 0.95rem;
+}
+.qd-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 20px;
+  border-bottom: 1px solid #f0f0f0;
+}
+.qd-item:last-child {
+  border-bottom: none;
+}
+.qd-item-info {
+  flex: 1;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.qd-item-info:hover .qd-item-name {
+  color: #0a6b3c;
+}
+.qd-item-name {
+  font-size: 1rem;
+  font-weight: 600;
+}
+.qd-item-date {
+  font-size: 0.78rem;
+  color: #999;
+}
+.qd-btn-del {
+  border: none;
+  background: none;
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 6px;
+  opacity: 0.5;
+}
+.qd-btn-del:hover {
+  opacity: 1;
+}
+.qd-confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: #c0392b;
+}
+.qd-btn-yes {
+  padding: 5px 12px;
+  border: none;
+  border-radius: 6px;
+  background: #c0392b;
+  color: #fff;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.qd-btn-no {
+  padding: 5px 12px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
