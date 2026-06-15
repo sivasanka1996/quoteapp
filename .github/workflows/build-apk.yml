@@ -87,11 +87,15 @@ jobs:
           '
 
       - name: Find APK
-        run: find twa -name "*.apk" 2>/dev/null || echo "No APK found"
+        run: |
+          echo "=== twa contents ==="
+          ls -la twa/ || echo "twa dir missing"
+          echo "=== searching for APKs ==="
+          find / -name "*.apk" 2>/dev/null || echo "No APK found anywhere"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: quoteapp-android
-          path: twa/**/*.apk
+          path: "**/*.apk"
           if-no-files-found: warn
