@@ -132,16 +132,13 @@ jobs:
       - name: Build APK
         run: |
           cd twa-project
-          gradle assembleRelease --no-daemon
+          gradle assembleDebug --no-daemon
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
-
-      - name: Find and upload APK
-        run: find twa-project -name "*.apk" | head -5
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: quoteapp-android
-          path: twa-project/app/build/outputs/apk/**/*.apk
+          path: twa-project/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
