@@ -10,92 +10,147 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Setup Java
+        uses: actions/setup-java@v4
         with:
-          node-version: 20
+          distribution: temurin
+          java-version: 17
 
-      - name: Install Bubblewrap and expect
-        run: |
-          npm install -g @bubblewrap/cli
-          sudo apt-get install -y expect
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
-      - name: Write TWA manifest
+      - name: Install Android build tools
+        run: sdkmanager "build-tools;34.0.0" "platforms;android-34"
+
+      - name: Create TWA Android project
         run: |
-          mkdir -p twa
-          cat > twa/twa-manifest.json << 'EOF'
-          {
-            "packageId": "com.quoteapp.app",
-            "host": "quoteapp-3f48e.web.app",
-            "name": "Quotation App",
-            "shortName": "Quotes",
-            "startUrl": "/",
-            "display": "standalone",
-            "themeColor": "#1a1a1a",
-            "backgroundColor": "#ffffff",
-            "enableNotifications": false,
-            "versions": {
-              "appVersionCode": 1,
-              "appVersionName": "1.0.0"
-            },
-            "signingKey": {
-              "path": "android.keystore",
-              "alias": "android"
-            },
-            "appVersionCode": 1,
-            "appVersionName": "1.0.0",
-            "shortcuts": [],
-            "generatorApp": "bubblewrap-cli",
-            "webManifestUrl": "https://quoteapp-3f48e.web.app/manifest.webmanifest",
-            "isChromeOSOnly": false,
-            "isMetaQuest": false,
-            "fullScopeUrl": "https://quoteapp-3f48e.web.app/",
-            "minSdkVersion": 19,
-            "orientation": "portrait",
-            "fingerprints": [],
-            "icons": [
-              { "src": "https://quoteapp-3f48e.web.app/pwa-512x512.png", "sizes": "512x512", "type": "image/png" }
-            ]
+          mkdir -p twa-project/app/src/main/res/values
+          mkdir -p twa-project/app/src/main/res/xml
+          mkdir -p twa-project/app/src/main/java/com/quoteapp/app
+          mkdir -p twa-project/gradle/wrapper
+
+      - name: Write build files
+        run: |
+          # settings.gradle
+          cat > twa-project/settings.gradle << 'EOF'
+          rootProject.name = "QuoteApp"
+          include ':app'
+          EOF
+
+          # root build.gradle
+          cat > twa-project/build.gradle << 'EOF'
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.2' }
+          }
+          allprojects { repositories { google(); mavenCentral() } }
+          EOF
+
+          # app/build.gradle
+          cat > twa-project/app/build.gradle << 'EOF'
+          plugins { id 'com.android.application' }
+          android {
+              namespace 'com.quoteapp.app'
+              compileSdk 34
+              defaultConfig {
+                  applicationId 'com.quoteapp.app'
+                  minSdk 19
+                  targetSdk 34
+                  versionCode 1
+                  versionName '1.0'
+              }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                      signingConfig signingConfigs.debug
+                  }
+              }
+          }
+          dependencies {
+              implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.5.0'
           }
           EOF
 
-      - name: Generate keystore
-        run: |
-          cd twa
-          keytool -genkeypair -v \
-            -keystore android.keystore \
-            -alias android \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -storepass android \
-            -keypass android \
-            -dname "CN=QuoteApp, OU=QuoteApp, O=QuoteApp, L=Hyderabad, S=Telangana, C=IN"
+          # AndroidManifest.xml
+          cat > twa-project/app/src/main/AndroidManifest.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application
+                  android:label="Quotation App"
+                  android:theme="@style/AppTheme"
+                  android:allowBackup="true">
+                  <activity
+                      android:name="com.google.androidbrowserhelper.trusted.LauncherActivity"
+                      android:exported="true">
+                      <meta-data
+                          android:name="android.support.customtabs.trusted.DEFAULT_URL"
+                          android:value="https://quoteapp-3f48e.web.app" />
+                      <meta-data
+                          android:name="android.support.customtabs.trusted.STATUS_BAR_COLOR"
+                          android:resource="@color/colorPrimary" />
+                      <meta-data
+                          android:name="android.support.customtabs.trusted.SPLASH_IMAGE_DRAWABLE"
+                          android:resource="@color/colorPrimary"/>
+                      <intent-filter android:autoVerify="true">
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                      <intent-filter android:autoVerify="true">
+                          <action android:name="android.intent.action.VIEW"/>
+                          <category android:name="android.intent.category.DEFAULT" />
+                          <category android:name="android.intent.category.BROWSABLE"/>
+                          <data android:scheme="https" android:host="quoteapp-3f48e.web.app"/>
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
 
-      - name: Build APK with expect
-        run: |
-          cd twa
-          expect -c '
-            set timeout 600
-            spawn bubblewrap build --skipPwaValidation
-            expect {
-              "install the JDK" { send "Y\r"; exp_continue }
-              "install the Android SDK" { send "Y\r"; exp_continue }
-              "keystore" { send "\r"; exp_continue }
-              eof
-            }
-          '
+          # colors.xml
+          cat > twa-project/app/src/main/res/values/colors.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="colorPrimary">#1a1a1a</color>
+          </resources>
+          EOF
 
-      - name: Find APK
+          # styles.xml
+          cat > twa-project/app/src/main/res/values/styles.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
+                  <item name="colorPrimary">@color/colorPrimary</item>
+              </style>
+          </resources>
+          EOF
+
+          # gradle wrapper properties
+          cat > twa-project/gradle/wrapper/gradle-wrapper.properties << 'EOF'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.4-bin.zip
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          EOF
+
+          # download gradle wrapper
+          cd twa-project
+          wget -q https://raw.githubusercontent.com/gradle/gradle/master/gradlew -O gradlew
+          chmod +x gradlew
+
+      - name: Build APK
         run: |
-          echo "=== twa contents ==="
-          ls -la twa/ || echo "twa dir missing"
-          echo "=== searching for APKs ==="
-          find / -name "*.apk" 2>/dev/null || echo "No APK found anywhere"
+          cd twa-project
+          ./gradlew assembleRelease --no-daemon
+        env:
+          ANDROID_HOME: /usr/local/lib/android/sdk
+
+      - name: Find and upload APK
+        run: find twa-project -name "*.apk" | head -5
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: quoteapp-android
-          path: "**/*.apk"
-          if-no-files-found: warn
+          path: twa-project/app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
