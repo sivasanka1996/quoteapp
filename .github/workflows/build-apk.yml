@@ -79,8 +79,12 @@ jobs:
       - name: Build APK
         run: |
           cd twa
-          # Answer Y to let Bubblewrap install and manage its own JDK
-          printf "Y\n\n\n\n\n\n\n\n" | bubblewrap build --skipPwaValidation
+          # Y = let Bubblewrap install JDK
+          # n = don't install Android SDK (we already have it)
+          # $ANDROID_SDK_ROOT = path to existing SDK
+          printf "Y\nn\n${ANDROID_SDK_ROOT}\n\n\n\n\n\n" | bubblewrap build --skipPwaValidation
+        env:
+          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
