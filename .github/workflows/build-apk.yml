@@ -15,12 +15,6 @@ jobs:
         with:
           node-version: 20
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
-
       - name: Install Bubblewrap
         run: npm install -g @bubblewrap/cli
 
@@ -85,9 +79,8 @@ jobs:
       - name: Build APK
         run: |
           cd twa
-          printf "n\n${JAVA_HOME}\n" | bubblewrap build --skipPwaValidation
-        env:
-          JAVA_HOME: ${{ env.JAVA_HOME }}
+          # Answer Y to let Bubblewrap install and manage its own JDK
+          printf "Y\n\n\n\n\n\n\n\n" | bubblewrap build --skipPwaValidation
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
