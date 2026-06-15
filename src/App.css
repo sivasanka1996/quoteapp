@@ -24,10 +24,53 @@ header h1 {
 }
 .header-left {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+  min-width: 0;
 }
+.qe-back {
+  border: none;
+  background: none;
+  font-size: 1.4rem;
+  cursor: pointer;
+  color: #1a1a1a;
+  padding: 4px 8px 4px 0;
+  flex-shrink: 0;
+}
+.qe-customer {
+  font-size: 0.78rem;
+  color: #888;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.qe-quote-name {
+  border: none !important;
+  border-bottom: 1.5px solid #ddd !important;
+  border-radius: 0 !important;
+  padding: 4px 0 !important;
+  font-size: 1rem !important;
+  font-weight: 600;
+  width: 160px;
+  background: transparent;
+}
+.qe-quote-name:focus {
+  outline: none !important;
+  border-bottom-color: #1a1a1a !important;
+}
+.btn-save-quote {
+  padding: 9px 16px;
+  border: none;
+  border-radius: 8px;
+  background: #0a6b3c;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-save-quote:hover { background: #085c33; }
+.btn-save-quote:disabled { opacity: 0.5; cursor: default; }
 .quote-name-tag {
   font-size: 0.85rem;
   color: #666;
