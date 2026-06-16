@@ -7,23 +7,7 @@
 //
 // Then set VITE_IMAGE_PROXY_URL=https://<your-worker>.workers.dev in .env.local
 
-const PROMPT = `This is a handwritten list of electrical materials. The text may be in Telugu, English, or mixed.
-
-Read every line carefully and list each item in exactly this format (one item per line):
-QTY | ITEM NAME | RATE
-
-Rules:
-- QTY: the number at the start of the line (use 1 if not clear)
-- ITEM NAME: describe the item in English. Keep sizes like 1.5sq, 2.5sq, 4sq, 6mm, 10mm, MCB, RCCB, socket, wire, lug, pipe, isolator, plug, fan
-- RATE: the price/amount shown (use - if not visible)
-
-Example output:
-6 | 1.5 sq mm wire | -
-16 | 6A socket | 83
-1 | 40A isolator | 350
-9 | Fan Apollo | 287
-
-Write ONLY the list lines. No explanation, no headers, nothing else.`;
+const PROMPT = `Please transcribe every line of text visible in this image exactly as written. Include all numbers, words, and symbols you can see. Write each line of the original document on a new line. Do not skip any lines even if unclear - write your best guess.`;
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -54,6 +38,7 @@ export default {
     if (!env.GEMINI_API_KEY) return json({ error: "GEMINI_API_KEY secret not set on this worker" }, 500);
 
     let rawText = "";
+    let debugInfo = "";
     try {
       const res = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${env.GEMINI_API_KEY}`,
@@ -73,23 +58,36 @@ export default {
       );
       const data = await res.json();
       rawText = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+      if (!rawText) {
+        debugInfo = JSON.stringify(data).slice(0, 400);
+      }
     } catch (e) {
       return json({ error: `Gemini request failed: ${e.message}` }, 502);
     }
 
-    // Parse pipe-delimited plain text: "QTY | NAME | RATE"
-    const lines = rawText.split("\n").map(l => l.trim()).filter(l => l.includes("|"));
-    const items = lines.map(line => {
-      const parts = line.split("|").map(p => p.trim());
-      const qty = parseInt(parts[0]) || 1;
-      const name = parts[1] || parts[0] || "";
-      const rateStr = parts[2] || "";
-      const rate = rateStr && rateStr !== "-" ? (parseFloat(rateStr) || null) : null;
-      return { name, qty, rate };
-    }).filter(it => it.name.length > 0);
+    if (!rawText) {
+      return json({ items: [], confidence: "low", notes: `No response from Gemini. API data: ${debugInfo}` });
+    }
+
+    // Parse raw transcription lines — each line like "6- 1.5sq ... 1650/- 9900"
+    const lines = rawText.split("\n").map(l => l.trim()).filter(l => l.length > 2);
+    const items = [];
+    for (const line of lines) {
+      // Extract leading number as qty (e.g. "6-", "16-", "1-", "9-")
+      const qtyMatch = line.match(/^(\d+)\s*[-–]?\s*/);
+      const qty = qtyMatch ? parseInt(qtyMatch[1]) : 1;
+      // Remove the leading qty, get rest as name
+      const rest = qtyMatch ? line.slice(qtyMatch[0].length).trim() : line;
+      if (!rest || rest.length < 2) continue;
+      // Extract last number as rate if present
+      const rateMatch = rest.match(/[\s\/](\d[\d,]*)\s*\/?[-–]?\s*$/);
+      const rate = rateMatch ? parseFloat(rateMatch[1].replace(/,/g, "")) : null;
+      const name = rateMatch ? rest.slice(0, rest.length - rateMatch[0].length).trim() : rest;
+      if (name.length > 0) items.push({ name, qty, rate });
+    }
 
     if (items.length === 0) {
-      return json({ items: [], confidence: "low", notes: rawText.slice(0, 300) });
+      return json({ items: [], confidence: "low", notes: rawText.slice(0, 400) });
     }
 
     return json({ items, confidence: "partial", notes: "" });
