@@ -203,19 +203,31 @@ export function QuoteEditor({ customer, existingQuote, onBack }: Props) {
         </label>
       </div>
 
-      <div className="cards">
-        {lines.map((l, i) => (
-          <LineCard key={l.id} line={l} result={results[i]} checked={selected.has(l.id)}
-            onToggleSelect={() => toggleSelect(l.id)}
-            onChange={(patch) => updateLine(l.id, patch)}
-            onDelete={() => deleteLine(l.id)} />
-        ))}
-      </div>
-
-      <div className="add-row">
-        <button className="add-btn" onClick={addLine}>+ Add item</button>
-        <button className="add-btn add-btn-image" onClick={() => setShowImageReader(true)}>📷 Read image</button>
-      </div>
+      {lines.length === 0 ? (
+        <div className="qe-empty">
+          <button className="qe-empty-camera" onClick={() => setShowImageReader(true)}>
+            📷
+            <span>Read from image</span>
+            <small>Take a photo of the order list</small>
+          </button>
+          <button className="qe-empty-manual" onClick={addLine}>+ Add item manually</button>
+        </div>
+      ) : (
+        <>
+          <div className="cards">
+            {lines.map((l, i) => (
+              <LineCard key={l.id} line={l} result={results[i]} checked={selected.has(l.id)}
+                onToggleSelect={() => toggleSelect(l.id)}
+                onChange={(patch) => updateLine(l.id, patch)}
+                onDelete={() => deleteLine(l.id)} />
+            ))}
+          </div>
+          <div className="add-row">
+            <button className="add-btn" onClick={addLine}>+ Add item</button>
+            <button className="add-btn add-btn-image" onClick={() => setShowImageReader(true)}>📷 Read image</button>
+          </div>
+        </>
+      )}
 
       <section className="summary">
         <h2>Profit Summary</h2>
