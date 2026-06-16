@@ -7,19 +7,23 @@
 //
 // Then set VITE_IMAGE_PROXY_URL=https://<your-worker>.workers.dev in .env.local
 
-const PROMPT = `You are reading a handwritten or printed list of electrical materials.
-The image may contain Telugu, English, or mixed text.
+const PROMPT = `This is a handwritten list of electrical materials. The text may be in Telugu, English, or mixed.
 
-Look at every line in the image and extract each item. Even if writing is unclear, make your best guess.
+Read every line carefully and list each item in exactly this format (one item per line):
+QTY | ITEM NAME | RATE
 
-For each line item extract:
-- name: describe the item in English (e.g. "1.5 sq mm wire", "6A socket", "40A isolator", "MCB 20A", "copper lug"). Keep sizes and specs.
-- qty: the number/quantity on that line (default 1 if unclear)
-- rate: any price/rate shown for that item (null if not visible)
+Rules:
+- QTY: the number at the start of the line (use 1 if not clear)
+- ITEM NAME: describe the item in English. Keep sizes like 1.5sq, 2.5sq, 4sq, 6mm, 10mm, MCB, RCCB, socket, wire, lug, pipe, isolator, plug, fan
+- RATE: the price/amount shown (use - if not visible)
 
-IMPORTANT: You MUST return ONLY a raw JSON object. No markdown, no code fences, no explanation.
-Example of the exact format required:
-{"items":[{"name":"1.5 sq mm wire","qty":6,"rate":null},{"name":"6A socket","qty":16,"rate":83}],"confidence":"partial","notes":""}`;
+Example output:
+6 | 1.5 sq mm wire | -
+16 | 6A socket | 83
+1 | 40A isolator | 350
+9 | Fan Apollo | 287
+
+Write ONLY the list lines. No explanation, no headers, nothing else.`;
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -73,25 +77,22 @@ export default {
       return json({ error: `Gemini request failed: ${e.message}` }, 502);
     }
 
-    // Strip markdown code fences if present
-    let cleaned = rawText.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+    // Parse pipe-delimited plain text: "QTY | NAME | RATE"
+    const lines = rawText.split("\n").map(l => l.trim()).filter(l => l.includes("|"));
+    const items = lines.map(line => {
+      const parts = line.split("|").map(p => p.trim());
+      const qty = parseInt(parts[0]) || 1;
+      const name = parts[1] || parts[0] || "";
+      const rateStr = parts[2] || "";
+      const rate = rateStr && rateStr !== "-" ? (parseFloat(rateStr) || null) : null;
+      return { name, qty, rate };
+    }).filter(it => it.name.length > 0);
 
-    // Extract the first JSON object
-    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
+    if (items.length === 0) {
       return json({ items: [], confidence: "low", notes: rawText.slice(0, 300) });
     }
 
-    try {
-      const result = JSON.parse(jsonMatch[0]);
-      // Always include raw text in notes for debugging when items is empty
-      if (!result.items || result.items.length === 0) {
-        result.notes = (result.notes ? result.notes + " | " : "") + "Raw: " + rawText.slice(0, 200);
-      }
-      return json(result);
-    } catch {
-      return json({ items: [], confidence: "low", notes: rawText.slice(0, 300) });
-    }
+    return json({ items, confidence: "partial", notes: "" });
   },
 };
 
