@@ -7,20 +7,19 @@
 //
 // Then set VITE_IMAGE_PROXY_URL=https://<your-worker>.workers.dev in .env.local
 
-const PROMPT = `You are reading a list of electrical materials from a handwritten or printed image.
-The text may be in Telugu, English, or a mix of both.
-Extract every line item you can find.
+const PROMPT = `You are reading a handwritten or printed list of electrical materials.
+The image may contain Telugu, English, or mixed text.
 
-For each item, extract:
-- name: item description in English (translate Telugu if needed; keep technical terms like MCB, RCCB, wire, mm, A, V as-is)
-- qty: quantity as a number (use 1 if not specified or unclear)
-- rate: unit price or rate as a number (null if not found in the image)
+Look at every line in the image and extract each item. Even if writing is unclear, make your best guess.
 
-Return ONLY valid JSON — no explanation, no markdown, no code block:
-{"items":[{"name":"...","qty":1,"rate":null}],"confidence":"full","notes":""}
+For each line item extract:
+- name: describe the item in English (e.g. "1.5 sq mm wire", "6A socket", "40A isolator", "MCB 20A", "copper lug"). Keep sizes and specs.
+- qty: the number/quantity on that line (default 1 if unclear)
+- rate: any price/rate shown for that item (null if not visible)
 
-confidence must be one of: full (all items clearly read), partial (some items unclear), low (very hard to read)
-notes: one short sentence if anything was unclear or skipped, otherwise empty string`;
+IMPORTANT: You MUST return ONLY a raw JSON object. No markdown, no code fences, no explanation.
+Example of the exact format required:
+{"items":[{"name":"1.5 sq mm wire","qty":6,"rate":null},{"name":"6A socket","qty":16,"rate":83}],"confidence":"partial","notes":""}`;
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -47,55 +46,49 @@ export default {
       return json({ error: "Invalid request body" }, 400);
     }
 
-    if (!imageBase64) {
-      return json({ error: "imageBase64 is required" }, 400);
-    }
+    if (!imageBase64) return json({ error: "imageBase64 is required" }, 400);
+    if (!env.GEMINI_API_KEY) return json({ error: "GEMINI_API_KEY secret not set on this worker" }, 500);
 
-    if (!env.GEMINI_API_KEY) {
-      return json({ error: "GEMINI_API_KEY secret not set on this worker" }, 500);
-    }
-
-    let geminiData;
+    let rawText = "";
     try {
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${env.GEMINI_API_KEY}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            contents: [
-              {
-                parts: [
-                  { text: PROMPT },
-                  { inline_data: { mime_type: mimeType, data: imageBase64 } },
-                ],
-              },
-            ],
-            generationConfig: { temperature: 0.1 },
+            contents: [{
+              parts: [
+                { text: PROMPT },
+                { inline_data: { mime_type: mimeType, data: imageBase64 } },
+              ],
+            }],
+            generationConfig: { temperature: 0.1, maxOutputTokens: 2048 },
           }),
         }
       );
-      geminiData = await res.json();
+      const data = await res.json();
+      rawText = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
     } catch (e) {
       return json({ error: `Gemini request failed: ${e.message}` }, 502);
     }
 
-    const rawText =
-      geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+    // Strip markdown code fences if present
+    let cleaned = rawText.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
 
-    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+    // Extract the first JSON object
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      return json({ items: [], confidence: "low", notes: "Could not parse response from Gemini" });
+      // Gemini returned plain text — wrap it as a note so user knows what happened
+      return json({ items: [], confidence: "low", notes: `Gemini response: ${rawText.slice(0, 200)}` });
     }
 
-    let result;
     try {
-      result = JSON.parse(jsonMatch[0]);
+      const result = JSON.parse(jsonMatch[0]);
+      return json(result);
     } catch {
-      return json({ items: [], confidence: "low", notes: "Malformed JSON from Gemini" });
+      return json({ items: [], confidence: "low", notes: "Could not parse Gemini response as JSON" });
     }
-
-    return json(result);
   },
 };
 
