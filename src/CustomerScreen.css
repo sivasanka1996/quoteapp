@@ -40,6 +40,26 @@
   font-size: 0.82rem;
   color: #888;
 }
+.cs-header-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.cs-btn-photo {
+  padding: 9px 14px;
+  border: 1.5px solid #2563eb;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.cs-btn-photo:hover { background: #dbeafe; }
+
 .cs-btn-new {
   padding: 10px 16px;
   border: none;

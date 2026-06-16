@@ -2,12 +2,15 @@ import { useState } from "react";
 import { type Customer, type QuoteDoc } from "./types";
 import { useQuotes } from "./useQuotes";
 import { formatINR } from "./format";
+import { ImageReaderPanel } from "./ImageReader";
+import { type ReadItem } from "./readImage";
 import "./CustomerScreen.css";
 
 interface Props {
   customer: Customer;
   onBack: () => void;
   onNewQuote: () => void;
+  onNewQuoteFromImage: (items: ReadItem[]) => void;
   onOpenQuote: (quote: QuoteDoc) => void;
 }
 
@@ -17,9 +20,10 @@ function formatDate(ts: number): string {
   });
 }
 
-export function CustomerScreen({ customer, onBack, onNewQuote, onOpenQuote }: Props) {
+export function CustomerScreen({ customer, onBack, onNewQuote, onNewQuoteFromImage, onOpenQuote }: Props) {
   const { quotes, loading, deleteQuote } = useQuotes(customer.id);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [showImageReader, setShowImageReader] = useState(false);
 
   return (
     <div className="cs-screen">
@@ -30,8 +34,18 @@ export function CustomerScreen({ customer, onBack, onNewQuote, onOpenQuote }: Pr
           {customer.phone && <span className="cs-phone">📞 {customer.phone}</span>}
           {customer.address && <span className="cs-addr">{customer.address}</span>}
         </div>
-        <button className="cs-btn-new" onClick={onNewQuote}>+ New Quote</button>
+        <div className="cs-header-actions">
+          <button className="cs-btn-photo" onClick={() => setShowImageReader(true)}>📷 Take photo</button>
+          <button className="cs-btn-new" onClick={onNewQuote}>+ New Quote</button>
+        </div>
       </header>
+
+      {showImageReader && (
+        <ImageReaderPanel
+          onAdd={(items) => { setShowImageReader(false); onNewQuoteFromImage(items); }}
+          onClose={() => setShowImageReader(false)}
+        />
+      )}
 
       <div className="cs-body">
         {loading ? (

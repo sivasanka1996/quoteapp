@@ -61,12 +61,24 @@ function applyBlanket(_l: UILine, b: Blanket): Partial<UILine> {
 interface Props {
   customer: Customer;
   existingQuote: QuoteDoc | null;
+  initialItems?: import("./readImage").ReadItem[];
   onBack: () => void;
 }
 
-export function QuoteEditor({ customer, existingQuote, onBack }: Props) {
-  const initLines = (): UILine[] =>
-    existingQuote ? existingQuote.lines : [blankLine()];
+export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: Props) {
+  const initLines = (): UILine[] => {
+    if (existingQuote) return existingQuote.lines;
+    if (initialItems && initialItems.length > 0) {
+      return initialItems.map((it) => ({
+        ...blankLine(),
+        name: it.name,
+        qty: String(it.qty || 1),
+        sellMode: "direct" as const,
+        sellRate: it.rate != null ? String(it.rate) : "",
+      }));
+    }
+    return [];
+  };
 
   const [lines, setLines] = useState<UILine[]>(initLines);
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -119,6 +131,7 @@ export function QuoteEditor({ customer, existingQuote, onBack }: Props) {
   }
 
   async function handleSave() {
+
     setSaving(true);
     const id = await saveQuote(customer.name, quoteName || "Untitled", lines, totals.totalSale, quoteId);
     setQuoteId(id);
@@ -267,10 +280,18 @@ function LineCard({ line: l, result: r, checked, onToggleSelect, onChange, onDel
       </div>
       <PriceSide kind="cost" label="Cost (buy)" mode={l.costMode} list={l.costList} disc1={l.costDisc1} disc2={l.costDisc2} rate={l.costRate}
         resolved={r.resolvedCost} total={r.lineCostTotal}
-        onChange={(p) => onChange({ costMode: p.mode ?? l.costMode, costList: p.list ?? l.costList, costDisc1: p.disc1 ?? l.costDisc1, costDisc2: p.disc2 ?? l.costDisc2, costRate: p.rate ?? l.costRate })} />
+        onChange={(p) => onChange({
+          costMode: p.mode ?? l.costMode, costList: p.list ?? l.costList,
+          costDisc1: p.disc1 ?? l.costDisc1, costDisc2: p.disc2 ?? l.costDisc2, costRate: p.rate ?? l.costRate,
+          ...(p.list !== undefined ? { sellList: p.list } : {}),
+        })} />
       <PriceSide kind="sell" label="Sell (customer)" mode={l.sellMode} list={l.sellList} disc1={l.sellDisc1} disc2={l.sellDisc2} rate={l.sellRate}
         resolved={r.resolvedSell} total={r.lineSaleTotal}
-        onChange={(p) => onChange({ sellMode: p.mode ?? l.sellMode, sellList: p.list ?? l.sellList, sellDisc1: p.disc1 ?? l.sellDisc1, sellDisc2: p.disc2 ?? l.sellDisc2, sellRate: p.rate ?? l.sellRate })} />
+        onChange={(p) => onChange({
+          sellMode: p.mode ?? l.sellMode, sellList: p.list ?? l.sellList,
+          sellDisc1: p.disc1 ?? l.sellDisc1, sellDisc2: p.disc2 ?? l.sellDisc2, sellRate: p.rate ?? l.sellRate,
+          ...(p.list !== undefined ? { costList: p.list } : {}),
+        })} />
       <div className="card-foot">
         <div className={"foot-stat " + (r.lineProfit >= 0 ? "profit" : "loss")}>
           <span>Profit</span><strong>{formatINR(r.lineProfit)}</strong>
