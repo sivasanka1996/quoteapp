@@ -17,8 +17,18 @@ const CORS = {
 
 export default {
   async fetch(request, env) {
+    const url = new URL(request.url);
+
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: CORS });
+    }
+
+    // Debug: list available models
+    if (url.pathname === "/list") {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${env.GEMINI_API_KEY}`);
+      const d = await r.json();
+      const names = (d.models || []).map(m => m.name);
+      return json({ models: names });
     }
 
     if (request.method !== "POST") {
@@ -37,11 +47,11 @@ export default {
     if (!imageBase64) return json({ error: "imageBase64 is required" }, 400);
     if (!env.GEMINI_API_KEY) return json({ error: "GEMINI_API_KEY secret not set on this worker" }, 500);
 
-    let rawText = "";
+let rawText = "";
     let debugInfo = "";
     try {
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-latest:generateContent?key=${env.GEMINI_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
