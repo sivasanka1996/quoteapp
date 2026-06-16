@@ -79,15 +79,18 @@ export default {
     // Extract the first JSON object
     const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      // Gemini returned plain text — wrap it as a note so user knows what happened
-      return json({ items: [], confidence: "low", notes: `Gemini response: ${rawText.slice(0, 200)}` });
+      return json({ items: [], confidence: "low", notes: rawText.slice(0, 300) });
     }
 
     try {
       const result = JSON.parse(jsonMatch[0]);
+      // Always include raw text in notes for debugging when items is empty
+      if (!result.items || result.items.length === 0) {
+        result.notes = (result.notes ? result.notes + " | " : "") + "Raw: " + rawText.slice(0, 200);
+      }
       return json(result);
     } catch {
-      return json({ items: [], confidence: "low", notes: "Could not parse Gemini response as JSON" });
+      return json({ items: [], confidence: "low", notes: rawText.slice(0, 300) });
     }
   },
 };

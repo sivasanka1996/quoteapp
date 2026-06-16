@@ -137,6 +137,7 @@ export function ImageReaderPanel({ onAdd, onClose }: Props) {
         {stage === "confirming" && items.length === 0 && (
           <div className="ir-empty">
             No items found — try a clearer photo or add items manually.
+            {notes && <div className="ir-empty-notes">{notes}</div>}
           </div>
         )}
 

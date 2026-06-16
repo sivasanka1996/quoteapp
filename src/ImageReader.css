@@ -187,6 +187,17 @@
   font-size: 0.9rem;
 }
 
+.ir-empty-notes {
+  margin-top: 10px;
+  font-size: 0.75rem;
+  color: #aaa;
+  word-break: break-word;
+  text-align: left;
+  background: #f9fafb;
+  border-radius: 6px;
+  padding: 8px;
+}
+
 /* --- Confirm list --- */
 
 .ir-confirm {
