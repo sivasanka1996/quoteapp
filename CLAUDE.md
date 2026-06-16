@@ -183,24 +183,33 @@ File: `firestore.rules` — deployed automatically with `firebase deploy`.
 - [x] Save & persist — quotes saved to Firestore per customer, not localStorage
 - [x] Android APK — built via GitHub Actions using Gradle/TWA, hosted on GitHub Releases v1.0
 - [x] APK download banner on home screen — green banner linking to GitHub Release
+- [x] Image reading — "📷 Read image" button in QuoteEditor; Cloudflare Worker proxy for Gemini; swappable module `src/readImage.ts`; Telugu + English; confirmation UI before adding items
 
 ---
 
 ## WHAT TO BUILD NEXT (in order)
 
-### Step 4 — Image reading (next up)
-- Upload / camera capture of handwritten or printed item list
-- Send image to Gemini free tier via a serverless function
-- **The Gemini API key MUST NOT be in frontend code** — use Cloudflare Workers or Netlify Functions (free, no card needed) as a proxy
-- Build reader as a SWAPPABLE module (one file) so engine can change later
-- Handle Telugu and English handwriting
-- Return structured item list into the editable quote table
-- Graceful handling when reading is partial or fails (manual entry fallback)
+### Step 4 — Image reading — NEEDS ACTIVATION (code is done)
 
-**Setup needed before coding:**
-1. Get Gemini API key from Google AI Studio (free tier)
-2. Create Cloudflare Worker or Netlify Function as the proxy
-3. Store key as a runtime secret in the function — never in frontend
+All code is committed. To activate:
+1. Get a free Gemini API key from https://aistudio.google.com/ (free tier, no card)
+2. Deploy the Cloudflare Worker:
+   ```
+   cd cf-worker
+   npx wrangler deploy
+   npx wrangler secret put GEMINI_API_KEY   ← paste key when prompted
+   ```
+3. Copy the deployed worker URL, add to `.env.local` in project root:
+   ```
+   VITE_IMAGE_PROXY_URL=https://quoteapp-image-reader.<account>.workers.dev
+   ```
+4. Push to main — GitHub Actions will deploy the updated frontend
+
+**Key files:**
+- `src/readImage.ts` — swappable reader module (swap this file to change the AI engine)
+- `src/ImageReader.tsx` + `src/ImageReader.css` — camera/upload UI, confirmation list
+- `cf-worker/image-reader.js` — the Cloudflare Worker (Gemini proxy, key stored as secret)
+- `cf-worker/wrangler.toml` — worker config
 
 ### Step 5 — Voice
 - Mic button, browser Web Speech API (free), Telugu + English

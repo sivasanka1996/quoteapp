@@ -427,6 +427,26 @@ input:focus {
   background: #f5f5f5;
 }
 
+.add-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.add-row .add-btn {
+  margin-top: 0;
+  flex: 1;
+}
+
+.add-btn-image {
+  border-color: #2563eb;
+  color: #2563eb;
+}
+
+.add-btn-image:hover {
+  background: #eff6ff;
+}
+
 .del {
   border: none;
   background: none;

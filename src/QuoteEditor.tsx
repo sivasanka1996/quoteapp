@@ -6,6 +6,8 @@ import { CompanySettingsPanel } from "./CompanySettings";
 import { useCompanySettings } from "./useCompanySettings";
 import { useQuotes } from "./useQuotes";
 import { type UILine, type Customer, type QuoteDoc } from "./types";
+import { ImageReaderPanel } from "./ImageReader";
+import { type ReadItem } from "./readImage";
 import "./App.css";
 
 // ---- Helpers ----
@@ -74,6 +76,7 @@ export function QuoteEditor({ customer, existingQuote, onBack }: Props) {
   const [quoteName, setQuoteName] = useState(existingQuote?.name ?? "");
   const [quoteId, setQuoteId] = useState<string | undefined>(existingQuote?.id);
   const [saving, setSaving] = useState(false);
+  const [showImageReader, setShowImageReader] = useState(false);
 
   const { settings: company, update: updateCompany } = useCompanySettings();
   const { saveQuote } = useQuotes(customer.id);
@@ -102,6 +105,17 @@ export function QuoteEditor({ customer, existingQuote, onBack }: Props) {
   }
   function applyBlanketToSelected() {
     setLines((prev) => prev.map((l) => selected.has(l.id) ? { ...l, ...applyBlanket(l, blanket) } : l));
+  }
+
+  function handleAddFromImage(readItems: ReadItem[]) {
+    const newLines: UILine[] = readItems.map((it) => ({
+      ...blankLine(),
+      name: it.name,
+      qty: String(it.qty || 1),
+      sellMode: "direct" as const,
+      sellRate: it.rate != null ? String(it.rate) : "",
+    }));
+    setLines((prev) => [...prev, ...newLines]);
   }
 
   async function handleSave() {
@@ -198,7 +212,10 @@ export function QuoteEditor({ customer, existingQuote, onBack }: Props) {
         ))}
       </div>
 
-      <button className="add-btn" onClick={addLine}>+ Add item</button>
+      <div className="add-row">
+        <button className="add-btn" onClick={addLine}>+ Add item</button>
+        <button className="add-btn add-btn-image" onClick={() => setShowImageReader(true)}>📷 Read image</button>
+      </div>
 
       <section className="summary">
         <h2>Profit Summary</h2>
@@ -214,6 +231,7 @@ export function QuoteEditor({ customer, existingQuote, onBack }: Props) {
       </section>
 
       {showSettings && <CompanySettingsPanel settings={company} onChange={updateCompany} onClose={() => setShowSettings(false)} />}
+      {showImageReader && <ImageReaderPanel onAdd={handleAddFromImage} onClose={() => setShowImageReader(false)} />}
     </div>
   );
 }

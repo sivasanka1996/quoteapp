@@ -1,0 +1,9 @@
+name = "quoteapp-image-reader"
+main = "image-reader.js"
+compatibility_date = "2024-09-23"
+
+# After deploying, set your Gemini API key as a secret (never in this file):
+#   npx wrangler secret put GEMINI_API_KEY
+#
+# Then copy the deployed URL and add to your frontend .env.local:
+#   VITE_IMAGE_PROXY_URL=https://quoteapp-image-reader.<your-account>.workers.dev
