@@ -16,6 +16,10 @@ dist-ssr
 .firebase/
 firebase-debug.log
 
+# Keystore files — never commit these
+*.jks
+*.b64
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

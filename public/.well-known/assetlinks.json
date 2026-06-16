@@ -1,0 +1,10 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.quoteapp.app",
+    "sha256_cert_fingerprints": [
+      "20:A6:65:64:A9:54:88:4D:B8:1C:8D:77:0C:52:DF:78:22:DC:18:40:20:DA:AC:67:FB:C5:52:85:9A:B0:6F:C7"
+    ]
+  }
+}]
