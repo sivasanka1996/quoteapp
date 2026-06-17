@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { readImageItems, type ReadItem } from "./readImage";
 import "./ImageReader.css";
 
@@ -17,7 +17,6 @@ interface ConfirmItem extends ReadItem {
 let _itemSeq = 0;
 
 export function ImageReaderPanel({ onAdd, onClose }: Props) {
-  const fileRef = useRef<HTMLInputElement>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [stage, setStage] = useState<Stage>("idle");
@@ -78,24 +77,22 @@ export function ImageReaderPanel({ onAdd, onClose }: Props) {
           </button>
         </div>
 
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          style={{ display: "none" }}
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) handleFileChange(f);
-            e.target.value = "";
-          }}
-        />
-
         {!imageUrl && (
           <div className="ir-prompt">
-            <button className="ir-camera-btn" onClick={() => fileRef.current?.click()}>
+            <label className="ir-camera-btn">
               📷 Take photo / Choose image
-            </button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                style={{ display: "none" }}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleFileChange(f);
+                  e.target.value = "";
+                }}
+              />
+            </label>
             <p className="ir-hint">Supports Telugu &amp; English handwriting or printed lists</p>
           </div>
         )}
@@ -103,12 +100,19 @@ export function ImageReaderPanel({ onAdd, onClose }: Props) {
         {imageUrl && (
           <div className="ir-preview-wrap">
             <img className="ir-preview" src={imageUrl} alt="Selected" />
-            <button
-              className="ir-retake"
-              onClick={() => fileRef.current?.click()}
-            >
+            <label className="ir-retake">
               Retake / Change
-            </button>
+              <input
+                type="file"
+                accept="image/*"
+                style={{ display: "none" }}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleFileChange(f);
+                  e.target.value = "";
+                }}
+              />
+            </label>
           </div>
         )}
 
