@@ -82,7 +82,6 @@ export function ImageReaderPanel({ onAdd, onClose }: Props) {
             <label className="ir-camera-btn">
               📷 Take photo / Choose image
               <input
-                ref={fileRef}
                 type="file"
                 accept="image/*"
                 style={{ display: "none" }}
