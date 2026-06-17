@@ -495,8 +495,19 @@ input:focus {
   color: #2563eb;
 }
 
-.add-btn-image:hover {
-  background: #eff6ff;
+.add-btn-image:hover { background: #eff6ff; }
+
+.add-btn-voice {
+  border-color: #7c3aed;
+  color: #7c3aed;
+}
+
+.add-btn-voice:hover { background: #f5f3ff; }
+
+.qe-empty-voice {
+  background: #f5f3ff;
+  border-color: #7c3aed;
+  color: #6d28d9;
 }
 
 .del {

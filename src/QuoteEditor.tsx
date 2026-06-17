@@ -8,6 +8,7 @@ import { useQuotes } from "./useQuotes";
 import { type UILine, type Customer, type QuoteDoc } from "./types";
 import { ImageReaderPanel } from "./ImageReader";
 import { type ReadItem } from "./readImage";
+import { VoiceReaderPanel, type VoiceItem } from "./VoiceReader";
 import "./App.css";
 
 // ---- Helpers ----
@@ -89,6 +90,7 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
   const [quoteId, setQuoteId] = useState<string | undefined>(existingQuote?.id);
   const [saving, setSaving] = useState(false);
   const [showImageReader, setShowImageReader] = useState(false);
+  const [showVoiceReader, setShowVoiceReader] = useState(false);
 
   const { settings: company, update: updateCompany } = useCompanySettings();
   const { saveQuote } = useQuotes(customer.id);
@@ -117,6 +119,16 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
   }
   function applyBlanketToSelected() {
     setLines((prev) => prev.map((l) => selected.has(l.id) ? { ...l, ...applyBlanket(l, blanket) } : l));
+  }
+
+  function handleAddFromVoice(voiceItem: VoiceItem) {
+    setLines((prev) => [...prev, {
+      ...blankLine(),
+      name: voiceItem.name,
+      qty: String(voiceItem.qty || 1),
+      sellMode: "direct" as const,
+      sellRate: voiceItem.rate != null ? String(voiceItem.rate) : "",
+    }]);
   }
 
   function handleAddFromImage(readItems: ReadItem[]) {
@@ -223,6 +235,11 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
             <span>Read from image</span>
             <small>Take a photo of the order list</small>
           </button>
+          <button className="qe-empty-camera qe-empty-voice" onClick={() => setShowVoiceReader(true)}>
+            🎤
+            <span>Add by voice</span>
+            <small>Speak item name and quantity</small>
+          </button>
           <button className="qe-empty-manual" onClick={addLine}>+ Add item manually</button>
         </div>
       ) : (
@@ -237,7 +254,8 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
           </div>
           <div className="add-row">
             <button className="add-btn" onClick={addLine}>+ Add item</button>
-            <button className="add-btn add-btn-image" onClick={() => setShowImageReader(true)}>📷 Read image</button>
+            <button className="add-btn add-btn-image" onClick={() => setShowImageReader(true)}>📷 Image</button>
+            <button className="add-btn add-btn-voice" onClick={() => setShowVoiceReader(true)}>🎤 Voice</button>
           </div>
         </>
       )}
@@ -257,6 +275,7 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
 
       {showSettings && <CompanySettingsPanel settings={company} onChange={updateCompany} onClose={() => setShowSettings(false)} />}
       {showImageReader && <ImageReaderPanel onAdd={handleAddFromImage} onClose={() => setShowImageReader(false)} />}
+      {showVoiceReader && <VoiceReaderPanel onAdd={handleAddFromVoice} onClose={() => setShowVoiceReader(false)} />}
     </div>
   );
 }

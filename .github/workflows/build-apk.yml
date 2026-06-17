@@ -52,8 +52,8 @@ jobs:
                   applicationId 'com.quoteapp.app'
                   minSdk 21
                   targetSdk 34
-                  versionCode 5
-                  versionName '1.4'
+                  versionCode 6
+                  versionName '1.5'
               }
               signingConfigs {
                   release {
@@ -83,6 +83,7 @@ jobs:
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET"/>
               <uses-permission android:name="android.permission.CAMERA"/>
+              <uses-permission android:name="android.permission.RECORD_AUDIO"/>
               <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
               <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
               <application
@@ -148,12 +149,16 @@ jobs:
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
 
-                  // Request camera permission upfront so getUserMedia works
-                  if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
-                          != PackageManager.PERMISSION_GRANTED) {
-                      ActivityCompat.requestPermissions(this,
-                          new String[]{Manifest.permission.CAMERA, Manifest.permission.READ_MEDIA_IMAGES},
-                          CAMERA_PERMISSION_REQUEST);
+                  // Request camera + mic permissions upfront
+                  String[] perms = {Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO};
+                  boolean needsRequest = false;
+                  for (String p : perms) {
+                      if (ContextCompat.checkSelfPermission(this, p) != PackageManager.PERMISSION_GRANTED) {
+                          needsRequest = true; break;
+                      }
+                  }
+                  if (needsRequest) {
+                      ActivityCompat.requestPermissions(this, perms, CAMERA_PERMISSION_REQUEST);
                   }
 
                   webView = new WebView(this);
