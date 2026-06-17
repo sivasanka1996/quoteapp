@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   collection, onSnapshot, addDoc, updateDoc, deleteDoc,
-  doc, orderBy, query, where,
+  doc, query, where,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { type UILine, type QuoteDoc } from "./types";
@@ -14,13 +14,14 @@ export function useQuotes(customerId: string) {
     if (!customerId) return;
     const q = query(
       collection(db, "quotes"),
-      where("customerId", "==", customerId),
-      orderBy("updatedAt", "desc")
+      where("customerId", "==", customerId)
     );
     const unsub = onSnapshot(q, (snap) => {
-      setQuotes(snap.docs.map((d) => ({ id: d.id, ...d.data() } as QuoteDoc)));
+      const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as QuoteDoc));
+      docs.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+      setQuotes(docs);
       setLoading(false);
-    });
+    }, () => setLoading(false));
     return unsub;
   }, [customerId]);
 
