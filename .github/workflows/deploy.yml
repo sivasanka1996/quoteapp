@@ -29,6 +29,6 @@ jobs:
           VITE_IMAGE_PROXY_URL: https://quoteapp-image-reader.qouteappsub.workers.dev
 
       - name: Deploy to Firebase
-        run: npx firebase-tools deploy --only hosting,firestore:rules --token "$FIREBASE_TOKEN" --project quoteapp-3f48e
+        run: npx firebase-tools deploy --only hosting,firestore:rules,firestore:indexes --token "$FIREBASE_TOKEN" --project quoteapp-3f48e
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
