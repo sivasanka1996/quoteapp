@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatINR } from "./format";
+import { formatINR, formatINRShort } from "./format";
 
 describe("formatINR — Indian grouping", () => {
   it("formats crore-sized numbers", () => {
@@ -21,5 +21,24 @@ describe("formatINR — Indian grouping", () => {
   });
   it("handles negatives", () => {
     expect(formatINR(-373347)).toBe("-3,73,347");
+  });
+});
+
+describe("formatINRShort — compact stat tiles", () => {
+  it("abbreviates lakhs", () => {
+    expect(formatINRShort(240000)).toBe("2.4L");
+    expect(formatINRShort(100000)).toBe("1L");
+    expect(formatINRShort(1150000)).toBe("11.5L");
+  });
+  it("abbreviates crores", () => {
+    expect(formatINRShort(12500000)).toBe("1.3Cr");
+    expect(formatINRShort(10000000)).toBe("1Cr");
+  });
+  it("falls back to full grouping below a lakh", () => {
+    expect(formatINRShort(99999)).toBe("99,999");
+    expect(formatINRShort(0)).toBe("0");
+  });
+  it("keeps the sign", () => {
+    expect(formatINRShort(-240000)).toBe("-2.4L");
   });
 });

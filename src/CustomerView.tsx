@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { type LineResult } from "./calc/engine";
 import { type CompanySettings } from "./useCompanySettings";
 import { formatINR } from "./format";
+import { shareQuotePdf, pdfFilename } from "./sharePdf";
 import "./CustomerView.css";
 
 export interface CustomerLine {
@@ -22,6 +23,11 @@ export interface CustomerViewProps {
   };
   company: CompanySettings;
   onClose: () => void;
+  customerName?: string;
+  quoteName?: string;
+  /** Start the share sheet as soon as the document is on screen. */
+  autoShare?: boolean;
+  onShareHandled?: () => void;
 }
 
 type ColKey = "qty" | "listPrice" | "discount" | "rate" | "amount";
@@ -42,18 +48,54 @@ function discountLabel(d1: string, d2: string): string {
   return `${v1 || v2}%`;
 }
 
-export function CustomerView({ lines, totals, company, onClose }: CustomerViewProps) {
+export function CustomerView({
+  lines, totals, company, onClose,
+  customerName = "", quoteName = "", autoShare = false, onShareHandled,
+}: CustomerViewProps) {
   const [visible, setVisible] = useState<Set<ColKey>>(
     new Set(["qty", "listPrice", "discount", "rate", "amount"])
   );
+  const docRef = useRef<HTMLDivElement>(null);
+  const [sharing, setSharing] = useState(false);
+  const [shareMsg, setShareMsg] = useState("");
 
   function toggleCol(key: ColKey) {
     setVisible((prev) => {
       const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   }
+
+  async function handleShare() {
+    if (!docRef.current || sharing) return;
+    setSharing(true);
+    setShareMsg("");
+    try {
+      const outcome = await shareQuotePdf(docRef.current, {
+        filename: pdfFilename(customerName, quoteName),
+        title: quoteName || "Quotation",
+        text: company.name ? `Quotation from ${company.name}` : undefined,
+      });
+      if (outcome === "downloaded") {
+        setShareMsg("PDF saved to your downloads — attach it in WhatsApp.");
+      }
+    } catch {
+      setShareMsg("Could not build the PDF. Use Print / Save PDF instead.");
+    } finally {
+      setSharing(false);
+    }
+  }
+
+  // Fire the share sheet once the document has painted, when asked to
+  useEffect(() => {
+    if (!autoShare) return;
+    onShareHandled?.();
+    const t = setTimeout(handleShare, 150);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoShare]);
 
   const show = (key: ColKey) => visible.has(key);
   const hasCompany = !!(company.name || company.addressLine1 || company.phone || company.gstin || company.logoDataUrl);
@@ -64,10 +106,17 @@ export function CustomerView({ lines, totals, company, onClose }: CustomerViewPr
         {/* Screen-only controls */}
         <div className="cv-toolbar no-print">
           <button className="cv-close" onClick={onClose}>← Back</button>
-          <button className="cv-print" onClick={() => window.print()}>
-            🖨 Print / Save PDF
-          </button>
+          <div className="cv-toolbar-right">
+            <button className="cv-print" onClick={() => window.print()}>
+              🖨 Print / Save PDF
+            </button>
+            <button className="cv-share" onClick={handleShare} disabled={sharing}>
+              {sharing ? "Preparing…" : "Share PDF / WhatsApp"}
+            </button>
+          </div>
         </div>
+
+        {shareMsg && <p className="cv-share-msg no-print">{shareMsg}</p>}
 
         {/* Column toggles — screen only */}
         <div className="cv-col-toggles no-print">
@@ -84,7 +133,7 @@ export function CustomerView({ lines, totals, company, onClose }: CustomerViewPr
         </div>
 
         {/* Printable document */}
-        <div className="cv-doc">
+        <div className="cv-doc" ref={docRef}>
 
           {/* Company header */}
           {hasCompany && (

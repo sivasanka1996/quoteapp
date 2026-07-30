@@ -25,6 +25,23 @@ export interface Customer {
   createdAt: number;
 }
 
+// Where a quote stands with the customer. Set by hand — nothing infers it.
+export type QuoteStatus = "draft" | "sent" | "accepted" | "declined";
+
+export const QUOTE_STATUSES: QuoteStatus[] = [
+  "draft",
+  "sent",
+  "accepted",
+  "declined",
+];
+
+export const STATUS_LABEL: Record<QuoteStatus, string> = {
+  draft: "Draft",
+  sent: "Sent",
+  accepted: "Accepted",
+  declined: "Declined",
+};
+
 export interface QuoteDoc {
   id: string;
   customerId: string;
@@ -32,6 +49,12 @@ export interface QuoteDoc {
   name: string;       // quote label / description
   lines: UILine[];
   totalSale: number;  // denormalized for list display
+  status?: QuoteStatus; // optional — quotes saved before this field existed
   createdAt: number;
   updatedAt: number;
+}
+
+// Quotes written before `status` existed read as undefined — treat them as draft
+export function quoteStatus(q: QuoteDoc): QuoteStatus {
+  return q.status ?? "draft";
 }

@@ -38,7 +38,7 @@ export interface QuoteTotals {
 // Parses "64.7% + 2%" into [0.647, 0.02].
 // Supports any number of chained discounts separated by + or /.
 export function parseDiscountChain(expr: string): number[] {
-  const parts = expr.split(/[+\/]/).map((s) => s.trim());
+  const parts = expr.split(/[+/]/).map((s) => s.trim());
   return parts.map((p) => {
     const n = parseFloat(p.replace("%", ""));
     if (isNaN(n)) throw new Error(`Invalid discount token: "${p}"`);

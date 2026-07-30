@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseTranscript } from "./VoiceReader";
+import { parseTranscript } from "./voiceParse";
 
 describe("parseTranscript — English (en-IN)", () => {
   it("pulls leading qty and trailing rate keyword", () => {

@@ -1,0 +1,72 @@
+.sb {
+  display: inline-block;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: var(--r-full);
+  white-space: nowrap;
+}
+
+.sb-draft {
+  color: var(--st-draft);
+  background: var(--st-draft-bg);
+}
+.sb-sent {
+  color: var(--st-sent);
+  background: var(--st-sent-bg);
+}
+.sb-accepted {
+  color: var(--st-accepted);
+  background: var(--st-accepted-bg);
+}
+.sb-declined {
+  color: var(--st-declined);
+  background: var(--st-declined-bg);
+}
+
+/* --- Picker --- */
+
+.sp {
+  display: flex;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+
+.sp-btn {
+  flex: 1 1 auto;
+  min-height: var(--tap-sm);
+  min-width: 76px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-full);
+  background: var(--surface);
+  color: var(--ink-3);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--dur) var(--ease);
+}
+
+.sp-btn:hover {
+  border-color: var(--ink-4);
+}
+
+.sp-btn.is-active.sp-draft {
+  color: var(--st-draft);
+  background: var(--st-draft-bg);
+  border-color: var(--st-draft);
+}
+.sp-btn.is-active.sp-sent {
+  color: var(--st-sent);
+  background: var(--st-sent-bg);
+  border-color: var(--st-sent);
+}
+.sp-btn.is-active.sp-accepted {
+  color: var(--st-accepted);
+  background: var(--st-accepted-bg);
+  border-color: var(--st-accepted);
+}
+.sp-btn.is-active.sp-declined {
+  color: var(--st-declined);
+  background: var(--st-declined-bg);
+  border-color: var(--st-declined);
+}

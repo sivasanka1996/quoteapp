@@ -1,9 +1,94 @@
+/* ============================================================
+   Design tokens — every screen consumes these, nothing hardcodes
+   ============================================================ */
+
 :root {
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* --- Brand green --- */
+  --green-900: #064e2b;
+  --green-700: #0a6b3c;
+  --green-600: #0e7a45;
+  --green-500: #14915a;
+  --green-100: #d7ece0;
+  --green-50: #eaf5ef;
+
+  /* --- Neutrals --- */
+  --ink: #16201c;
+  --ink-2: #445049;
+  --ink-3: #6b7770;
+  --ink-4: #9aa5a0;
+  --line: #e3e9e6;
+  --line-2: #eef2f0;
+  --surface: #ffffff;
+  --surface-2: #f7faf8;
+  --page: #f4f7f5;
+
+  /* --- Semantic money colors --- */
+  --cost: #a1560c;
+  --cost-bg: #fdf4e7;
+  --sell: #1a5fb4;
+  --sell-bg: #eaf1fb;
+  --profit: #0a6b3c;
+  --profit-bg: #eaf5ef;
+  --loss: #b42318;
+  --loss-bg: #fdeceb;
+  --gst: #5c5f7a;
+
+  /* --- Quote status --- */
+  --st-draft: #5d6963;
+  --st-draft-bg: #f0f3f1;
+  --st-sent: #1a5fb4;
+  --st-sent-bg: #eaf1fb;
+  --st-accepted: #0a6b3c;
+  --st-accepted-bg: #e3f2e9;
+  --st-declined: #b42318;
+  --st-declined-bg: #fdeceb;
+
+  /* --- Type scale --- */
+  --fs-xs: 0.72rem;
+  --fs-sm: 0.82rem;
+  --fs-base: 0.94rem;
+  --fs-md: 1.05rem;
+  --fs-lg: 1.2rem;
+  --fs-xl: 1.45rem;
+  --fs-2xl: 1.75rem;
+
+  /* --- Spacing --- */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+  --s-10: 40px;
+
+  /* --- Radii --- */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 22px;
+  --r-full: 999px;
+
+  /* --- Elevation --- */
+  --sh-sm: 0 1px 2px rgba(22, 32, 28, 0.06);
+  --sh-md: 0 2px 8px rgba(22, 32, 28, 0.08);
+  --sh-lg: 0 8px 28px rgba(22, 32, 28, 0.14);
+
+  /* --- Touch targets --- */
+  --tap: 48px;
+  --tap-sm: 44px;
+
+  /* --- Motion --- */
+  --ease: cubic-bezier(0.2, 0, 0.2, 1);
+  --dur: 160ms;
+
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Telugu",
+    sans-serif;
   line-height: 1.45;
-  color: #1a1a1a;
-  background: #fff;
+  color: var(--ink);
+  background: var(--page);
   -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
 }
 
 * {
@@ -12,9 +97,37 @@
 
 body {
   margin: 0;
+  background: var(--page);
 }
 
 #root {
   width: 100%;
   margin: 0 auto;
+}
+
+/* Money and any aligned figures — keeps columns of digits lining up */
+.tnum,
+.num,
+input.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Visible focus for keyboard users everywhere */
+:focus-visible {
+  outline: 2px solid var(--green-600);
+  outline-offset: 2px;
+}
+
+button {
+  font-family: inherit;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

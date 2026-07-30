@@ -34,7 +34,8 @@ Built by Siva for his dad. Non-technical end user — mobile-first, big touch ta
 ```bash
 npm install
 npm run dev        # http://localhost:5173
-npm test           # 26 unit tests (Vitest)
+npm test           # 41 unit tests (Vitest)
+npm run lint       # eslint — clean, keep it that way
 npm run build      # production build
 ```
 
@@ -66,24 +67,41 @@ HomeScreen (search/add customers)
 ### Key files
 ```
 src/
-  AppRouter.tsx          — view manager (home/customer/quote screens)
-  HomeScreen.tsx/css     — customer search + add customer + APK download banner
-  CustomerScreen.tsx/css — quote history per customer
-  QuoteEditor.tsx        — main quote editing UI (cards, blanket discount, profit summary)
-  CustomerView.tsx/css   — customer-facing PDF view with column toggles
+  index.css              — DESIGN TOKENS (color, type scale, spacing, radii, shadows)
+  AppRouter.tsx          — view manager (home/customer/quote) + AppHeader + settings
+  AppHeader.tsx/css      — persistent app bar (logo, title, settings gear)
+  HomeScreen.tsx/css     — stat tiles, APK banner, search, customer rows
+  CustomerScreen.tsx/css — quote history per customer, status badges, status filter
+  QuoteEditor.tsx/css    — collapsed item rows + edit sheet + blanket/summary sidebar
+  CustomerView.tsx/css   — customer-facing document, column toggles, print, share
+  StatusBadge.tsx/css    — quote status badge + status picker
   CompanySettings.tsx    — company name/address/phone/GSTIN/logo (localStorage)
   App.tsx                — re-exports AppRouter
+  appInfo.ts             — version, APK URL, isInstalledApp() standalone detection
   firebase.ts            — Firebase init + Firestore db export
-  types.ts               — shared TypeScript types (UILine, Customer, QuoteDoc)
+  types.ts               — shared types (UILine, Customer, QuoteDoc, QuoteStatus)
+  types.test.ts          — 2 tests for the quoteStatus fallback
   useCustomers.ts        — Firestore CRUD for customers collection
-  useQuotes.ts           — Firestore CRUD for quotes collection (filtered by customerId)
+  useQuotes.ts           — Firestore CRUD per customer + useAllQuotes() for home stats
   useCompanySettings.ts  — company details in localStorage
   useQuoteStorage.ts     — legacy localStorage quote storage (kept, not primary)
+  sharePdf.ts            — element → A4 PDF → Web Share API (lazy-loads jspdf)
+  readImage.ts           — swappable image reader (Gemini via CF Worker)
+  voiceParse.ts          — voice transcript parser (English + Telugu)
+  voiceParse.test.ts     — 9 parser tests
+  VoiceReader.tsx/css    — mic UI, language toggle, alternatives
   calc/engine.ts         — PURE calc functions (no UI, no network)
   calc/engine.test.ts    — 21 tests verifying fixture numbers
-  format.ts              — Indian number formatting (lakh/crore)
-  format.test.ts         — 5 formatting tests
+  format.ts              — Indian number formatting (lakh/crore), short form, dates
+  format.test.ts         — 9 formatting tests
 ```
+
+### Design system
+
+All color, spacing, type, radii and shadow values live as CSS custom properties in
+`src/index.css`. Screens consume tokens — do not hardcode hex values or px spacing.
+Money uses `.tnum` (tabular numerals) so digit columns align. Touch targets are
+`var(--tap)` = 48px minimum.
 
 ### Firestore collections
 ```
@@ -99,9 +117,14 @@ quotes/{id}
   name: string
   lines: UILine[]
   totalSale: number (denormalized for list display)
+  status: "draft" | "sent" | "accepted" | "declined"
   createdAt: number
   updatedAt: number
 ```
+
+`status` is set by hand in the quote editor — nothing infers it. Quotes written
+before the field existed read as `undefined`; use `quoteStatus(q)` from
+`types.ts`, which falls back to `"draft"`.
 
 ---
 
@@ -172,7 +195,13 @@ File: `firestore.rules` — deployed automatically with `firebase deploy`.
 
 ## Current build status — WHAT IS DONE
 
-- [x] Calc engine — 26 tests passing
+- [x] Full visual redesign — design tokens, all four screens, mobile-first
+- [x] Quote status (draft/sent/accepted/declined) — badges, filter, home stat tiles
+- [x] Business / Customer view toggle in the quote editor
+- [x] Collapsed item rows + bottom-sheet line editor (cost, sell, GST, profit)
+- [x] Share as PDF / WhatsApp — Web Share API, falls back to file download
+- [x] Voice input — en-IN default, English/తెలుగు toggle, Telugu-aware parser
+- [x] Calc engine — 41 tests passing
 - [x] Quote editor — card UI, blanket discount (apply to all / selected), profit summary
 - [x] Discount inputs — plain number fields (Discount % + Extra disc %), no % symbol to type
 - [x] Customer PDF — column toggles, company header (logo/name/address/GSTIN), print to PDF
@@ -211,11 +240,17 @@ All code is committed. To activate:
 - `cf-worker/image-reader.js` — the Cloudflare Worker (Gemini proxy, key stored as secret)
 - `cf-worker/wrangler.toml` — worker config
 
-### Step 5 — Voice
-- Mic button, browser Web Speech API (free), Telugu + English
-- ALWAYS show "I heard: … — apply?" confirmation before changing any number
-- Undo on last voice action
-- Supports adding items and editing fields
+### Step 5 — Voice — DONE, with one gap
+
+Built: mic button, Web Speech API, `en-IN` default with an English/తెలుగు toggle
+persisted to localStorage, "I heard: …" confirmation before anything is added,
+up to 3 alternatives as tappable chips, Telugu rate keywords and digits.
+
+Still open:
+- No undo on the last voice action
+- Voice only ADDS items; it cannot edit an existing line's fields
+- In Telugu mode item names stay in Telugu script and land on the customer PDF
+  as-is. Transliterating needs a lookup table of Dad's actual item vocabulary.
 
 ### Before handover to Dad
 - Add Firebase Authentication (Google sign-in or phone OTP)
