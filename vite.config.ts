@@ -13,7 +13,7 @@ export default defineConfig({
         name: 'Quotation App',
         short_name: 'Quotes',
         description: 'Electrical materials quotation with margin calculator',
-        theme_color: '#1a1a1a',
+        theme_color: '#0a6b3c',
         background_color: '#ffffff',
         display: 'standalone',
         orientation: 'portrait',
