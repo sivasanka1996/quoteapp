@@ -58,3 +58,34 @@ export interface QuoteDoc {
 export function quoteStatus(q: QuoteDoc): QuoteStatus {
   return q.status ?? "draft";
 }
+
+/**
+ * Next free line id, given the lines already on screen and the counter's
+ * current value.
+ *
+ * Lines loaded from Firestore carry ids minted in an earlier session. Without
+ * this the editor's counter still sits at 1, so Add Item on a saved quote
+ * hands out an id that is already taken — React keys collide, edits patch two
+ * rows at once, and delete removes the wrong item.
+ *
+ * Monotonic and idempotent: calling it twice with the same lines is safe
+ * (StrictMode runs state initialisers twice in dev).
+ */
+export function seedNextId(lines: Pick<UILine, "id">[], current: number): number {
+  return lines.reduce(
+    (n, l) => (Number.isFinite(l.id) ? Math.max(n, l.id + 1) : n),
+    current
+  );
+}
+
+/**
+ * True when a line has no cost side filled in, so the engine resolves its cost
+ * to ₹0 and reports the whole sale value as profit.
+ *
+ * Voice and image imports set only `sellRate`, which is exactly this case —
+ * without a warning the profit panel confidently overstates the margin.
+ */
+export function hasNoCost(l: UILine): boolean {
+  if (l.costMode === "direct") return !(parseFloat(l.costRate) > 0);
+  return !(parseFloat(l.costList) > 0);
+}

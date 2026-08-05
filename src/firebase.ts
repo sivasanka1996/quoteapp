@@ -1,5 +1,9 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCAWvi1Ekiz_smS1INzxjf5Mjk9SToKoOA",
@@ -12,4 +16,12 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+
+// Offline-first. The default cache is memory-only, which means no signal =
+// no first snapshot, no quotes on screen, and writes that never settle. With
+// a persistent cache Firestore mirrors every read into IndexedDB, serves it
+// instantly on the next open, and queues writes until the phone is back.
+// Dad works in buildings and basements — this is what stops him losing work.
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+});

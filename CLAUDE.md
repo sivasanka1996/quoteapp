@@ -83,7 +83,7 @@ npm install        # REQUIRED FIRST — node_modules is not committed and is
                    # often absent on a fresh clone. Without it `npm test`
                    # fails with "'vitest' is not recognized".
 npm run dev        # http://localhost:5173
-npm test           # 41 unit tests (Vitest) — 21 engine, 9 format, 9 voiceParse, 2 types
+npm test           # 52 unit tests (Vitest) — 21 engine, 9 format, 9 voiceParse, 13 types
 npm run lint       # eslint — clean, keep it that way (NOT yet run in CI)
 npm run build      # production build
 ```
@@ -126,6 +126,7 @@ HomeScreen (search/add customers)
 src/
   index.css              — DESIGN TOKENS (color, type scale, spacing, radii, shadows)
   AppRouter.tsx          — view manager (home/customer/quote) + AppHeader + settings
+  ErrorBoundary.tsx/css  — app-wide render-throw catcher (wraps App in main.tsx)
   AppHeader.tsx/css      — persistent app bar (logo, title, settings gear)
   HomeScreen.tsx/css     — stat tiles, APK banner, search, customer rows
   CustomerScreen.tsx/css — quote history per customer, status badges, status filter
@@ -137,7 +138,8 @@ src/
   appInfo.ts             — version, APK URL, isInstalledApp() standalone detection
   firebase.ts            — Firebase init + Firestore db export
   types.ts               — shared types (UILine, Customer, QuoteDoc, QuoteStatus)
-  types.test.ts          — 2 tests for the quoteStatus fallback
+                           + pure helpers: quoteStatus, seedNextId, hasNoCost
+  types.test.ts          — 13 tests (quoteStatus, seedNextId, hasNoCost)
   useCustomers.ts        — Firestore CRUD for customers collection
   useQuotes.ts           — Firestore CRUD per customer + useAllQuotes() for home stats
   useCompanySettings.ts  — company details in localStorage
@@ -269,13 +271,20 @@ client-side (commit 1ef97d9). The index is deployed and unused.
 
 ## Current build status — WHAT IS DONE
 
+- [x] **PI-1 Trust (code)** — Firestore persistent cache (IndexedDB, offline
+      reads + queued writes); `seedNextId` closes the duplicate-line-id bug;
+      save has try/catch, a retry banner and an ack timeout so it can never
+      hang; unsaved-changes dialog on back plus a `beforeunload` guard; app-wide
+      `ErrorBoundary`; "no cost" chip, cost-side ₹0 warning and a profit-panel
+      caveat on imported lines. Four items still need on-device verification —
+      see the PI-1 table below.
 - [x] Full visual redesign — design tokens, all four screens, mobile-first
 - [x] Quote status (draft/sent/accepted/declined) — badges, filter, home stat tiles
 - [x] Business / Customer view toggle in the quote editor
 - [x] Collapsed item rows + bottom-sheet line editor (cost, sell, GST, profit)
 - [x] Share as PDF / WhatsApp — Web Share API, falls back to file download
 - [x] Voice input — en-IN default, English/తెలుగు toggle, Telugu-aware parser
-- [x] Calc engine — 41 tests passing
+- [x] Calc engine — 52 tests passing
 - [x] Quote editor — card UI, blanket discount (apply to all / selected), profit summary
 - [x] Discount inputs — plain number fields (Discount % + Extra disc %), no % symbol to type
 - [x] Customer PDF — column toggles, company header (logo/name/address/GSTIN), print to PDF
@@ -291,41 +300,19 @@ client-side (commit 1ef97d9). The index is deployed and unused.
 
 ---
 
-## KNOWN BUGS — verified by audit 2026-08-05, all still open
+## KNOWN BUGS
 
-These are real defects found by reading the code, not speculation. Fix before
-adding features.
-
-1. **Duplicate line IDs.** `nextId` in `QuoteEditor.tsx` is a module-level
-   counter starting at 1, and `initLines()` returns `existingQuote.lines`
-   without advancing it. Open a saved quote (lines with ids 1,2,3) → tap Add
-   Item → the new line also gets id 1. `updateLine` then patches two rows,
-   React keys collide, and delete removes the wrong item.
-   *Fix:* seed `nextId` from `max(existing ids) + 1`.
-
-2. **Save can hang forever.** `handleSave` has no try/catch. A rejected write
-   leaves `saving = true` permanently — the button reads "Saving…" and the
-   quote is lost.
-
-3. **No unsaved-changes guard.** `onBack` navigates away silently. The
-   `savedAt` state already tracks dirtiness (it is nulled on every edit); it is
-   just never read on exit.
-
-4. **Imported items show 100% profit.** Image and voice imports set `sellRate`
-   but leave cost blank. `buildDiscountExpr("","")` → `"0%"` on a list price of
-   0 → cost resolves to ₹0 → `lineProfit === lineSaleTotal`. Right after a photo
-   import the profit panel confidently reports the entire sale value as margin.
-   The `no rate` chip in `LineRow` is the pattern to mirror for cost.
+Audited 2026-08-05. Bugs 1, 2, 3, 4 and 7 were closed by PI-1 on the same day —
+see **WHAT IS DONE**. These are what is left.
 
 5. **Quantities truncate to integers.** `parseInt(l.qty)`. Wire and cable sell
-   by the metre — "2.5" silently becomes 2.
+   by the metre — "2.5" silently becomes 2. Scheduled as PI-2.5.
 
 6. **Deleting a customer orphans their quotes.** `deleteCustomer` removes only
    the customer document. The quotes survive, still counted in home stats,
-   unreachable in the UI.
+   unreachable in the UI. Scheduled as PI-4.4.
 
-7. **No error boundary.** Any render throw gives Dad a white screen with no way
-   back.
+(Numbering is kept from the original audit so older notes still line up.)
 
 ---
 
@@ -334,45 +321,36 @@ adding features.
 Ordered by value to Dad. Do not jump ahead; PI-1 is what makes the app
 trustworthy, and nothing else matters until it is done.
 
-### PI-1 — Trust
+### PI-1 — Trust — CODE COMPLETE 2026-08-05, AWAITING ON-DEVICE CHECKS
 
-Dad must never lose work and never see a wrong number.
+All six items are written, typechecked, linted and unit-tested where they are
+unit-testable. **Four of the six still need a hands-on browser check** — they
+depend on DevTools and on IndexedDB, which no automated test in this repo
+reaches. Do not tick them off in conversation without running them.
 
-1. **Firestore offline persistence.** The single highest-value change in the
-   backlog. The web SDK currently defaults to a memory-only cache, so with no
-   signal: `onSnapshot` never delivers a first payload (home tiles stuck on
-   `—`, no quotes listed), writes never settle (bug #2 above), and a reload
-   shows an empty app. Meanwhile the PWA service worker *does* cache the app
-   shell — so today the app opens fine offline and contains nothing.
-   *Fix, in `firebase.ts`:*
-   ```ts
-   export const db = initializeFirestore(app, {
-     localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
-   });
-   ```
-   Firestore then mirrors reads into IndexedDB, serves them instantly offline,
-   and queues writes until signal returns.
-2. Fix the `nextId` collision (bug #1).
-3. try/catch + visible error + retry on save (bug #2).
-4. Unsaved-changes guard on back (bug #3).
-5. Error boundary (bug #7).
-6. "No cost entered" warning on imported lines (bug #4).
-
-**How to verify PI-1 — none of these are covered by the current test suite.**
-Claiming an item is done requires actually doing the check.
-
-| Item | Verification |
-|---|---|
-| Offline persistence | DevTools → Network → Offline. Reload. Quotes and customers must still render from IndexedDB (check Application → IndexedDB → `firestore/...`). Edit a quote and Save — it must report success immediately, then sync when you go back online. |
-| `nextId` collision | Open a quote saved earlier (so its lines carry ids 1,2,3), tap Add Item, and confirm the new line's id does not collide. Best done by extracting the id-seeding into a pure function and adding a Vitest case — that is the only one of these six that is unit-testable as the code stands. |
-| Save error handling | DevTools offline (or block the Firestore domain), tap Save. The button must leave the "Saving…" state and show a retry, not hang. |
-| Unsaved-changes guard | Edit a line, tap back without saving. Must prompt. Then save and tap back — must NOT prompt. |
-| Error boundary | Temporarily `throw new Error("x")` in a screen's render, confirm a recovery UI appears instead of a white page, then remove it. |
-| No-cost warning | Import items via voice or image, then check the profit panel warns rather than reporting the full sale value as margin. |
+| Item | Verification | State |
+|---|---|---|
+| Offline persistence | DevTools → Network → Offline. Reload. Quotes and customers must still render from IndexedDB (check Application → IndexedDB → `firestore/...`). Edit a quote and Save — it must report success immediately, then sync when you go back online. | **UNVERIFIED** |
+| `nextId` collision | Covered by `seedNextId` tests in `types.test.ts` — 6 cases, including the exact 1,2,3-then-Add-Item scenario. | **verified (unit)** |
+| Save error handling | DevTools offline (or block the Firestore domain), tap Save. The button must leave the "Saving…" state and show a retry, not hang. | **UNVERIFIED** |
+| Unsaved-changes guard | Edit a line, tap back without saving. Must prompt. Then save and tap back — must NOT prompt. | **UNVERIFIED** |
+| Error boundary | Temporarily `throw new Error("x")` in a screen's render, confirm a recovery UI appears instead of a white page, then remove it. | **UNVERIFIED** |
+| No-cost warning | `hasNoCost` has 5 unit tests; the chip and panel wiring itself is by eye. Import items via voice or image and check the profit panel warns. | **verified (unit)** |
 
 Tests are `environment: 'node'`, so anything touching the DOM needs a jsdom
 switch in `vite.config.ts` first. Do not add a half-configured test setup just to
 claim coverage — a manual check honestly reported is better than a fake test.
+
+**Design note on the save path.** Firestore resolves a write promise only on
+*server* ack. Offline that promise never settles, so simply awaiting it would
+still hang the button even with persistence on — the original bug wearing a new
+hat. `useQuotes.saveQuote` therefore races the write against a 2.5s
+`ACK_TIMEOUT_MS` and returns `{ id, queued }`: `queued: true` means the
+persistent cache has the data and the server has not confirmed yet, which the
+editor reports as saved plus a "will sync" note. New quotes use a client-minted
+`doc()` id rather than `addDoc`, so a quote created with no signal still gets a
+stable id. Real failures (permission denied) still reject and surface as the
+retry banner.
 
 ### PI-2 — The document
 

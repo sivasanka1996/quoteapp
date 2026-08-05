@@ -1,10 +1,43 @@
 import { useEffect, useState } from "react";
 import {
-  collection, onSnapshot, addDoc, updateDoc, deleteDoc,
+  collection, onSnapshot, setDoc, updateDoc, deleteDoc,
   doc, query, where,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { type UILine, type QuoteDoc, type QuoteStatus } from "./types";
+
+/**
+ * How long to wait for the server to acknowledge a write before calling it
+ * saved-but-not-synced.
+ *
+ * Firestore resolves a write promise only when the *server* has the data.
+ * Offline that promise never settles, so awaiting it hangs the Save button
+ * forever. The write is not lost — the persistent cache has already applied
+ * it locally and will replay it when signal returns — so after this long we
+ * report success and say it will sync.
+ */
+const ACK_TIMEOUT_MS = 2500;
+
+export interface SaveResult {
+  id: string;
+  /** true = written locally and queued; the server has not confirmed yet */
+  queued: boolean;
+}
+
+/** Resolves false on ack, true on timeout. Rejects if the write genuinely fails. */
+async function ackOrQueued(write: Promise<unknown>): Promise<boolean> {
+  // A rejection arriving after the timeout would otherwise be unhandled.
+  write.catch(() => {});
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<boolean>((resolve) => {
+    timer = setTimeout(() => resolve(true), ACK_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([write.then(() => false), timeout]);
+  } finally {
+    clearTimeout(timer!);
+  }
+}
 
 export function useQuotes(customerId: string) {
   const [quotes, setQuotes] = useState<QuoteDoc[]>([]);
@@ -32,19 +65,22 @@ export function useQuotes(customerId: string) {
     totalSale: number,
     status: QuoteStatus,
     existingId?: string
-  ): Promise<string> {
+  ): Promise<SaveResult> {
     const now = Date.now();
     if (existingId) {
-      await updateDoc(doc(db, "quotes", existingId), {
+      const write = updateDoc(doc(db, "quotes", existingId), {
         name: name.trim() || "Untitled",
         lines,
         totalSale,
         status,
         updatedAt: now,
       });
-      return existingId;
+      return { id: existingId, queued: await ackOrQueued(write) };
     }
-    const ref = await addDoc(collection(db, "quotes"), {
+    // doc() mints the id on the device, so a new quote gets a stable id even
+    // with no signal. addDoc would have had to wait for the server.
+    const ref = doc(collection(db, "quotes"));
+    const write = setDoc(ref, {
       customerId,
       customerName,
       name: name.trim() || "Untitled",
@@ -54,7 +90,7 @@ export function useQuotes(customerId: string) {
       createdAt: now,
       updatedAt: now,
     });
-    return ref.id;
+    return { id: ref.id, queued: await ackOrQueued(write) };
   }
 
   async function setStatus(id: string, status: QuoteStatus) {

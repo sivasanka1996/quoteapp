@@ -1,11 +1,14 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { calcQuote, type LineInput, type LineResult, type PriceMode } from "./calc/engine";
 import { formatINR, formatPct } from "./format";
 import { CustomerView, type CustomerLine } from "./CustomerView";
 import { useCompanySettings } from "./useCompanySettings";
 import { useQuotes } from "./useQuotes";
 import { StatusPicker } from "./StatusBadge";
-import { type UILine, type Customer, type QuoteDoc, type QuoteStatus } from "./types";
+import {
+  seedNextId, hasNoCost,
+  type UILine, type Customer, type QuoteDoc, type QuoteStatus,
+} from "./types";
 import { ImageReaderPanel } from "./ImageReader";
 import { type ReadItem } from "./readImage";
 import { VoiceReaderPanel, type VoiceItem } from "./VoiceReader";
@@ -78,7 +81,12 @@ type ViewMode = "business" | "customer";
 
 export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: Props) {
   const initLines = (): UILine[] => {
-    if (existingQuote) return existingQuote.lines;
+    if (existingQuote) {
+      // Saved lines own their ids already — move the counter past them so the
+      // next Add Item cannot mint a duplicate.
+      nextId = seedNextId(existingQuote.lines, nextId);
+      return existingQuote.lines;
+    }
     if (initialItems && initialItems.length > 0) {
       return initialItems.map((it) => ({
         ...blankLine(),
@@ -101,6 +109,12 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
   const [quoteId, setQuoteId] = useState<string | undefined>(existingQuote?.id);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [queued, setQueued] = useState(false);
+  // Distinct from `savedAt`: a freshly opened quote is unsaved-looking but
+  // untouched, and must not nag on the way out.
+  const [dirty, setDirty] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
   const [showImageReader, setShowImageReader] = useState(false);
   const [showVoiceReader, setShowVoiceReader] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -114,21 +128,27 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
     return { results, totals };
   }, [lines]);
 
+  /** Every edit path funnels through here, so nothing can change silently. */
+  function markDirty() {
+    setDirty(true);
+    setSavedAt(null);
+  }
+
   function updateLine(id: number, patch: Partial<UILine>) {
     setLines((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
-    setSavedAt(null);
+    markDirty();
   }
   function addLine() {
     const l = blankLine();
     setLines((prev) => [...prev, l]);
     setEditingId(l.id);
-    setSavedAt(null);
+    markDirty();
   }
   function deleteLine(id: number) {
     setLines((prev) => prev.filter((l) => l.id !== id));
     setSelected((prev) => { const s = new Set(prev); s.delete(id); return s; });
     setDeleteId(null);
-    setSavedAt(null);
+    markDirty();
   }
   function toggleSelect(id: number) {
     setSelected((prev) => {
@@ -143,11 +163,11 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
   }
   function applyBlanketToAll() {
     setLines((prev) => prev.map((l) => ({ ...l, ...applyBlanket(l, blanket) })));
-    setSavedAt(null);
+    markDirty();
   }
   function applyBlanketToSelected() {
     setLines((prev) => prev.map((l) => (selected.has(l.id) ? { ...l, ...applyBlanket(l, blanket) } : l)));
-    setSavedAt(null);
+    markDirty();
   }
 
   function handleAddFromVoice(voiceItem: VoiceItem) {
@@ -158,7 +178,7 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
       sellMode: "direct" as const,
       sellRate: voiceItem.rate != null ? String(voiceItem.rate) : "",
     }]);
-    setSavedAt(null);
+    markDirty();
   }
 
   function handleAddFromImage(readItems: ReadItem[]) {
@@ -170,28 +190,64 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
       sellRate: it.rate != null ? String(it.rate) : "",
     }));
     setLines((prev) => [...prev, ...newLines]);
-    setSavedAt(null);
+    markDirty();
   }
 
-  async function handleSave() {
+  /** Returns true when the quote is safely stored (locally is good enough). */
+  async function handleSave(): Promise<boolean> {
     setSaving(true);
-    const id = await saveQuote(
-      customer.name,
-      quoteName || "Untitled",
-      lines,
-      totals.totalSale,
-      status,
-      quoteId
-    );
-    setQuoteId(id);
-    setSaving(false);
-    setSavedAt(Date.now());
+    setSaveError(null);
+    try {
+      const res = await saveQuote(
+        customer.name,
+        quoteName || "Untitled",
+        lines,
+        totals.totalSale,
+        status,
+        quoteId
+      );
+      setQuoteId(res.id);
+      setQueued(res.queued);
+      setDirty(false);
+      setSavedAt(Date.now());
+      return true;
+    } catch (err) {
+      // Without this the button sat on "Saving…" forever and the quote was lost.
+      setSaveError(err instanceof Error ? err.message : String(err));
+      return false;
+    } finally {
+      setSaving(false);
+    }
   }
 
   function handleStatusChange(s: QuoteStatus) {
     setStatus(s);
-    setSavedAt(null);
+    markDirty();
   }
+
+  function handleBack() {
+    if (dirty) setConfirmLeave(true);
+    else onBack();
+  }
+
+  async function saveAndLeave() {
+    if (await handleSave()) onBack();
+    else setConfirmLeave(false); // the error banner explains what happened
+  }
+
+  // Same guard for closing the tab or swiping the PWA away.
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+
+  // Lines the engine is costing at ₹0 while charging the customer — voice and
+  // image imports land here, and the profit panel would call it all margin.
+  const noCostCount = lines.filter(
+    (l, i) => hasNoCost(l) && results[i].lineSaleTotal > 0
+  ).length;
 
   const allSelected = lines.length > 0 && selected.size === lines.length;
   const someSelected = selected.size > 0 && !allSelected;
@@ -228,14 +284,14 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
   return (
     <div className="qe">
       <div className="qe-top">
-        <button className="qe-back" onClick={onBack} aria-label="Back to quotes">←</button>
+        <button className="qe-back" onClick={handleBack} aria-label="Back to quotes">←</button>
         <div className="qe-title-wrap">
           <span className="qe-customer">{customer.name}</span>
           <input
             className="qe-name"
             value={quoteName}
             placeholder="Quote name / label"
-            onChange={(e) => { setQuoteName(e.target.value); setSavedAt(null); }}
+            onChange={(e) => { setQuoteName(e.target.value); markDirty(); }}
             aria-label="Quote name"
           />
         </div>
@@ -244,11 +300,23 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
             <button className="is-active" aria-pressed="true">Business</button>
             <button onClick={() => setMode("customer")} aria-pressed="false">Customer</button>
           </div>
-          <button className="qe-save" onClick={handleSave} disabled={saving}>
-            {saving ? "Saving…" : savedAt ? "Saved ✓" : quoteId ? "Update" : "Save"}
-          </button>
+          <SaveButton saving={saving} savedAt={savedAt} quoteId={quoteId} onSave={handleSave} />
         </div>
       </div>
+
+      {saveError && (
+        <div className="qe-savealert" role="alert">
+          <span>Could not save — {saveError}</span>
+          <button className="qe-savealert-retry" onClick={handleSave} disabled={saving}>
+            Retry
+          </button>
+        </div>
+      )}
+      {queued && savedAt && !saveError && (
+        <div className="qe-savenote" role="status">
+          Saved on this phone — it will sync when you are back online.
+        </div>
+      )}
 
       <div className="qe-grid">
         <main className="qe-main">
@@ -389,6 +457,13 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
               <span>On cost {formatPct(totals.profitOnCostPct)}</span>
               <span>On sales {formatPct(totals.profitOnSalesPct)}</span>
             </div>
+            {noCostCount > 0 && (
+              <p className="qe-warn-text">
+                ⚠ {noCostCount === 1 ? "1 item has" : `${noCostCount} items have`} no
+                cost entered, so {noCostCount === 1 ? "it counts" : "they count"} as
+                ₹0 — this profit is overstated.
+              </p>
+            )}
             <p className="qe-note">Pre-GST. GST is passed through and never counted as profit.</p>
           </section>
 
@@ -415,9 +490,7 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
           <span>Grand total</span>
           <strong className="tnum">{formatINR(totals.grandTotal)}</strong>
         </div>
-        <button className="qe-save" onClick={handleSave} disabled={saving}>
-          {saving ? "Saving…" : savedAt ? "Saved ✓" : quoteId ? "Update" : "Save"}
-        </button>
+        <SaveButton saving={saving} savedAt={savedAt} quoteId={quoteId} onSave={handleSave} />
       </div>
 
       {editing && (
@@ -431,6 +504,29 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
         />
       )}
 
+      {confirmLeave && (
+        <div
+          className="qe-sheet-overlay"
+          onClick={(e) => { if (e.target === e.currentTarget) setConfirmLeave(false); }}
+        >
+          <div className="qe-confirm" role="dialog" aria-label="Unsaved changes">
+            <h3>Unsaved changes</h3>
+            <p>This quote has changes that have not been saved yet.</p>
+            <div className="qe-confirm-actions">
+              <button className="qe-btn-primary" onClick={saveAndLeave} disabled={saving}>
+                {saving ? "Saving…" : "Save and go back"}
+              </button>
+              <button className="qe-btn-ghost" onClick={() => setConfirmLeave(false)}>
+                Keep editing
+              </button>
+              <button className="qe-btn-danger" onClick={onBack}>
+                Discard changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showImageReader && (
         <ImageReaderPanel onAdd={handleAddFromImage} onClose={() => setShowImageReader(false)} />
       )}
@@ -438,6 +534,19 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
         <VoiceReaderPanel onAdd={handleAddFromVoice} onClose={() => setShowVoiceReader(false)} />
       )}
     </div>
+  );
+}
+
+// ---- Save button (top bar and sticky footer share it) ----
+
+function SaveButton({ saving, savedAt, quoteId, onSave }: {
+  saving: boolean; savedAt: number | null; quoteId: string | undefined;
+  onSave: () => void;
+}) {
+  return (
+    <button className="qe-save" onClick={onSave} disabled={saving}>
+      {saving ? "Saving…" : savedAt ? "Saved ✓" : quoteId ? "Update" : "Save"}
+    </button>
   );
 }
 
@@ -456,6 +565,9 @@ function LineRow({
   const qty = parseInt(l.qty) || 0;
   const disc = l.sellMode === "discount" ? discountLabel(l.sellDisc1, l.sellDisc2) : "";
   const noRate = l.sellMode === "direct" && l.sellRate.trim() === "";
+  // Mirrors the `no rate` chip: a line with no cost reports its whole sale
+  // value as profit, which is the single most misleading number in the app.
+  const noCost = hasNoCost(l) && r.lineSaleTotal > 0;
   const unnamed = l.name.trim() === "";
 
   return (
@@ -480,6 +592,7 @@ function LineRow({
           </span>
           {disc && <span className="qe-chip">{disc}</span>}
           {noRate && <span className="qe-chip qe-chip-warn">no rate</span>}
+          {noCost && <span className="qe-chip qe-chip-warn">no cost</span>}
           <span className={"qe-row-profit " + (r.lineProfit >= 0 ? "is-profit" : "is-loss")}>
             {r.lineProfit >= 0 ? "+" : ""}
             {formatINR(r.lineProfit)}
@@ -638,6 +751,10 @@ function PriceSide({ kind, label, mode, list, disc1, disc2, rate, resolved, tota
   resolved: number; total: number; onChange: (p: SidePatch) => void;
 }) {
   const emptyRate = mode === "direct" && rate.trim() === "";
+  // Discount mode with no list price resolves to ₹0 just as surely as a blank
+  // rate does — it just looks filled-in because the discount fields are set.
+  const emptyList = mode === "discount" && !(parseFloat(list) > 0);
+  const noValue = emptyRate || emptyList;
   return (
     <div className={"qe-side qe-side-" + kind}>
       <div className="qe-side-top">
@@ -664,7 +781,8 @@ function PriceSide({ kind, label, mode, list, disc1, disc2, rate, resolved, tota
         <div className="qe-side-inputs">
           <label className="qe-field">
             <span>List price</span>
-            <input className="qe-input num" value={list} placeholder="0" inputMode="numeric"
+            <input className={"qe-input num" + (emptyList ? " is-warn" : "")}
+              value={list} placeholder="0" inputMode="numeric"
               onChange={(e) => onChange({ list: e.target.value })} />
           </label>
           <label className="qe-field">
@@ -699,8 +817,10 @@ function PriceSide({ kind, label, mode, list, disc1, disc2, rate, resolved, tota
       )}
 
       <div className="qe-side-resolved">
-        {emptyRate ? (
-          <span className="qe-warn-text">⚠ no rate entered — counts as ₹0</span>
+        {noValue ? (
+          <span className="qe-warn-text">
+            ⚠ no {kind === "cost" ? "cost" : "rate"} entered — counts as ₹0
+          </span>
         ) : (
           <>
             <span>{formatINR(resolved, 2)} <em>/ unit</em></span>
