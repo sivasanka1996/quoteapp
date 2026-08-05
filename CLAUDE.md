@@ -29,6 +29,27 @@ adds a service to run.
 
 ---
 
+## Current working state — check this before assuming
+
+*Last updated 2026-08-05. Re-check with `git status` and `git log -1`; if this
+section disagrees with git, git is right and this section is stale.*
+
+- **Branch:** `feature/Vision_Draft`, not `main`. Branched off `a159e6a`.
+- **Deploys only happen from `main`** (`deploy.yml` triggers on push to main).
+  Nothing on this branch is live. PI work has to reach `main` to ship.
+- **Push access is unresolved.** `git push` to `origin`
+  (`sivasanka1996/quoteapp`) returns 403 — the `RevanParimi` GitHub account
+  lacks write access. Siva is sorting this out with the repo owner. Until then
+  commit locally and do not burn time retrying the push.
+- **Commit author must be `revan.datta132@gmail.com`.** With no `user.email`
+  configured, git derives `revan.parimi@ibm.com` from the machine hostname,
+  which is wrong. Global config is now set; verify with
+  `git log -1 --format='%ae'` after committing.
+- **`npm install` has not been run** in some checkouts — `node_modules` is
+  absent and `npm test` fails with "'vitest' is not recognized" until it is.
+
+---
+
 ## Live URLs
 
 - **App:** https://quoteapp-3f48e.web.app
@@ -336,6 +357,22 @@ Dad must never lose work and never see a wrong number.
 4. Unsaved-changes guard on back (bug #3).
 5. Error boundary (bug #7).
 6. "No cost entered" warning on imported lines (bug #4).
+
+**How to verify PI-1 — none of these are covered by the current test suite.**
+Claiming an item is done requires actually doing the check.
+
+| Item | Verification |
+|---|---|
+| Offline persistence | DevTools → Network → Offline. Reload. Quotes and customers must still render from IndexedDB (check Application → IndexedDB → `firestore/...`). Edit a quote and Save — it must report success immediately, then sync when you go back online. |
+| `nextId` collision | Open a quote saved earlier (so its lines carry ids 1,2,3), tap Add Item, and confirm the new line's id does not collide. Best done by extracting the id-seeding into a pure function and adding a Vitest case — that is the only one of these six that is unit-testable as the code stands. |
+| Save error handling | DevTools offline (or block the Firestore domain), tap Save. The button must leave the "Saving…" state and show a retry, not hang. |
+| Unsaved-changes guard | Edit a line, tap back without saving. Must prompt. Then save and tap back — must NOT prompt. |
+| Error boundary | Temporarily `throw new Error("x")` in a screen's render, confirm a recovery UI appears instead of a white page, then remove it. |
+| No-cost warning | Import items via voice or image, then check the profit panel warns rather than reporting the full sale value as margin. |
+
+Tests are `environment: 'node'`, so anything touching the DOM needs a jsdom
+switch in `vite.config.ts` first. Do not add a half-configured test setup just to
+claim coverage — a manual check honestly reported is better than a fake test.
 
 ### PI-2 — The document
 
