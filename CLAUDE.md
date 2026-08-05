@@ -271,13 +271,13 @@ client-side (commit 1ef97d9). The index is deployed and unused.
 
 ## Current build status — WHAT IS DONE
 
-- [x] **PI-1 Trust (code)** — Firestore persistent cache (IndexedDB, offline
-      reads + queued writes); `seedNextId` closes the duplicate-line-id bug;
-      save has try/catch, a retry banner and an ack timeout so it can never
-      hang; unsaved-changes dialog on back plus a `beforeunload` guard; app-wide
+- [x] **PI-1 Trust** — Firestore persistent cache (IndexedDB, offline reads +
+      queued writes); `seedNextId` closes the duplicate-line-id bug; save has
+      try/catch, a retry banner and an ack timeout so it can never hang;
+      unsaved-changes dialog on back plus a `beforeunload` guard; app-wide
       `ErrorBoundary`; "no cost" chip, cost-side ₹0 warning and a profit-panel
-      caveat on imported lines. Four items still need on-device verification —
-      see the PI-1 table below.
+      caveat on imported lines. Verified end-to-end in a real browser — see the
+      PI-1 table for what was and was not checked.
 - [x] Full visual redesign — design tokens, all four screens, mobile-first
 - [x] Quote status (draft/sent/accepted/declined) — badges, filter, home stat tiles
 - [x] Business / Customer view toggle in the quote editor
@@ -321,25 +321,40 @@ see **WHAT IS DONE**. These are what is left.
 Ordered by value to Dad. Do not jump ahead; PI-1 is what makes the app
 trustworthy, and nothing else matters until it is done.
 
-### PI-1 — Trust — CODE COMPLETE 2026-08-05, AWAITING ON-DEVICE CHECKS
+### PI-1 — Trust — DONE and VERIFIED 2026-08-05
 
-All six items are written, typechecked, linted and unit-tested where they are
-unit-testable. **Four of the six still need a hands-on browser check** — they
-depend on DevTools and on IndexedDB, which no automated test in this repo
-reaches. Do not tick them off in conversation without running them.
+All six items shipped and were verified by driving the **built** app in
+Chromium (Playwright, against the real Firestore project). One item is
+partially verified — see the note under the table.
 
-| Item | Verification | State |
+| Item | How it was verified | Result |
 |---|---|---|
-| Offline persistence | DevTools → Network → Offline. Reload. Quotes and customers must still render from IndexedDB (check Application → IndexedDB → `firestore/...`). Edit a quote and Save — it must report success immediately, then sync when you go back online. | **UNVERIFIED** |
-| `nextId` collision | Covered by `seedNextId` tests in `types.test.ts` — 6 cases, including the exact 1,2,3-then-Add-Item scenario. | **verified (unit)** |
-| Save error handling | DevTools offline (or block the Firestore domain), tap Save. The button must leave the "Saving…" state and show a retry, not hang. | **UNVERIFIED** |
-| Unsaved-changes guard | Edit a line, tap back without saving. Must prompt. Then save and tap back — must NOT prompt. | **UNVERIFIED** |
-| Error boundary | Temporarily `throw new Error("x")` in a screen's render, confirm a recovery UI appears instead of a white page, then remove it. | **UNVERIFIED** |
-| No-cost warning | `hasNoCost` has 5 unit tests; the chip and panel wiring itself is by eye. Import items via voice or image and check the profit panel warns. | **verified (unit)** |
+| Offline persistence — reads | `firestore/[DEFAULT]/quoteapp-3f48e/main` present in IndexedDB. Firestore blocked at the network layer, page reloaded: all 6 customers and all 4 stat tiles still rendered from cache. | **PASS** |
+| Offline persistence — writes | Saved a quote with Firestore blocked, then restored the network. A separate Node client then found the quote on the **server** (2 lines, totalSale ₹2000) — the queued write really did drain. | **PASS** |
+| Save never hangs | With Firestore blocked, Save went to "Saved ✓" in **2560ms** (the `ACK_TIMEOUT_MS` path) and showed the "will sync when you are back online" note. Never stuck on "Saving…". | **PASS** |
+| `nextId` collision | 6 `seedNextId` unit tests, plus end-to-end: reopened a saved quote and tapped Add Item — row count went 1 → 2, no duplicate. | **PASS** |
+| Unsaved-changes guard | Back straight after saving → no prompt. Edit the quote name, then Back → prompt appears. | **PASS** |
+| Error boundary | Put a `throw` in `HomeScreen`'s render and rebuilt: got the recovery card ("Something went wrong" + Back/Reload), root HTML 498 bytes, not a blank page. Throw removed and rebuilt clean. | **PASS** |
+| No-cost warning | 5 `hasNoCost` unit tests, plus end-to-end on an item with a sell rate and no cost: cost-side ₹0 warning, `no cost` row chip, and the profit panel reading "1 item has no cost entered… this profit is overstated". | **PASS** |
+
+**Not verified: that the app *shell* opens with the network fully cut.** The
+service worker registers but never reaches `active` in headless Chromium, so a
+full `setOffline` reload could not be exercised — every offline check above cut
+Firestore only. This is PWA behaviour that predates PI-1, not something these
+changes touched, but nobody has actually watched it work. **Worth one check on
+Dad's phone: put it in airplane mode and open the app cold.** If the shell does
+not load, the persistent cache underneath it is moot.
 
 Tests are `environment: 'node'`, so anything touching the DOM needs a jsdom
 switch in `vite.config.ts` first. Do not add a half-configured test setup just to
 claim coverage — a manual check honestly reported is better than a fake test.
+
+**How to re-run these checks.** They are not in the repo (they need Playwright,
+a Chromium download and a live Firestore). Recipe: `npm run build && npm run
+preview`, drive `localhost:4173` with Playwright, abort `**://*.googleapis.com/**`
+to simulate no signal, and use an obviously-named throwaway customer. Delete the
+customer **and its quotes** afterwards — bug #6 means deleting the customer
+alone leaves the quotes behind.
 
 **Design note on the save path.** Firestore resolves a write promise only on
 *server* ack. Offline that promise never settles, so simply awaiting it would
