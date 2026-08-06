@@ -31,7 +31,7 @@ adds a service to run.
 
 ## Current working state — check this before assuming
 
-*Last updated 2026-08-05. Re-check with `git status` and `git log -1`; if this
+*Last updated 2026-08-06. Re-check with `git status` and `git log -1`; if this
 section disagrees with git, git is right and this section is stale.*
 
 - **Branch:** `feature/Vision_Draft`, not `main`. Branched off `a159e6a`.
@@ -83,7 +83,7 @@ npm install        # REQUIRED FIRST — node_modules is not committed and is
                    # often absent on a fresh clone. Without it `npm test`
                    # fails with "'vitest' is not recognized".
 npm run dev        # http://localhost:5173
-npm test           # 52 unit tests (Vitest) — 21 engine, 9 format, 9 voiceParse, 13 types
+npm test           # 63 unit tests (Vitest) — 23 engine, 15 format, 9 voiceParse, 16 types
 npm run lint       # eslint — clean, keep it that way (NOT yet run in CI)
 npm run build      # production build
 ```
@@ -142,7 +142,7 @@ src/
   types.test.ts          — 13 tests (quoteStatus, seedNextId, hasNoCost)
   useCustomers.ts        — Firestore CRUD for customers collection
   useQuotes.ts           — Firestore CRUD per customer + useAllQuotes() for home stats
-  useCompanySettings.ts  — company details in localStorage
+  useCompanySettings.ts  — company details in localStorage (incl. validity + terms)
   sharePdf.ts            — element → A4 PDF → Web Share API (lazy-loads jspdf)
   readImage.ts           — swappable image reader (Gemini via CF Worker)
   ImageReader.tsx/css    — camera/gallery UI, confirmation list before adding
@@ -278,6 +278,17 @@ client-side (commit 1ef97d9). The index is deployed and unused.
       `ErrorBoundary`; "no cost" chip, cost-side ₹0 warning and a profit-panel
       caveat on imported lines. Verified end-to-end in a real browser — see the
       PI-1 table for what was and was not checked.
+- [x] **PI-2 The document** — the customer view is a quotation now, not a price
+      list. It carries a To block (name, address and phone, read from the
+      customer record), a quote number derived from `createdAt`
+      (`Q-260806-1423`), the date, an optional subject taken from the quote
+      name, validity and terms from company settings, and `₹` on every amount.
+      Every field hides when it is empty, so a customer with no address on file
+      still prints cleanly. The editor mints `createdAt` when it opens, so a PDF
+      shared *before* the first save carries the same number the saved quote
+      ends up with. Fractional quantities fixed (bug #5). Verified end to end in
+      Chromium against the real Firestore — 33 checks, all passing; see the PI-2
+      table below.
 - [x] Full visual redesign — design tokens, all four screens, mobile-first
 - [x] Quote status (draft/sent/accepted/declined) — badges, filter, home stat tiles
 - [x] Business / Customer view toggle in the quote editor
@@ -302,17 +313,32 @@ client-side (commit 1ef97d9). The index is deployed and unused.
 
 ## KNOWN BUGS
 
-Audited 2026-08-05. Bugs 1, 2, 3, 4 and 7 were closed by PI-1 on the same day —
-see **WHAT IS DONE**. These are what is left.
-
-5. **Quantities truncate to integers.** `parseInt(l.qty)`. Wire and cable sell
-   by the metre — "2.5" silently becomes 2. Scheduled as PI-2.5.
+Audited 2026-08-05. Bugs 1, 2, 3, 4 and 7 were closed by PI-1; bug 5 was closed
+by PI-2 on 2026-08-06 — see **WHAT IS DONE**. These are what is left.
 
 6. **Deleting a customer orphans their quotes.** `deleteCustomer` removes only
    the customer document. The quotes survive, still counted in home stats,
    unreachable in the UI. Scheduled as PI-4.4.
 
-(Numbering is kept from the original audit so older notes still line up.)
+8. **The item table is clipped on a phone, and the clipping reaches the PDF.**
+   Found while verifying PI-2, 2026-08-06. With all five columns showing, the
+   table is wider than `.cv-doc` at phone widths: at 375px the Amount column's
+   right edge lands 61px past the document edge, at 414px 22px past. `.cv-doc`
+   is `overflow-x: visible`, so the content spills rather than scrolls, and
+   `sharePdf` rasterises the document at its *rendered* width with no
+   `windowWidth` override — so the Amount column can be missing from the file
+   the customer receives.
+
+   Mostly pre-existing (the table has always been this wide); PI-2 made it worse
+   by about 30px, adding `₹` to three columns. **Dad already has a workaround:**
+   switching off *List price* and *Discount* with the column toggles makes the
+   table fit exactly at 375px, measured. A real fix is a design decision — shrink
+   the type on narrow screens, or default those two columns off below some
+   width — so it is not something to pick unilaterally. Worth doing before
+   handover.
+
+(Numbering is kept from the original audit so older notes still line up. 7 was
+closed by PI-1, hence the gap.)
 
 ---
 
@@ -370,18 +396,42 @@ editor reports as saved plus a "will sync" note. New quotes use a client-minted
 stable id. Real failures (permission denied) still reject and surface as the
 retry banner.
 
-### PI-2 — The document
+### PI-2 — The document — DONE and VERIFIED 2026-08-06
 
-The customer PDF is not yet a quotation. Missing the fields that let a business
-act on it or refer back to it.
+All five items shipped. Verified by driving the **built** app in Chromium
+(Playwright, against the real Firestore project) with two obviously-named
+throwaway customers, both deleted afterwards along with their quotes. 33 checks,
+all passing.
 
-1. **Customer name + address on the document.** `customerName` is already
-   passed into `CustomerView` but is only used for the PDF *filename* — it
-   never renders on the page.
-2. **Date + quote number.**
-3. **Validity period + terms** — one editable line, stored with company settings.
-4. **Consistent `₹`** — home tiles prepend it, the PDF totals do not.
-5. Fractional quantities (bug #5).
+| Item | How it was verified | Result |
+|---|---|---|
+| Customer name, address, phone | Seeded a customer with all three; the To block rendered each one. A second customer with no address or phone rendered no empty `.cv-billto-line` at all. | **PASS** |
+| Date + quote number | Seeded `createdAt` = 06 Aug 2026 14:23; the document read `Q-260806-1423` and `06 Aug 2026`. | **PASS** |
+| Number matches before and after the first save | New quote → Customer view **without saving** → `Q-260806-1234`. Back, Save, Customer view again → identical. Closed and reopened from the customer's history → still identical. | **PASS** |
+| Validity + terms | Set in company settings with a multi-line terms block; both printed under the totals and the terms kept all 3 lines (`white-space: pre-line`). Cleared → the whole block disappeared. | **PASS** |
+| Consistent `₹` | Every money cell and all three totals: `₹120`, `₹2,280`, `₹2,400`, `₹432`, `₹2,832`. | **PASS** |
+| Fractional quantities (bug #5) | 2.5 m at ₹48: business row `2.5 × 48.00`, amount `120` — not `96`. Document showed qty `2.5` and `₹120`. | **PASS** |
+| Nothing renders as `undefined` | Full document and bare document both scanned for `undefined` / `NaN` / `[object` — clean. | **PASS** |
+| Header does not overflow a phone | At 375px the No./Date column wraps below the title (`flex-wrap: wrap`), the row does not overflow (scroll 291 = client 291) and the page does not scroll horizontally. | **PASS** |
+
+**The business view deliberately has no `₹`.** PI-2 item 4 scoped the symbol to
+the home tiles and the customer-facing document. The editor's own dense number
+columns were left alone.
+
+**Bug #5's closure is precise.** The named mechanism — `parseInt(l.qty)` in five
+places — is gone, replaced by one tested `parseQty` in `types.ts`. The *voice*
+path still reads a leading decimal as part of the item name, and that is
+deliberate: in this domain "1.5 sq" and "2.5 sq" are item names, and the idiom is
+quantity-first-as-a-whole-number — the existing test
+`parseTranscript("6 wire 1.5sq rate 1650")` expects qty 6, name "wire 1.5sq".
+Teaching that regex decimals would parse "2.5 sq wire" as qty 2.5 of "sq wire",
+turning a correct parse into a wrong one. A fractional quantity from a voice
+import is entered by editing the qty field afterwards, which now works.
+
+**What this did not check:** the actual generated PDF. Every check reads the DOM
+that `sharePdf` rasterises, not the file html2canvas produces. That gap is how
+bug #8 above stayed invisible until the table was measured — worth remembering
+before trusting a DOM check to speak for the PDF.
 
 ### PI-3 — Sharpen the AI paths
 
@@ -439,6 +489,9 @@ Cheap. Do whenever there is a spare hour.
 
 ### Before handover to Dad
 - Test on his actual phone/browser
+- **Share a real PDF from a phone-width browser and open the file.** Bug #8:
+  with all five columns on, the Amount column can be clipped out of the shared
+  PDF. Every PI-2 check read the DOM, not the generated file.
 - **Airplane-mode cold start.** Load the live site with signal, force-close it,
   turn on airplane mode, reopen. Customers and quotes must list. This is the
   one PI-1 claim no automated check could reach — it needs the service worker
