@@ -13,6 +13,12 @@ type Stage = "idle" | "camera" | "reading" | "confirming" | "error";
 interface ConfirmItem extends ReadItem {
   _id: number;
   checked: boolean;
+  // Qty/rate held as the text the user is actively typing, parsed only at
+  // commit (handleAdd). A number input re-parsed on every keystroke gets its
+  // DOM value stomped by React mid-edit — "2." becomes "2" before the "5" is
+  // ever typed, silently turning 2.5 into 25.
+  _qtyRaw: string;
+  _rateRaw: string;
 }
 
 let _itemSeq = 0;
@@ -92,7 +98,13 @@ export function ImageReaderPanel({ onAdd, onClose }: Props) {
         ? imageBlob
         : new File([imageBlob], "photo.jpg", { type: "image/jpeg" });
       const result = await readImageItems(file);
-      setItems(result.items.map((it) => ({ ...it, _id: _itemSeq++, checked: true })));
+      setItems(result.items.map((it) => ({
+        ...it,
+        _id: _itemSeq++,
+        checked: true,
+        _qtyRaw: String(it.qty ?? ""),
+        _rateRaw: it.rate == null ? "" : String(it.rate),
+      })));
       setNotes(result.notes ?? "");
       setStage("confirming");
     } catch (e) {
@@ -106,7 +118,15 @@ export function ImageReaderPanel({ onAdd, onClose }: Props) {
   }
 
   function handleAdd() {
-    onAdd(items.filter((it) => it.checked));
+    onAdd(
+      items
+        .filter((it) => it.checked)
+        .map((it) => ({
+          name: it.name,
+          qty: parseQty(it._qtyRaw),
+          rate: it._rateRaw.trim() === "" ? null : (parseFloat(it._rateRaw) || null),
+        }))
+    );
     stopCamera();
     onClose();
   }
@@ -206,13 +226,13 @@ export function ImageReaderPanel({ onAdd, onClose }: Props) {
                     onChange={(e) => patchItem(it._id, { name: e.target.value })} />
                   <label className="ir-item-field">
                     <span>Qty</span>
-                    <input className="ir-item-num" value={it.qty} inputMode="decimal"
-                      onChange={(e) => patchItem(it._id, { qty: parseQty(e.target.value) })} />
+                    <input className="ir-item-num" value={it._qtyRaw} inputMode="decimal"
+                      onChange={(e) => patchItem(it._id, { _qtyRaw: e.target.value })} />
                   </label>
                   <label className="ir-item-field">
                     <span>Rate</span>
-                    <input className="ir-item-num" value={it.rate ?? ""} inputMode="decimal" placeholder="—"
-                      onChange={(e) => patchItem(it._id, { rate: e.target.value.trim() === "" ? null : parseFloat(e.target.value) || null })} />
+                    <input className="ir-item-num" value={it._rateRaw} inputMode="decimal" placeholder="—"
+                      onChange={(e) => patchItem(it._id, { _rateRaw: e.target.value })} />
                   </label>
                 </div>
               ))}

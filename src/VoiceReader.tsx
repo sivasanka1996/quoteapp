@@ -37,6 +37,12 @@ export function VoiceReaderPanel({ onAdd, onClose }: Props) {
   const [transcript, setTranscript] = useState("");
   const [alternatives, setAlternatives] = useState<string[]>([]);
   const [item, setItem] = useState<VoiceItem>({ name: "", qty: 1, rate: null });
+  // Qty/rate held as the text being typed, parsed only at commit (handleAdd).
+  // A number re-parsed on every keystroke gets its DOM value stomped by React
+  // mid-edit — "2." becomes "2" before the "5" is ever typed, silently turning
+  // 2.5 into 25 (and, with the old `|| 1` fallback, "0." into 1).
+  const [qtyRaw, setQtyRaw] = useState("1");
+  const [rateRaw, setRateRaw] = useState("");
   const [error, setError] = useState("");
   const [lang, setLang] = useState<VoiceLang>(
     () =>
@@ -57,7 +63,10 @@ export function VoiceReaderPanel({ onAdd, onClose }: Props) {
 
   function applyTranscript(text: string) {
     setTranscript(text);
-    setItem(parseTranscript(text));
+    const parsed = parseTranscript(text);
+    setItem(parsed);
+    setQtyRaw(String(parsed.qty));
+    setRateRaw(parsed.rate != null ? String(parsed.rate) : "");
   }
 
   function startListening() {
@@ -112,7 +121,11 @@ export function VoiceReaderPanel({ onAdd, onClose }: Props) {
 
   function handleAdd() {
     if (item.name.trim()) {
-      onAdd(item);
+      onAdd({
+        name: item.name,
+        qty: parseQty(qtyRaw) || 1,
+        rate: rateRaw.trim() === "" ? null : (parseFloat(rateRaw) || null),
+      });
       onClose();
     }
   }
@@ -195,24 +208,19 @@ export function VoiceReaderPanel({ onAdd, onClose }: Props) {
                   <span>Qty</span>
                   <input
                     className="vr-input-num"
-                    value={item.qty}
+                    value={qtyRaw}
                     inputMode="decimal"
-                    onChange={(e) => setItem((p) => ({ ...p, qty: parseQty(e.target.value) || 1 }))}
+                    onChange={(e) => setQtyRaw(e.target.value)}
                   />
                 </label>
                 <label className="vr-field">
                   <span>Rate</span>
                   <input
                     className="vr-input-num"
-                    value={item.rate ?? ""}
+                    value={rateRaw}
                     inputMode="decimal"
                     placeholder="—"
-                    onChange={(e) =>
-                      setItem((p) => ({
-                        ...p,
-                        rate: e.target.value.trim() === "" ? null : parseFloat(e.target.value) || null,
-                      }))
-                    }
+                    onChange={(e) => setRateRaw(e.target.value)}
                   />
                 </label>
               </div>
