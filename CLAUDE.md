@@ -426,6 +426,31 @@ all passing.
 | Nothing renders as `undefined` | Full document and bare document both scanned for `undefined` / `NaN` / `[object` — clean. | **PASS** |
 | Header does not overflow a phone | At 375px the No./Date column wraps below the title (`flex-wrap: wrap`), the row does not overflow (scroll 291 = client 291) and the page does not scroll horizontally. | **PASS** |
 
+**Two defects the whole-branch review caught, both fixed before merge.** Neither
+was visible to a single task's review — each needed two tasks side by side.
+
+1. **`Subject: Untitled` on the customer's document.** `saveQuote` had always
+   stored `name.trim() || "Untitled"` as an internal placeholder, which was
+   harmless while the quote name only fed the PDF *filename*. PI-2 promoted it
+   to a rendered `Subject:` line, so reopening an unnamed quote and sharing it
+   sent the customer a quotation reading "Subject: Untitled". `saveQuote` now
+   stores the name as typed, each display site applies its own fallback, and the
+   editor treats a stored `"Untitled"` as no name so quotes saved before the fix
+   are covered too. The quote *list* still shows "Untitled", which is where that
+   label belongs.
+2. **The image and voice confirm-list qty and rate fields could not take a
+   decimal point.** Both were controlled by a *number* and re-parsed on every
+   keystroke, so React restored the committed value and erased the in-progress
+   `"2."` — typing `2.5` produced **25**, and on the rate field `12.5` produced
+   **125**. They now hold the in-progress text as a string and parse once at
+   commit, matching what the quote editor's own qty field already did. Task 2
+   had given these fields `inputMode="decimal"`, so the keypad was offering a
+   key the field rejected.
+
+Re-verified in the browser after those fixes: a legacy `"Untitled"` quote prints
+no subject line and the word appears nowhere on the document, a named quote
+still prints its subject, and the quote list still labels unnamed quotes.
+
 **The business view deliberately has no `₹`.** PI-2 item 4 scoped the symbol to
 the home tiles and the customer-facing document. The editor's own dense number
 columns were left alone.
