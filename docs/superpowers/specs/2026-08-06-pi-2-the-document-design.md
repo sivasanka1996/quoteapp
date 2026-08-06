@@ -132,8 +132,13 @@ DOM inside the existing `.cv-doc` (the node `sharePdf` rasterises):
 | `.cv-terms` | new | `company.validity` or `company.terms` is non-empty |
 
 Every new field hides when empty, so a customer with no address on file still
-prints a clean document. Styling uses the tokens in `index.css` — no new hex
-values, no hardcoded px.
+prints a clean document.
+
+Styling follows the file's existing split rather than the app-wide token rule:
+the screen-only toolbar in `CustomerView.css` uses tokens, but everything inside
+`.cv-doc` is fixed hex (`#1a1a1a`, `#555`, `#eee`) because it is a print surface
+that must look the same regardless of theme. New document blocks match their
+neighbours.
 
 The No./Date block is `CustomerView` calling `quoteNumber(createdAt)` and the
 existing `formatDate(createdAt)` — both hide when the helper returns `""`, which
@@ -182,7 +187,19 @@ exactly as it renders on screen. No jsPDF font work is involved.
 
 ## 5. Fractional quantities (bug #5)
 
-`parseInt` → `parseFloat` at five sites:
+One tested helper in `types.ts`, next to the other UILine semantics:
+
+```ts
+/** Quantity as a number. Wire sells by the metre, so "2.5" must stay 2.5. */
+export function parseQty(s: string): number
+```
+
+Five sites currently `parseInt` a quantity string, which is five chances to fix
+this bug in four places. A helper also makes the fix testable: `toLineInput`
+lives inside `QuoteEditor.tsx`, which imports Firebase, so a node-environment
+test cannot reach it. `parseQty` in `types.ts` can be tested directly.
+
+The five call sites:
 
 | Site | What it feeds |
 |---|---|
@@ -213,10 +230,18 @@ Tests stay `environment: 'node'`, so they cover the pure functions only.
 - `formatMoney` — zero, a lakh-grouped value, two decimals, and a negative
   rendering as `-₹5`
 
+**`types.test.ts`**
+- `parseQty` — `"2.5"` stays 2.5 (the bug, stated as a test); `""` and `"abc"`
+  are 0, matching what `parseInt(s) || 0` did for them
+
 **`engine.test.ts`**
-- 2.5 m at ₹48 is ₹120, not ₹96 (the bug, stated as a test)
+- 2.5 m at ₹48 is ₹120, not ₹96
 - a fractional qty against a discount-resolved rate, checking the rounding lands
   where per-line rounding says it should
+
+These two engine tests pass against the engine as it stands — `calcLine` always
+took `qty: number` and was never the broken part. They are here to lock the
+contract the UI now depends on. The test that actually goes red is `parseQty`.
 
 **Manual, in a browser** — the document layout itself. No component tests: the
 suite would need a jsdom switch in `vite.config.ts` first, and a manual check
@@ -235,6 +260,8 @@ not have. What gets checked by hand:
 ```
 src/format.ts              quoteNumber, formatMoney
 src/format.test.ts         tests for both
+src/types.ts               parseQty
+src/types.test.ts          parseQty tests
 src/useCompanySettings.ts  validity, terms
 src/CompanySettings.tsx    validity input, terms textarea, TextArea helper
 src/CustomerView.tsx       header block, To block, subject, terms, ₹ on money
