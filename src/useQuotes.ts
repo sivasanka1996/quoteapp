@@ -72,7 +72,7 @@ export function useQuotes(customerId: string) {
     const now = Date.now();
     if (existingId) {
       const write = updateDoc(doc(db, "quotes", existingId), {
-        name: name.trim() || "Untitled",
+        name: name.trim(),
         lines,
         totalSale,
         status,
@@ -86,7 +86,7 @@ export function useQuotes(customerId: string) {
     const write = setDoc(ref, {
       customerId,
       customerName,
-      name: name.trim() || "Untitled",
+      name: name.trim(),
       lines,
       totalSale,
       status,

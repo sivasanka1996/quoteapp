@@ -104,7 +104,12 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
   const [blanket, setBlanket] = useState<Blanket>({ side: "cost", disc1: "", disc2: "" });
   const [mode, setMode] = useState<ViewMode>("business");
   const [pendingShare, setPendingShare] = useState(false);
-  const [quoteName, setQuoteName] = useState(existingQuote?.name ?? "");
+  // "Untitled" was an internal storage placeholder before PI-2 promoted the
+  // quote name to a Subject line on the customer's document. Quotes saved back
+  // then carry the literal word; it is not something Dad typed.
+  const [quoteName, setQuoteName] = useState(
+    existingQuote?.name === "Untitled" ? "" : existingQuote?.name ?? ""
+  );
   const [status, setStatus] = useState<QuoteStatus>(existingQuote?.status ?? "draft");
   const [quoteId, setQuoteId] = useState<string | undefined>(existingQuote?.id);
   // Minted once, on open. A new quote's number is printable before it is saved,
@@ -203,7 +208,7 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
     try {
       const res = await saveQuote(
         customer.name,
-        quoteName || "Untitled",
+        quoteName,
         lines,
         totals.totalSale,
         status,
