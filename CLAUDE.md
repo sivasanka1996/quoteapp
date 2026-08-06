@@ -337,13 +337,16 @@ partially verified — see the note under the table.
 | Error boundary | Put a `throw` in `HomeScreen`'s render and rebuilt: got the recovery card ("Something went wrong" + Back/Reload), root HTML 498 bytes, not a blank page. Throw removed and rebuilt clean. | **PASS** |
 | No-cost warning | 5 `hasNoCost` unit tests, plus end-to-end on an item with a sell rate and no cost: cost-side ₹0 warning, `no cost` row chip, and the profit panel reading "1 item has no cost entered… this profit is overstated". | **PASS** |
 
-**Not verified: that the app *shell* opens with the network fully cut.** The
-service worker registers but never reaches `active` in headless Chromium, so a
-full `setOffline` reload could not be exercised — every offline check above cut
-Firestore only. This is PWA behaviour that predates PI-1, not something these
-changes touched, but nobody has actually watched it work. **Worth one check on
-Dad's phone: put it in airplane mode and open the app cold.** If the shell does
-not load, the persistent cache underneath it is moot.
+**Scope of "offline" above: the data layer only.** Each check aborted requests
+to the app's single off-localhost endpoint —
+`POST firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel`,
+the WebChannel stream `onSnapshot` runs on. `localhost` stayed reachable, so
+the app shell always loaded from the server. Whether the *service worker*
+serves the shell with the network fully cut is untested: the SW never reaches
+`active` under Playwright (headed or headless), and that is the harness, not
+the build — `sw.js` is served as `text/javascript` and all 25 precache URLs
+return 200. Deferred to the pre-handover list; it is pre-existing PWA
+behaviour, not something PI-1 touched.
 
 Tests are `environment: 'node'`, so anything touching the DOM needs a jsdom
 switch in `vite.config.ts` first. Do not add a half-configured test setup just to
@@ -436,6 +439,10 @@ Cheap. Do whenever there is a spare hour.
 
 ### Before handover to Dad
 - Test on his actual phone/browser
+- **Airplane-mode cold start.** Load the live site with signal, force-close it,
+  turn on airplane mode, reopen. Customers and quotes must list. This is the
+  one PI-1 claim no automated check could reach — it needs the service worker
+  active, which only happens in a real browser.
 - Walk him through camera + mic permissions (one-time)
 - Confirm the customer PDF hides cost/profit before he sends one
 
