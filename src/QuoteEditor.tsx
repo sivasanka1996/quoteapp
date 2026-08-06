@@ -6,7 +6,7 @@ import { useCompanySettings } from "./useCompanySettings";
 import { useQuotes } from "./useQuotes";
 import { StatusPicker } from "./StatusBadge";
 import {
-  seedNextId, hasNoCost,
+  seedNextId, hasNoCost, parseQty,
   type UILine, type Customer, type QuoteDoc, type QuoteStatus,
 } from "./types";
 import { ImageReaderPanel } from "./ImageReader";
@@ -43,7 +43,7 @@ function toPriceMode(
 
 function toLineInput(l: UILine): LineInput {
   return {
-    name: l.name, qty: parseInt(l.qty) || 0,
+    name: l.name, qty: parseQty(l.qty),
     cost: toPriceMode(l.costMode, l.costList, l.costDisc1, l.costDisc2, l.costRate),
     sell: toPriceMode(l.sellMode, l.sellList, l.sellDisc1, l.sellDisc2, l.sellRate),
     gstPct: parseFloat(l.gstPct) || 0,
@@ -260,7 +260,7 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
       const d = (1 - results[i].resolvedSell / listPrice) * 100;
       sellDisc1 = d > 0 ? d.toFixed(2) : "";
     }
-    return { name: l.name, qty: parseInt(l.qty) || 0, listPrice, sellDisc1, sellDisc2, result: results[i] };
+    return { name: l.name, qty: parseQty(l.qty), listPrice, sellDisc1, sellDisc2, result: results[i] };
   });
 
   if (mode === "customer") {
@@ -562,7 +562,7 @@ function LineRow({
   onToggleSelect: () => void; onEdit: () => void;
   onAskDelete: () => void; onCancelDelete: () => void; onConfirmDelete: () => void;
 }) {
-  const qty = parseInt(l.qty) || 0;
+  const qty = parseQty(l.qty);
   const disc = l.sellMode === "discount" ? discountLabel(l.sellDisc1, l.sellDisc2) : "";
   const noRate = l.sellMode === "direct" && l.sellRate.trim() === "";
   // Mirrors the `no rate` chip: a line with no cost reports its whole sale
@@ -665,7 +665,7 @@ function LineEditorSheet({
             <input
               className="qe-input num"
               value={l.qty}
-              inputMode="numeric"
+              inputMode="decimal"
               placeholder="0"
               onChange={(e) => onChange({ qty: e.target.value })}
             />

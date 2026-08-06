@@ -5,6 +5,7 @@ import {
   type VoiceItem,
   type VoiceLang,
 } from "./voiceParse";
+import { parseQty } from "./types";
 import "./VoiceReader.css";
 
 export type { VoiceItem } from "./voiceParse";
@@ -195,8 +196,8 @@ export function VoiceReaderPanel({ onAdd, onClose }: Props) {
                   <input
                     className="vr-input-num"
                     value={item.qty}
-                    inputMode="numeric"
-                    onChange={(e) => setItem((p) => ({ ...p, qty: parseInt(e.target.value) || 1 }))}
+                    inputMode="decimal"
+                    onChange={(e) => setItem((p) => ({ ...p, qty: parseQty(e.target.value) || 1 }))}
                   />
                 </label>
                 <label className="vr-field">

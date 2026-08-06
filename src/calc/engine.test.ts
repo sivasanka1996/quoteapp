@@ -184,3 +184,33 @@ describe("calcQuote — full fixture totals", () => {
     expect(totals.grandTotal).toBe(12502874);
   });
 });
+
+describe("fractional quantities — wire and cable sell by the metre", () => {
+  it("2.5 m at ₹48 is ₹120, not ₹96", () => {
+    const r = calcLine({
+      name: "2.5 sq wire",
+      qty: 2.5,
+      cost: { kind: "direct", rate: 40 },
+      sell: { kind: "direct", rate: 48 },
+      gstPct: 18,
+    });
+    expect(r.lineCostTotal).toBe(100);
+    expect(r.lineSaleTotal).toBe(120);
+    expect(r.lineProfit).toBe(20);
+    expect(r.gstAmount).toBe(22); // round(120 × 0.18) = round(21.6)
+  });
+
+  it("rounds a fractional qty against a discount-resolved rate", () => {
+    const r = calcLine({
+      name: "1.5 sq",
+      qty: 0.5,
+      cost: { kind: "discount", listPrice: 17835, discountExpr: COST_DISCOUNT_EXPR },
+      sell: { kind: "direct", rate: 6296 },
+      gstPct: 18,
+    });
+    // 17835 × 0.353 × 0.98 = 6169.84 per unit; × 0.5 = 3084.92 → 3085
+    expect(r.resolvedCost).toBeCloseTo(6169.84, 2);
+    expect(r.lineCostTotal).toBe(3085);
+    expect(r.lineSaleTotal).toBe(3148);
+  });
+});

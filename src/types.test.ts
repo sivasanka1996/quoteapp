@@ -3,6 +3,7 @@ import {
   quoteStatus,
   seedNextId,
   hasNoCost,
+  parseQty,
   type QuoteDoc,
   type UILine,
 } from "./types";
@@ -103,5 +104,21 @@ describe("hasNoCost", () => {
 
   it("flags discount mode with a zero list price, discounts or not", () => {
     expect(hasNoCost(line({ costMode: "discount", costList: "0", costDisc1: "64.7" }))).toBe(true);
+  });
+});
+
+describe("parseQty", () => {
+  it("keeps a fractional quantity — wire sells by the metre", () => {
+    expect(parseQty("2.5")).toBe(2.5);
+    expect(parseQty("0.75")).toBe(0.75);
+  });
+
+  it("reads whole numbers unchanged", () => {
+    expect(parseQty("402")).toBe(402);
+  });
+
+  it("is 0 for anything unreadable, as parseInt(s) || 0 was", () => {
+    expect(parseQty("")).toBe(0);
+    expect(parseQty("abc")).toBe(0);
   });
 });

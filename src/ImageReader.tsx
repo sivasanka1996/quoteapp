@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { readImageItems, type ReadItem } from "./readImage";
+import { parseQty } from "./types";
 import "./ImageReader.css";
 
 interface Props {
@@ -205,8 +206,8 @@ export function ImageReaderPanel({ onAdd, onClose }: Props) {
                     onChange={(e) => patchItem(it._id, { name: e.target.value })} />
                   <label className="ir-item-field">
                     <span>Qty</span>
-                    <input className="ir-item-num" value={it.qty} inputMode="numeric"
-                      onChange={(e) => patchItem(it._id, { qty: parseInt(e.target.value) || 0 })} />
+                    <input className="ir-item-num" value={it.qty} inputMode="decimal"
+                      onChange={(e) => patchItem(it._id, { qty: parseQty(e.target.value) })} />
                   </label>
                   <label className="ir-item-field">
                     <span>Rate</span>

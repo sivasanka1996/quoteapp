@@ -89,3 +89,16 @@ export function hasNoCost(l: UILine): boolean {
   if (l.costMode === "direct") return !(parseFloat(l.costRate) > 0);
   return !(parseFloat(l.costList) > 0);
 }
+
+/**
+ * A quantity string as a number.
+ *
+ * Wire and cable sell by the metre, so "2.5" has to stay 2.5. This used to be
+ * `parseInt(l.qty) || 0` in five separate places, which silently billed 2.5 m
+ * as 2 m. Fractional quantities were never a problem for the engine — it takes
+ * `qty: number` and always has.
+ */
+export function parseQty(s: string): number {
+  const n = parseFloat(s);
+  return Number.isFinite(n) ? n : 0;
+}
