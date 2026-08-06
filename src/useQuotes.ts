@@ -64,7 +64,10 @@ export function useQuotes(customerId: string) {
     lines: UILine[],
     totalSale: number,
     status: QuoteStatus,
-    existingId?: string
+    existingId?: string,
+    // The editor mints this when it opens, so the quote number printed on a
+    // PDF shared before the first save matches the document that gets stored.
+    createdAt?: number
   ): Promise<SaveResult> {
     const now = Date.now();
     if (existingId) {
@@ -87,7 +90,7 @@ export function useQuotes(customerId: string) {
       lines,
       totalSale,
       status,
-      createdAt: now,
+      createdAt: createdAt ?? now,
       updatedAt: now,
     });
     return { id: ref.id, queued: await ackOrQueued(write) };

@@ -107,6 +107,9 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
   const [quoteName, setQuoteName] = useState(existingQuote?.name ?? "");
   const [status, setStatus] = useState<QuoteStatus>(existingQuote?.status ?? "draft");
   const [quoteId, setQuoteId] = useState<string | undefined>(existingQuote?.id);
+  // Minted once, on open. A new quote's number is printable before it is saved,
+  // and stays the same once it is.
+  const [createdAt] = useState(() => existingQuote?.createdAt ?? Date.now());
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -204,7 +207,8 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
         lines,
         totals.totalSale,
         status,
-        quoteId
+        quoteId,
+        createdAt
       );
       setQuoteId(res.id);
       setQueued(res.queued);
