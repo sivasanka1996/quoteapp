@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { type Customer, quoteStatus } from "./types";
 import { useCustomers } from "./useCustomers";
 import { useAllQuotes } from "./useQuotes";
-import { formatINR, formatINRShort, formatDate } from "./format";
+import { formatMoney, formatINRShort, formatDate } from "./format";
 import { APK_URL, APP_VERSION, isInstalledApp } from "./appInfo";
 import "./HomeScreen.css";
 
@@ -204,7 +204,7 @@ export function HomeScreen({ onSelectCustomer }: Props) {
                 {s && s.total > 0 && (
                   <span className="home-row-amount">
                     <span className="home-row-value tnum">
-                      ₹{formatINR(s.total)}
+                      {formatMoney(s.total)}
                     </span>
                     <span className="home-row-value-label">Total value</span>
                   </span>

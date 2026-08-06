@@ -8,7 +8,7 @@ import {
   quoteStatus,
 } from "./types";
 import { useQuotes } from "./useQuotes";
-import { formatINR, formatDate } from "./format";
+import { formatMoney, formatDate } from "./format";
 import { StatusBadge } from "./StatusBadge";
 import { ImageReaderPanel } from "./ImageReader";
 import { VoiceReaderPanel } from "./VoiceReader";
@@ -60,7 +60,7 @@ export function CustomerScreen({
             {loading
               ? "Loading quotes…"
               : `${quotes.length} quote${quotes.length === 1 ? "" : "s"}` +
-                (totalValue > 0 ? ` · ₹${formatINR(totalValue)} total value` : "")}
+                (totalValue > 0 ? ` · ${formatMoney(totalValue)} total value` : "")}
           </p>
           {(customer.phone || customer.address) && (
             <p className="cs-ident-contact">
@@ -144,7 +144,7 @@ export function CustomerScreen({
                 </span>
                 <span className="cs-row-right">
                   {q.totalSale > 0 && (
-                    <span className="cs-row-amount tnum">₹{formatINR(q.totalSale)}</span>
+                    <span className="cs-row-amount tnum">{formatMoney(q.totalSale)}</span>
                   )}
                   <StatusBadge status={quoteStatus(q)} />
                 </span>

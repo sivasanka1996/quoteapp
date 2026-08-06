@@ -44,3 +44,24 @@ export function formatDate(ts: number): string {
     year: "numeric",
   });
 }
+
+/**
+ * "Q-260806-1423" — the date and time the quote was created.
+ *
+ * Derived rather than sequential: a counter needs either a counter document
+ * (a write that can fail with no signal) or a scan of every quote at save
+ * time. This needs neither, cannot collide, and never changes for a given
+ * quote because `createdAt` never changes.
+ */
+export function quoteNumber(ts: number): string {
+  if (!ts) return "";
+  const d = new Date(ts);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `Q-${p(d.getFullYear() % 100)}${p(d.getMonth() + 1)}${p(d.getDate())}` +
+         `-${p(d.getHours())}${p(d.getMinutes())}`;
+}
+
+/** "₹3,73,347" — formatINR with the symbol. Sign goes outside: -₹5, not ₹-5. */
+export function formatMoney(n: number, decimals = 0): string {
+  return (n < 0 ? "-" : "") + "₹" + formatINR(Math.abs(n), decimals);
+}

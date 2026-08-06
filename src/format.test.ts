@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatINR, formatINRShort } from "./format";
+import { formatINR, formatINRShort, quoteNumber, formatMoney } from "./format";
 
 describe("formatINR — Indian grouping", () => {
   it("formats crore-sized numbers", () => {
@@ -40,5 +40,31 @@ describe("formatINRShort — compact stat tiles", () => {
   });
   it("keeps the sign", () => {
     expect(formatINRShort(-240000)).toBe("-2.4L");
+  });
+});
+
+describe("quoteNumber — derived from the quote's creation time", () => {
+  it("builds Q-YYMMDD-HHMM", () => {
+    // Built from local components so the test holds in any timezone
+    expect(quoteNumber(new Date(2026, 7, 6, 14, 23).getTime())).toBe("Q-260806-1423");
+  });
+  it("pads single-digit month, day, hour and minute", () => {
+    expect(quoteNumber(new Date(2026, 0, 2, 3, 4).getTime())).toBe("Q-260102-0304");
+  });
+  it("is empty when there is no timestamp", () => {
+    expect(quoteNumber(0)).toBe("");
+  });
+});
+
+describe("formatMoney — formatINR with the symbol", () => {
+  it("prefixes the symbol", () => {
+    expect(formatMoney(0)).toBe("₹0");
+    expect(formatMoney(373347)).toBe("₹3,73,347");
+  });
+  it("keeps decimals", () => {
+    expect(formatMoney(6169.84, 2)).toBe("₹6,169.84");
+  });
+  it("puts the sign outside the symbol", () => {
+    expect(formatMoney(-5)).toBe("-₹5");
   });
 });
