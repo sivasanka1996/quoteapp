@@ -6,6 +6,8 @@ export interface CompanySettings {
   addressLine2: string;
   phone: string;
   gstin: string;
+  validity: string;     // "Valid for 15 days from the date above."
+  terms: string;        // free multi-line block, printed under the totals
   logoDataUrl: string; // base64 data URL or ""
 }
 
@@ -17,6 +19,8 @@ const defaults: CompanySettings = {
   addressLine2: "",
   phone: "",
   gstin: "",
+  validity: "",
+  terms: "",
   logoDataUrl: "",
 };
 

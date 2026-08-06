@@ -87,6 +87,18 @@ export function CompanySettingsPanel({ settings, onChange, onClose }: Props) {
             placeholder="22AAAAA0000A1Z5"
             onChange={(v) => onChange({ gstin: v.toUpperCase() })}
           />
+          <Field
+            label="Validity"
+            value={settings.validity}
+            placeholder="Valid for 15 days from the date above"
+            onChange={(v) => onChange({ validity: v })}
+          />
+          <TextArea
+            label="Terms"
+            value={settings.terms}
+            placeholder={"Payment: 50% advance, balance on delivery\nDelivery: 3–4 working days"}
+            onChange={(v) => onChange({ terms: v })}
+          />
         </div>
 
         <div className="cs-footer">
@@ -113,6 +125,30 @@ function Field({
     <label className="cs-field">
       <span>{label}</span>
       <input
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </label>
+  );
+}
+
+function TextArea({
+  label,
+  value,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <label className="cs-field">
+      <span>{label}</span>
+      <textarea
+        rows={4}
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}

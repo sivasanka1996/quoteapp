@@ -115,7 +115,8 @@
   color: #555;
   font-weight: 600;
 }
-.cs-field input {
+.cs-field input,
+.cs-field textarea {
   padding: 11px 12px;
   border: 1px solid #ccc;
   border-radius: 8px;
@@ -123,9 +124,15 @@
   font-family: inherit;
   width: 100%;
 }
-.cs-field input:focus {
+.cs-field input:focus,
+.cs-field textarea:focus {
   outline: none;
   border-color: #1a1a1a;
+}
+.cs-field textarea {
+  resize: vertical;
+  min-height: 92px;
+  line-height: 1.45;
 }
 
 /* Footer */
