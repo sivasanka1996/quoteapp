@@ -313,29 +313,12 @@ client-side (commit 1ef97d9). The index is deployed and unused.
 
 ## KNOWN BUGS
 
-Audited 2026-08-05. Bugs 1, 2, 3, 4 and 7 were closed by PI-1; bug 5 was closed
-by PI-2 on 2026-08-06 — see **WHAT IS DONE**. These are what is left.
+Audited 2026-08-05. Bugs 1, 2, 3, 4 and 7 were closed by PI-1; bugs 5 and 8 were
+closed by PI-2 on 2026-08-06 — see **WHAT IS DONE**. These are what is left.
 
 6. **Deleting a customer orphans their quotes.** `deleteCustomer` removes only
    the customer document. The quotes survive, still counted in home stats,
    unreachable in the UI. Scheduled as PI-4.4.
-
-8. **The item table is clipped on a phone, and the clipping reaches the PDF.**
-   Found while verifying PI-2, 2026-08-06. With all five columns showing, the
-   table is wider than `.cv-doc` at phone widths: at 375px the Amount column's
-   right edge lands 61px past the document edge, at 414px 22px past. `.cv-doc`
-   is `overflow-x: visible`, so the content spills rather than scrolls, and
-   `sharePdf` rasterises the document at its *rendered* width with no
-   `windowWidth` override — so the Amount column can be missing from the file
-   the customer receives.
-
-   Mostly pre-existing (the table has always been this wide); PI-2 made it worse
-   by about 30px, adding `₹` to three columns. **Dad already has a workaround:**
-   switching off *List price* and *Discount* with the column toggles makes the
-   table fit exactly at 375px, measured. A real fix is a design decision — shrink
-   the type on narrow screens, or default those two columns off below some
-   width — so it is not something to pick unilaterally. Worth doing before
-   handover.
 
 9. **A quote saved before PI-2 with a fractional-quantity line can show a stale
    `totalSale` in the quote list and the home tiles.** `totalSale` is
@@ -450,6 +433,25 @@ was visible to a single task's review — each needed two tasks side by side.
 Re-verified in the browser after those fixes: a legacy `"Untitled"` quote prints
 no subject line and the word appears nowhere on the document, a named quote
 still prints its subject, and the quote list still labels unnamed quotes.
+
+**The document does not reflow, and that is deliberate** (this closed bug #8).
+`sharePdf` rasterises `.cv-doc` with html2canvas at whatever width it happens to
+be rendered at, so a responsive document meant *the file a customer received
+depended on the screen it was shared from* — on a phone the item table
+overflowed and the Amount column was cut out of the PDF entirely. `.cv-doc` is
+now pinned to `width: 760px` on screen, so the shared file is identical from a
+phone or a desktop; verified at 360, 375, 414, 820 and 1280px, all rendering
+760px with nothing outside the captured node.
+
+The cost is that the preview scrolls sideways on a phone — Dad sees the left of
+the document and swipes for the totals. That is the right trade: a preview that
+fits the screen but misrepresents the output is worse than one he has to nudge,
+and every other PDF on a phone behaves this way. The `flex-wrap` on `.cv-docmeta`
+is now dead weight at a fixed width; it is left as insurance.
+
+Do not make the document responsive again without re-reading this. If the
+preview needs to fit a phone screen, scale it (`transform`) rather than reflow
+it — and check what html2canvas does with the transform before trusting it.
 
 **The business view deliberately has no `₹`.** PI-2 item 4 scoped the symbol to
 the home tiles and the customer-facing document. The editor's own dense number

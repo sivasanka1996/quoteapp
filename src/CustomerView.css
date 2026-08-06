@@ -170,6 +170,32 @@
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
 }
 
+/*
+ * The document does not reflow. sharePdf rasterises .cv-doc with html2canvas at
+ * whatever width it happens to be rendered at, so a responsive document would
+ * mean the file a customer receives depends on the screen it was shared from —
+ * on a phone the item table overflowed and the Amount column was cut out of the
+ * PDF entirely (old bug #8).
+ *
+ * Pinning the width makes the shared file identical from a phone or a desktop.
+ * The preview scrolls sideways instead, which is what any PDF on a phone does.
+ *
+ * `screen` matters: A4 at 96dpi is ~794 CSS px, so an unscoped max-width: 800px
+ * would catch the print path too — which already lays out correctly.
+ */
+@media screen {
+  .cv-doc {
+    width: 760px;
+  }
+}
+
+/* Only a viewport narrower than the document needs to scroll. */
+@media screen and (max-width: 800px) {
+  .cv-sheet {
+    overflow-x: auto;
+  }
+}
+
 /* --- Document meta: title + number/date --- */
 .cv-docmeta {
   display: flex;
