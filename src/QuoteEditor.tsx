@@ -274,7 +274,10 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
         totals={totals}
         company={company}
         customerName={customer.name}
-        quoteName={quoteName || "Quotation"}
+        customerAddress={customer.address}
+        customerPhone={customer.phone}
+        createdAt={createdAt}
+        quoteName={quoteName}
         autoShare={pendingShare}
         onShareHandled={() => setPendingShare(false)}
         onClose={() => setMode("business")}

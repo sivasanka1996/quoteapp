@@ -170,11 +170,74 @@
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
 }
 
+/* --- Document meta: title + number/date --- */
+.cv-docmeta {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+
 .cv-title {
   font-size: 1.8rem;
   font-weight: 700;
-  margin: 0 0 24px;
+  margin: 0;
   color: #1a1a1a;
+}
+
+.cv-docmeta-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: right;
+  font-size: 0.9rem;
+}
+.cv-docmeta-row {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+.cv-docmeta-row span {
+  color: #555;
+}
+.cv-docmeta-row strong {
+  min-width: 118px;
+  text-align: right;
+  color: #1a1a1a;
+}
+
+/* --- Bill-to block --- */
+.cv-billto {
+  margin-bottom: 18px;
+  line-height: 1.5;
+}
+.cv-billto-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #888;
+  margin-bottom: 3px;
+}
+.cv-billto-name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+.cv-billto-line {
+  font-size: 0.9rem;
+  color: #555;
+}
+
+.cv-subject {
+  margin: 0 0 18px;
+  font-size: 0.95rem;
+  color: #1a1a1a;
+}
+.cv-subject-label {
+  color: #888;
+  font-weight: 600;
 }
 
 .cv-table {
@@ -252,6 +315,34 @@
 
 .cv-grand strong {
   font-weight: 700;
+}
+
+/* --- Validity and terms --- */
+.cv-terms {
+  margin-top: 28px;
+  padding-top: 14px;
+  border-top: 1px solid #eee;
+}
+.cv-validity {
+  margin: 0 0 12px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+.cv-terms-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #888;
+  margin-bottom: 4px;
+}
+.cv-terms-body {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #555;
+  line-height: 1.55;
+  white-space: pre-line; /* keeps the line breaks Dad typed in settings */
 }
 
 /* --- Print styles --- */

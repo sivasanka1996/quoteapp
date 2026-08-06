@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { type LineResult } from "./calc/engine";
 import { type CompanySettings } from "./useCompanySettings";
-import { formatINR } from "./format";
+import { formatMoney, formatDate, quoteNumber } from "./format";
 import { shareQuotePdf, pdfFilename } from "./sharePdf";
 import "./CustomerView.css";
 
@@ -24,6 +24,10 @@ export interface CustomerViewProps {
   company: CompanySettings;
   onClose: () => void;
   customerName?: string;
+  customerAddress?: string;
+  customerPhone?: string;
+  /** The quote's creation time — the document's date and the source of its number. */
+  createdAt: number;
   quoteName?: string;
   /** Start the share sheet as soon as the document is on screen. */
   autoShare?: boolean;
@@ -50,7 +54,8 @@ function discountLabel(d1: string, d2: string): string {
 
 export function CustomerView({
   lines, totals, company, onClose,
-  customerName = "", quoteName = "", autoShare = false, onShareHandled,
+  customerName = "", customerAddress = "", customerPhone = "",
+  createdAt, quoteName = "", autoShare = false, onShareHandled,
 }: CustomerViewProps) {
   const [visible, setVisible] = useState<Set<ColKey>>(
     new Set(["qty", "listPrice", "discount", "rate", "amount"])
@@ -99,6 +104,9 @@ export function CustomerView({
 
   const show = (key: ColKey) => visible.has(key);
   const hasCompany = !!(company.name || company.addressLine1 || company.phone || company.gstin || company.logoDataUrl);
+  const docNo = quoteNumber(createdAt);
+  const docDate = formatDate(createdAt);
+  const hasTerms = !!(company.validity || company.terms);
 
   return (
     <div className="cv-overlay">
@@ -155,7 +163,36 @@ export function CustomerView({
 
           <div className="cv-divider" />
 
-          <h1 className="cv-title">Quotation</h1>
+          <div className="cv-docmeta">
+            <h1 className="cv-title">Quotation</h1>
+            <div className="cv-docmeta-fields">
+              {docNo && (
+                <div className="cv-docmeta-row">
+                  <span>No.</span><strong className="tnum">{docNo}</strong>
+                </div>
+              )}
+              {docDate && (
+                <div className="cv-docmeta-row">
+                  <span>Date</span><strong className="tnum">{docDate}</strong>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {customerName && (
+            <div className="cv-billto">
+              <div className="cv-billto-label">To</div>
+              <div className="cv-billto-name">{customerName}</div>
+              {customerAddress && <div className="cv-billto-line">{customerAddress}</div>}
+              {customerPhone && <div className="cv-billto-line">📞 {customerPhone}</div>}
+            </div>
+          )}
+
+          {quoteName && (
+            <p className="cv-subject">
+              <span className="cv-subject-label">Subject:</span> {quoteName}
+            </p>
+          )}
 
           <table className="cv-table">
             <thead>
@@ -175,10 +212,10 @@ export function CustomerView({
                   <tr key={i}>
                     <td>{l.name}</td>
                     {show("qty")       && <td className="num">{l.qty}</td>}
-                    {show("listPrice") && <td className="num">{l.listPrice ? formatINR(l.listPrice) : "—"}</td>}
+                    {show("listPrice") && <td className="num">{l.listPrice ? formatMoney(l.listPrice) : "—"}</td>}
                     {show("discount")  && <td className="num">{disc || "—"}</td>}
-                    {show("rate")      && <td className="num">{formatINR(l.result.resolvedSell, 2)}</td>}
-                    {show("amount")    && <td className="num">{formatINR(l.result.lineSaleTotal)}</td>}
+                    {show("rate")      && <td className="num">{formatMoney(l.result.resolvedSell, 2)}</td>}
+                    {show("amount")    && <td className="num">{formatMoney(l.result.lineSaleTotal)}</td>}
                   </tr>
                 );
               })}
@@ -188,17 +225,29 @@ export function CustomerView({
           <div className="cv-totals">
             <div className="cv-total-row">
               <span>Subtotal</span>
-              <strong>{formatINR(totals.totalSale)}</strong>
+              <strong>{formatMoney(totals.totalSale)}</strong>
             </div>
             <div className="cv-total-row">
               <span>GST</span>
-              <strong>{formatINR(totals.totalGst)}</strong>
+              <strong>{formatMoney(totals.totalGst)}</strong>
             </div>
             <div className="cv-total-row cv-grand">
               <span>Grand Total</span>
-              <strong>{formatINR(totals.grandTotal)}</strong>
+              <strong>{formatMoney(totals.grandTotal)}</strong>
             </div>
           </div>
+
+          {hasTerms && (
+            <div className="cv-terms">
+              {company.validity && <p className="cv-validity">{company.validity}</p>}
+              {company.terms && (
+                <>
+                  <div className="cv-terms-label">Terms</div>
+                  <p className="cv-terms-body">{company.terms}</p>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
