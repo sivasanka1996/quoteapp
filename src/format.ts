@@ -51,7 +51,9 @@ export function formatDate(ts: number): string {
  * Derived rather than sequential: a counter needs either a counter document
  * (a write that can fail with no signal) or a scan of every quote at save
  * time. This needs neither, cannot collide, and never changes for a given
- * quote because `createdAt` never changes.
+ * quote because `createdAt` never changes — stable per device, though: it is
+ * rendered from local device time, so the same `createdAt` would print a
+ * different number on a device set to a different timezone.
  */
 export function quoteNumber(ts: number): string {
   if (!ts) return "";

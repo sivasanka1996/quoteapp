@@ -5,13 +5,16 @@ import { formatMoney, formatDate, quoteNumber } from "./format";
 import { shareQuotePdf, pdfFilename } from "./sharePdf";
 import "./CustomerView.css";
 
+/** Only the sell-side numbers. Cost and profit must never reach this component. */
+export type CustomerLineResult = Pick<LineResult, "resolvedSell" | "lineSaleTotal">;
+
 export interface CustomerLine {
   name: string;
   qty: number;
   listPrice: number | null;
   sellDisc1: string;
   sellDisc2: string;
-  result: LineResult;
+  result: CustomerLineResult;
 }
 
 export interface CustomerViewProps {

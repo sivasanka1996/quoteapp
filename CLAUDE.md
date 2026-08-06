@@ -337,6 +337,18 @@ by PI-2 on 2026-08-06 — see **WHAT IS DONE**. These are what is left.
    width — so it is not something to pick unilaterally. Worth doing before
    handover.
 
+9. **A quote saved before PI-2 with a fractional-quantity line can show a stale
+   `totalSale` in the quote list and the home tiles.** `totalSale` is
+   denormalized at save time. Before bug #5 was fixed, a line with `qty:
+   "2.5"` was costed at the truncated quantity (2) when it was saved, and that
+   truncated `totalSale` is what got written to Firestore. The editor and the
+   customer document always recompute from the stored `lines`, so both already
+   read correctly. `CustomerScreen`'s list row and the home stat tiles read the
+   stored `totalSale` field directly, so they keep showing the old, truncated
+   figure until the quote is opened and saved again — which overwrites it with
+   the correct total. Self-healing, and only in the direction of correctness;
+   not worth a migration for a handful of pre-fix quotes.
+
 (Numbering is kept from the original audit so older notes still line up. 7 was
 closed by PI-1, hence the gap.)
 
