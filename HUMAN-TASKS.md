@@ -203,6 +203,13 @@ only happen from `main`, and this is a feature branch.
   already read correctly, and opening + saving such a quote heals it permanently.
   Self-healing and only ever in the direction of correctness — not worth a
   migration for a handful of quotes.
+- **No customer edit/delete UI** (new, 2026-08-07 — needs one decision from
+  Siva, then it is ordinary buildable work). `useCustomers` exposes
+  `updateCustomer` and `deleteCustomer`; no screen calls either. The part that
+  actually bites: PI-2 put the customer's address and phone on the To block of
+  every quotation, so a wrong number now reaches customers and cannot be
+  corrected in the app. Full write-up and the two options under **KNOWN GAPS**
+  in `CLAUDE.md`; the recommendation is edit-only first.
 - **PI-3 item 6** (voice): keep the browser Web Speech API. Free, shipped, good
   enough. Only revisit — AI4Bharat IndicWhisper is the best fit — if Dad
   complains about Telugu accuracy. No work pending.

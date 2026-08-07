@@ -164,7 +164,9 @@ src/
   types.test.ts          — 16 tests (quoteStatus, seedNextId, hasNoCost, parseQty)
   useCustomers.ts        — Firestore CRUD for customers collection
                            + deleteCustomerAndQuotes(db, id): one writeBatch so
-                           a customer and their quotes go together (bug #6)
+                           a customer and their quotes go together (bug #6).
+                           NOTE: no screen calls delete or update — see KNOWN
+                           GAPS. HomeScreen destructures add only.
   useQuotes.ts           — Firestore CRUD per customer + useAllQuotes() for home stats
   useCompanySettings.ts  — company details in localStorage (incl. validity + terms)
   sharePdf.ts            — element → A4 PDF → Web Share API (lazy-loads jspdf)
@@ -396,6 +398,38 @@ closed by PI-2 on 2026-08-06; bug 6 was closed by PI-4.4 on 2026-08-07 — see
 
 (Numbering is kept from the original audit so older notes still line up. Only
 #9 is open; the gaps are closed bugs.)
+
+---
+
+## KNOWN GAPS — not bugs, but not what the notes imply
+
+Found 2026-08-07 by reviewing the whole branch against `main` before merge. The
+code is correct; the surrounding claims were wider than the code.
+
+**There is no way to delete or edit a customer in the app.** `useCustomers`
+returns `deleteCustomer` and `updateCustomer`, and
+[HomeScreen.tsx:20](src/HomeScreen.tsx#L20) destructures
+`{ customers, loading, addCustomer }` — the other two have no call site
+anywhere in `src/`. So:
+
+- **Bug #6's fix is real, tested and unreachable from the UI.** PI-4.4 reads
+  like a user-facing repair; it is a library repair. The only live caller of
+  `deleteCustomerAndQuotes` is `scripts/cascade-check.ts`. Nothing regressed —
+  there was no delete button before either — but do not tell Dad the delete
+  behaviour changed for him, because he never had a delete button.
+- **A customer added by typo is permanent** as far as Dad is concerned, and so
+  is a wrong phone number, which PI-2 now prints on the To block of every
+  quotation that customer receives. That is the sharper half of this gap: the
+  address and phone became *customer-visible* in PI-2 while remaining
+  uneditable.
+
+Not fixed here because it is new scope, and a destructive control on a
+big-touch-target phone UI needs deciding, not defaulting. Two honest options
+when Siva wants it: **edit only** (lower risk, fixes the wrong-phone-number
+case, which is the one that reaches a customer), or **edit plus delete behind a
+type-the-name confirmation** (uses the batch that already exists and is already
+proved against real Firestore). Recommend edit first; delete has no demand
+behind it yet.
 
 ---
 

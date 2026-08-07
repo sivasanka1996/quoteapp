@@ -18,9 +18,14 @@ import { type Customer } from "./types";
  * customer. Past that `commit` throws and nothing is deleted, which is the
  * right way to fail: loud, and never half-done. Dad is nowhere near it.
  *
- * Takes `db` rather than reaching for the app's instance so `npm run
- * check:cascade` can drive this exact function from Node, where the app's
- * IndexedDB-backed cache cannot start. Production passes the app's `db`.
+ * Takes `db` rather than reaching for the app's instance so
+ * `npx vite-node scripts/cascade-check.ts` can drive this exact function from
+ * Node, where the app's IndexedDB-backed cache cannot start. Production passes
+ * the app's `db`.
+ *
+ * No screen calls this yet — `deleteCustomer` below is returned by the hook and
+ * consumed by nobody, so the only live caller is that script. See CLAUDE.md's
+ * note under KNOWN GAPS before assuming Dad can delete a customer in the app.
  */
 export async function deleteCustomerAndQuotes(db: Firestore, customerId: string) {
   const theirs = await getDocs(
