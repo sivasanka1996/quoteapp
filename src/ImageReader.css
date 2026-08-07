@@ -371,3 +371,25 @@
   background: #9ca3af;
   cursor: not-allowed;
 }
+
+/* --- Connection and completeness notices --- */
+
+.ir-offline {
+  margin: 0 0 var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  background: var(--cost-bg);
+  border: 1px solid var(--cost);
+  border-radius: 10px;
+  color: var(--cost);
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+}
+
+.ir-incomplete {
+  padding: var(--s-2) var(--s-3);
+  background: var(--cost-bg);
+  border-radius: 8px;
+  color: var(--cost);
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+}

@@ -31,7 +31,7 @@ adds a service to run.
 
 ## Current working state — check this before assuming
 
-*Last updated 2026-08-06. Re-check with `git status` and `git log -1`; if this
+*Last updated 2026-08-07. Re-check with `git status` and `git log -1`; if this
 section disagrees with git, git is right and this section is stale.*
 
 - **Branch:** `feature/Vision_Draft`, not `main`. Branched off `a159e6a`.
@@ -83,7 +83,8 @@ npm install        # REQUIRED FIRST — node_modules is not committed and is
                    # often absent on a fresh clone. Without it `npm test`
                    # fails with "'vitest' is not recognized".
 npm run dev        # http://localhost:5173
-npm test           # 63 unit tests (Vitest) — 23 engine, 15 format, 9 voiceParse, 16 types
+npm test           # 87 unit tests (Vitest) — 23 engine, 15 format, 9 voiceParse,
+                   # 16 types, 16 image-reader worker, 8 readImage
 npm run lint       # eslint — clean, keep it that way (NOT yet run in CI)
 npm run build      # production build
 ```
@@ -91,6 +92,10 @@ npm run build      # production build
 Tests are `environment: 'node'` (see `vite.config.ts`), so only pure functions
 are covered. There are no component or hook tests — adding any requires
 switching to jsdom first.
+
+The one exception is the Cloudflare Worker: `cf-worker/image-reader.js` is a
+plain `fetch(Request) → Response` handler, so it runs in the node environment
+with `globalThis.fetch` stubbed, and its tests never touch the real Gemini API.
 
 **This is a Node/TypeScript project.** `package.json` is the only manifest.
 There is no Python code and no `requirements.txt` is needed. If a `.quoteapp/`
@@ -101,6 +106,13 @@ virtualenv directory appears, it is a stray — delete it.
 ## Deploy
 
 Push to `main` → GitHub Actions runs tests → builds → deploys to Firebase automatically.
+
+**The Cloudflare Worker does not ship this way, and that matters.** `cf-worker/`
+is deployed by hand with `npx wrangler deploy`, against one live URL that every
+build of the app already points at. So a worker change goes live for Dad the
+moment it is deployed — it does not wait for `main`, and it is not held back by
+being on a feature branch. Worker code committed on a branch is *not* live;
+worker code deployed from a branch *is*. Keep those two facts apart.
 
 Secrets required in GitHub repo settings:
 - `FIREBASE_TOKEN` — from `firebase login:ci`
@@ -144,7 +156,10 @@ src/
   useQuotes.ts           — Firestore CRUD per customer + useAllQuotes() for home stats
   useCompanySettings.ts  — company details in localStorage (incl. validity + terms)
   sharePdf.ts            — element → A4 PDF → Web Share API (lazy-loads jspdf)
-  readImage.ts           — swappable image reader (Gemini via CF Worker)
+  readImage.ts           — swappable image reader (Gemini via CF Worker);
+                           downscales to MAX_EDGE=1600 before upload, refuses
+                           with an honest message when offline
+  readImage.test.ts      — 8 tests (fitWithin downscale maths, offline guard)
   ImageReader.tsx/css    — camera/gallery UI, confirmation list before adding
   voiceParse.ts          — voice transcript parser (English + Telugu)
   voiceParse.test.ts     — 9 parser tests
@@ -157,6 +172,11 @@ src/
 DEAD CODE — imported by nothing but each other, delete on sight (PI-4):
   QuoteDrawer.tsx/css    — pre-Firestore quote list drawer
   useQuoteStorage.ts     — pre-Firestore localStorage quote storage
+
+cf-worker/
+  image-reader.js        — Gemini proxy. Schema-constrained JSON, Flash → Pro
+                           retry, derived confidence. Deployed separately.
+  image-reader.test.js   — 16 tests (structured output, escalation, confidence)
 ```
 
 ### Design system
@@ -289,6 +309,17 @@ client-side (commit 1ef97d9). The index is deployed and unused.
       ends up with. Fractional quantities fixed (bug #5). Verified end to end in
       Chromium against the real Firestore — 33 checks, all passing; see the PI-2
       table below.
+- [x] **PI-3 Sharpen the AI paths** — five of the seven items. The worker now
+      asks Gemini for schema-constrained JSON instead of regex-hunting a
+      ```json fence out of prose; it retries once on Gemini 2.5 Pro when Flash
+      returns nothing usable; and `confidence` is derived from the items that
+      actually came back rather than being the constant `"partial"`. The client
+      downscales photos to 1600px on the long edge before upload (a 6 MB photo
+      became a 646 KB POST, measured in Chromium) and refuses with an honest
+      "no internet connection" message instead of a generic failure. Item 2
+      (few-shot examples) is **not done** — it needs real order slips from Dad;
+      item 6 (keep Web Speech API) needed no work. See the PI-3 table below,
+      and read the "not deployed" note before assuming any of this is live.
 - [x] Full visual redesign — design tokens, all four screens, mobile-first
 - [x] Quote status (draft/sent/accepted/declined) — badges, filter, home stat tiles
 - [x] Business / Customer view toggle in the quote editor
@@ -472,32 +503,60 @@ that `sharePdf` rasterises, not the file html2canvas produces. That gap is how
 bug #8 above stayed invisible until the table was measured — worth remembering
 before trusting a DOM check to speak for the PDF.
 
-### PI-3 — Sharpen the AI paths
+### PI-3 — Sharpen the AI paths — 5 of 7 DONE 2026-08-07, NOT DEPLOYED
 
-**Decision, 2026-08-05: do not switch models, and do not add embeddings or a
-vector DB.** Gemini 2.5 Flash is the right tier for this. The weak link is the
-prompt layer, not the model.
+**Decision, 2026-08-05, unchanged: do not switch models, and do not add
+embeddings or a vector DB.** Gemini 2.5 Flash is the right tier for this. The
+weak link was the prompt layer, not the model.
 
-1. **Structured output.** `cf-worker/image-reader.js` asks for free text, then
-   regex-hunts a ```json fence out of it, with four separate branches that
-   silently give up and return an empty list. Use Gemini's
-   `responseMimeType: "application/json"` + `responseSchema` instead — it makes
-   those failures structurally impossible. Biggest accuracy win available, ~20
-   lines.
-2. **Few-shot examples** — put two or three of Dad's real order slips in the
-   prompt. Domain handwriting is exactly what few-shot fixes.
-3. **Downscale images client-side** before base64 upload — a 12MP phone photo
-   currently becomes an ~8MB JSON POST.
-4. **Escalate on retry only** — if Flash returns nothing usable, retry once on
-   Gemini 2.5 Pro. Cheap on average, accurate when it matters.
-5. **Honest offline message** on the image reader, distinct from a generic
-   failure. (The reader genuinely needs network; that is fine, it just needs to
-   say so.)
+| Item | How it was verified | Result |
+|---|---|---|
+| 1. Structured output — `responseMimeType` + `responseSchema` replace the ```json fence hunt | 16 worker unit tests with `globalThis.fetch` stubbed: the request carries `responseMimeType: "application/json"` and a schema with name/qty/rate; a blank name is dropped; a missing rate stays `null` rather than becoming 0. Field names and the uppercase `Type` enum checked against Google's `generateContent` API reference. | **PASS (no live API call)** |
+| 3. Downscale before upload | Real Chromium against the dev server, calling the app's own `prepareImage`. A 4000×3000 photo (6155 KB) uploaded as 646 KB of base64 at exactly 1600×1200; an 800×600 photo was left at 800×600, not enlarged. | **PASS** |
+| 4. Escalate on retry only | Unit tests: Pro is not called when Flash reads the list; Flash returning zero items, HTTP 429, or a thrown request each escalate to `gemini-2.5-pro`; Pro is tried once, never in a loop. | **PASS (no live API call)** |
+| 5. Honest offline message | Real Chromium with `context.setOffline(true)`: `readImageItems` rejects with "No internet connection — reading a photo needs one", not the configuration error and not a bare `TypeError`. | **PASS** |
+| 7. `confidence` made honest | Unit tests: `"full"` only when every row has a qty **and** a rate, `"partial"` when a rate or qty is missing, `"low"` when nothing was read. | **PASS** |
+
+**Item 2 (few-shot examples) is the one thing still open, and it is blocked on
+Siva, not on code.** It needs two or three photos of Dad's *actual* order slips
+to paste into the prompt. Inventing handwriting samples would train the prompt
+on the wrong hand and is worse than leaving it out. Get the photos, then add
+them as `inline_data` parts ahead of the real image in `readWith`.
+
+**None of the worker half is live.** `cf-worker/image-reader.js` is committed
+but not deployed — deploying needs `npx wrangler deploy` from `cf-worker/`, and
+per the Deploy section that takes effect for Dad immediately, independent of
+this branch. The client half (downscale, offline message) ships normally with
+`main`. The two halves are independent: an old worker handles a downscaled
+image fine, and a new worker handles a full-size one fine, so they can go out
+in either order.
+
+**What this did not check: any of it against the real Gemini API.** Every worker
+test stubs `fetch`, so no request built by this code has ever received a real
+200. The schema is right per Google's published reference, but the first real
+proof will be the first photo read after deploy — read one before assuming it
+works. Two specific things to watch on that first read:
+
+- `maxOutputTokens` is still 8192 and thinking tokens count against it on the
+  2.5 models. It was left alone deliberately: that limit is what the live worker
+  runs today, so it is known to be survivable for Dad's slips, and changing it
+  blind is a worse bet than leaving it. If long lists come back empty, this is
+  the first suspect.
+- The Pro retry doubles the worst-case wait on a bad read. It only fires when
+  Flash already returned nothing, so the average read is unchanged.
+
+The ImageReader panel also grew an offline banner and a "N items still need a
+qty or rate — fill it in here, or the line is added at ₹0" warning on the
+confirm list. That warning closes a real gap: a null rate becomes a blank
+`sellRate`, and PI-1's existing no-cost warning only covers the *cost* side, so
+nothing used to catch a sell-side ₹0. **Neither of those two UI pieces has been
+exercised** — node tests cannot render, and driving the panel needs a customer
+and a quote in Firestore. The logic they call is unit-tested; the rendering is
+not.
+
 6. Keep the browser Web Speech API for voice — free, shipped, good enough. Only
    revisit (AI4Bharat IndicWhisper is the best fit) if Dad complains about
-   Telugu accuracy.
-7. Also note: `confidence` from the worker is decorative — it returns
-   `"partial"` on every success, never `"full"` or a meaningful `"low"`.
+   Telugu accuracy. **No work needed; nothing was changed here.**
 
 ### PI-4 — Hygiene
 
@@ -512,8 +571,10 @@ Cheap. Do whenever there is a spare hour.
 6. Reconcile version drift across `appInfo.ts`, `build-apk.yml`, and Releases.
 7. Add `npm run lint` to `deploy.yml` — this file says keep lint clean, CI never
    checks.
-8. Replace `README.md` — still the untouched Vite starter template.
-9. Add `.env.example` documenting `VITE_IMAGE_PROXY_URL`.
+8. ~~Replace `README.md`~~ — **done.** It is a real README, not the Vite
+   starter. (This list said otherwise until 2026-08-07; it was stale.)
+9. ~~Add `.env.example`~~ — **done.** It is tracked and documents
+   `VITE_IMAGE_PROXY_URL`. (Also stale until 2026-08-07.)
 10. Move the keystore password out of `build-apk.yml` (plaintext `quoteapp123`
     in a public repo) into a GitHub secret.
 
@@ -527,6 +588,10 @@ Cheap. Do whenever there is a spare hour.
   ADDS today).
 
 ### Before handover to Dad
+- **Deploy the worker and read one real order slip.** `npx wrangler deploy` from
+  `cf-worker/`, then photograph an actual slip and check the items come back.
+  PI-3's worker changes have never touched the real Gemini API — every test
+  stubs `fetch`. If the read comes back empty, suspect `maxOutputTokens` first.
 - Test on his actual phone/browser
 - **Share a real PDF from a phone-width browser and open the file.** Bug #8:
   with all five columns on, the Amount column can be clipped out of the shared

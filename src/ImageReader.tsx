@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { readImageItems, type ReadItem } from "./readImage";
 import { parseQty } from "./types";
 import "./ImageReader.css";
@@ -34,6 +34,20 @@ export function ImageReaderPanel({ onAdd, onClose }: Props) {
   const [error, setError] = useState("");
   const [items, setItems] = useState<ConfirmItem[]>([]);
   const [notes, setNotes] = useState("");
+
+  // Reading a photo is the one thing in this app that genuinely needs a
+  // connection. Say so before Dad takes the photo, not after he has waited.
+  const [online, setOnline] = useState(() => navigator.onLine !== false);
+  useEffect(() => {
+    const goOnline = () => setOnline(true);
+    const goOffline = () => setOnline(false);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+    };
+  }, []);
 
   function stopCamera() {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -138,6 +152,13 @@ export function ImageReaderPanel({ onAdd, onClose }: Props) {
 
   const checkedCount = items.filter((it) => it.checked).length;
 
+  // A row with no rate is added with a blank sell price and quietly totals ₹0.
+  // The editor's existing warning only covers the cost side, so this is the one
+  // place that can catch it.
+  const needNumbers = items.filter(
+    (it) => it.checked && (it._rateRaw.trim() === "" || !(parseQty(it._qtyRaw) > 0))
+  ).length;
+
   return (
     <div className="ir-overlay" onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}>
       <div className="ir-panel">
@@ -145,6 +166,13 @@ export function ImageReaderPanel({ onAdd, onClose }: Props) {
           <span className="ir-title">Read from image</span>
           <button className="ir-close" onClick={handleClose}>✕</button>
         </div>
+
+        {!online && (
+          <div className="ir-offline">
+            📶 No internet connection. Reading a photo needs one — the rest of
+            the app keeps working offline.
+          </div>
+        )}
 
         {/* Live camera view */}
         {stage === "camera" && (
@@ -237,6 +265,14 @@ export function ImageReaderPanel({ onAdd, onClose }: Props) {
                 </div>
               ))}
             </div>
+            {needNumbers > 0 && (
+              <div className="ir-incomplete">
+                ⚠ {needNumbers} item{needNumbers !== 1 ? "s" : ""} still
+                {needNumbers !== 1 ? " need" : " needs"} a qty or rate — fill
+                {needNumbers !== 1 ? " them" : " it"} in here, or the line is
+                added at ₹0.
+              </div>
+            )}
             <button className="ir-add-btn" disabled={checkedCount === 0} onClick={handleAdd}>
               Add {checkedCount} item{checkedCount !== 1 ? "s" : ""} to quote
             </button>
