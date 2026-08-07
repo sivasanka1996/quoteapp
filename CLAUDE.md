@@ -599,10 +599,33 @@ The ImageReader panel also grew an offline banner and a "N items still need a
 qty or rate — fill it in here, or the line is added at ₹0" warning on the
 confirm list. That warning closes a real gap: a null rate becomes a blank
 `sellRate`, and PI-1's existing no-cost warning only covers the *cost* side, so
-nothing used to catch a sell-side ₹0. **Neither of those two UI pieces has been
-exercised** — node tests cannot render, and driving the panel needs a customer
-and a quote in Firestore. The logic they call is unit-tested; the rendering is
-not.
+nothing used to catch a sell-side ₹0.
+
+**Both of those UI pieces are now verified — 2026-08-07, 23 checks, all
+passing.** They were the last "never rendered" claim in the code. Driven in
+Chromium against the built app and the real Firestore, with **only the Gemini
+proxy intercepted at the network layer** — so the component, `readImageItems`,
+and the whole client path are the real ones, and no worker deploy or API key was
+needed. One throwaway customer per run, deleted afterwards; Save was never
+pressed, so no quote document was ever written.
+
+| Item | How it was verified | Result |
+|---|---|---|
+| Offline banner | Absent while online; `context.setOffline(true)` made `.ir-offline` appear reading "No internet connection… the rest of the app keeps working offline"; going back online cleared it. | **PASS** |
+| Incomplete-row warning | A canned 3-item read (one complete, one with `rate: null`, one with `qty: 0`) produced "**2 items still need** a qty or rate — fill **them** in here, or the line is added at ₹0". | **PASS** |
+| Warning counts *and* grammar | Filling the missing rate dropped it to "**1 item still needs** … fill **it** in here" — the singular branch renders correctly. Filling the zero qty removed the warning entirely. | **PASS** |
+| Both conditions counted | A missing rate and a zero qty each count, confirming the `_rateRaw === "" \|\| !(parseQty(_qtyRaw) > 0)` pair. | **PASS** |
+| Decimal entry (PI-2 regression) | Typed `2.5` into qty and `12.5` into rate keystroke-by-keystroke; fields held `"2.5"` and `"12.5"`, not `25` and `125`. | **PASS** |
+| Values reach the quote | The row rendered `2.5 × 12.50` and an amount of `31` — so the fraction really multiplied. Checked on the row's own cell, **not** a page-text search for "2.5", which the item name "Copper Wire 2.5sq" would have satisfied on its own. | **PASS** |
+| Checkbox count | "Add 3 items to quote" → unchecking a row → "Add 2 items to quote". | **PASS** |
+| Clean render | All three names carried into the editor; no `undefined`/`NaN`/`[object`; no uncaught page errors. | **PASS** |
+
+**What this still does not check:** the real Gemini response. The proxy was
+faked, so this proves the *panel* handles a well-formed reply correctly — it says
+nothing about what Gemini actually returns. That gap closes only on the first
+real read after the worker is deployed. The harness is not in the repo (it needs
+Playwright and a live Firestore); recipe is the same as PI-1's, plus
+`page.route(PROXY_URL, …)` to serve the canned items.
 
 6. Keep the browser Web Speech API for voice — free, shipped, good enough. Only
    revisit (AI4Bharat IndicWhisper is the best fit) if Dad complains about

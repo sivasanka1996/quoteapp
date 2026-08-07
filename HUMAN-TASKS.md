@@ -165,19 +165,18 @@ it. Costs a little storage and nothing else. Housekeeping only.
 
 ---
 
-## 7. One decision for Siva — no console needed
+## 7. ~~One decision for Siva~~ — DONE 2026-08-07
 
-- [ ] Bump CI off Node 20, or consciously leave it
+- [x] Bump CI off Node 20 → **Node 22**
 
-[deploy.yml:17](.github/workflows/deploy.yml#L17) pins `node-version: 20`. Node 20
-reached end-of-life in April 2026, so CI builds what Dad runs on an unmaintained
-runtime. It still works — `node-version: 20` resolves to 20.19.x, which satisfies
-the `engines` range in `package.json` — so this is not urgent and nothing is
-broken.
+[deploy.yml:17](.github/workflows/deploy.yml#L17) now pins `node-version: 22`.
+Node 20 reached end-of-life in April 2026, so CI was building what Dad runs on an
+unmaintained runtime. Nothing was broken — 20.19.x satisfied the `engines` range
+— but 22 is current LTS, supported into 2027, and already inside that range.
 
-It is a one-line change to `22` or `24`. Left alone only because it touches the
-deploy pipeline and the target version is a judgement call, not an obvious
-default. Say which and it is done in a minute.
+**Watch the first Actions run after this reaches `main`.** It is the first build
+on 22, and CI is the only place it runs. Nothing here can prove that: deploys
+only happen from `main`, and this is a feature branch.
 
 ---
 
