@@ -3,10 +3,16 @@ import worker from "./image-reader.js";
 
 const ENV = { GEMINI_API_KEY: "test-key" };
 
-function post(body = { imageBase64: "AAAA", mimeType: "image/jpeg" }) {
+/** The origin the live app actually calls from. */
+const APP_ORIGIN = "https://quoteapp-3f48e.web.app";
+
+function post(body = { imageBase64: "AAAA", mimeType: "image/jpeg" }, origin = APP_ORIGIN) {
   return new Request("https://worker.test/", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(origin ? { Origin: origin } : {}),
+    },
     body: JSON.stringify(body),
   });
 }
@@ -215,5 +221,94 @@ describe("confidence reports what was actually read", () => {
     const body = await (await worker.fetch(post(), ENV)).json();
 
     expect(body.confidence).toBe("low");
+  });
+});
+
+describe("only the app may spend the Gemini key", () => {
+  function options(origin) {
+    return new Request("https://worker.test/", {
+      method: "OPTIONS",
+      headers: origin ? { Origin: origin } : {},
+    });
+  }
+
+  test("answers the app's own origin rather than a wildcard", async () => {
+    stubGemini(geminiItems([{ name: "Wire", qty: 2, rate: 100 }]));
+
+    const res = await worker.fetch(post(), ENV);
+
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe(APP_ORIGIN);
+  });
+
+  test("allows the dev server, so npm run dev still reads photos", async () => {
+    stubGemini(geminiItems([{ name: "Wire", qty: 2, rate: 100 }]));
+
+    const res = await worker.fetch(post(undefined, "http://localhost:5173"), ENV);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("http://localhost:5173");
+  });
+
+  test("refuses a page that is not the app, without calling Gemini", async () => {
+    const calls = stubGemini();
+
+    const res = await worker.fetch(post(undefined, "https://not-the-app.example"), ENV);
+
+    expect(res.status).toBe(403);
+    expect(calls).toHaveLength(0);
+  });
+
+  // The whole point of the exercise. A script has to be *told* to send an
+  // Origin; a browser always does. Refusing the blank case is what stops the
+  // worker being a free Gemini relay for anyone who reads the public repo.
+  test("refuses a request that sends no origin at all, without calling Gemini", async () => {
+    const calls = stubGemini();
+
+    const res = await worker.fetch(post(undefined, null), ENV);
+
+    expect(res.status).toBe(403);
+    expect(calls).toHaveLength(0);
+  });
+
+  test("never reflects an origin it has refused", async () => {
+    stubGemini();
+
+    const res = await worker.fetch(post(undefined, "https://not-the-app.example"), ENV);
+
+    expect(res.headers.get("Access-Control-Allow-Origin")).not.toBe("https://not-the-app.example");
+    expect(res.headers.get("Access-Control-Allow-Origin")).not.toBe("*");
+  });
+
+  test("lets the browser preflight from the app", async () => {
+    const res = await worker.fetch(options(APP_ORIGIN), ENV);
+
+    expect(res.status).toBe(204);
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe(APP_ORIGIN);
+  });
+
+  test("refuses to preflight from anywhere else", async () => {
+    const res = await worker.fetch(options("https://not-the-app.example"), ENV);
+
+    expect(res.status).toBe(403);
+  });
+
+  test("keeps the model-list endpoint behind the same check", async () => {
+    const calls = stubGemini();
+    const req = new Request("https://worker.test/list", {
+      headers: { Origin: "https://not-the-app.example" },
+    });
+
+    const res = await worker.fetch(req, ENV);
+
+    expect(res.status).toBe(403);
+    expect(calls).toHaveLength(0);
+  });
+
+  test("tells caches the answer depends on the origin", async () => {
+    stubGemini(geminiItems([{ name: "Wire", qty: 2, rate: 100 }]));
+
+    const res = await worker.fetch(post(), ENV);
+
+    expect(res.headers.get("Vary")).toBe("Origin");
   });
 });

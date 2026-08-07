@@ -28,18 +28,56 @@ const RESPONSE_SCHEMA = {
 // average read stays cheap and the bad read still gets a proper try.
 const MODELS = ["gemini-2.5-flash", "gemini-2.5-pro"];
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
-};
+// Who may spend the Gemini key. The worker sits on one public URL with the key
+// in its environment, so with `*` anyone reading the public repo had a free
+// relay. Both Firebase hostnames are listed because Hosting answers on either,
+// and both local ports because `npm run dev` and `npm run preview` differ.
+const ALLOWED_ORIGINS = new Set([
+  "https://quoteapp-3f48e.web.app",
+  "https://quoteapp-3f48e.firebaseapp.com",
+  "http://localhost:5173",
+  "http://localhost:4173",
+]);
+
+// Vary matters: without it a cache could hand one origin's answer to another.
+function corsFor(origin) {
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Vary": "Origin",
+  };
+}
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    // Refuse before doing any work, and refuse a *missing* Origin too. CORS
+    // headers alone would not have closed this: they only stop other browser
+    // pages reading the reply, while curl — which sends no Origin — would still
+    // be served. A browser always sends one, so nothing legitimate is lost.
+    //
+    // Honest limit: a script can still set the header by hand. This turns a
+    // relay anyone could paste into a console into one you have to mean to
+    // abuse. Verifying a Firebase Auth token is what would actually close it,
+    // and that waits on PI-4.1.
+    const origin = request.headers.get("Origin");
+    if (!origin || !ALLOWED_ORIGINS.has(origin)) {
+      return new Response("Forbidden — this worker only answers the quotation app.", {
+        status: 403,
+        headers: { "Vary": "Origin" },
+      });
+    }
+    const cors = corsFor(origin);
+    const json = (data, status = 200) =>
+      new Response(JSON.stringify(data), {
+        status,
+        headers: { ...cors, "Content-Type": "application/json" },
+      });
+
     if (request.method === "OPTIONS") {
-      return new Response(null, { headers: CORS });
+      return new Response(null, { status: 204, headers: cors });
     }
 
     if (url.pathname === "/list") {
@@ -49,7 +87,7 @@ export default {
     }
 
     if (request.method !== "POST") {
-      return new Response("Method not allowed", { status: 405, headers: CORS });
+      return new Response("Method not allowed", { status: 405, headers: cors });
     }
 
     let imageBase64, mimeType;
@@ -161,11 +199,4 @@ function normalize(parsed) {
       rate: Number.isFinite(Number(it?.rate)) && it?.rate !== null ? Number(it.rate) : null,
     }))
     .filter((it) => it.name !== "");
-}
-
-function json(data, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { ...CORS, "Content-Type": "application/json" },
-  });
 }
