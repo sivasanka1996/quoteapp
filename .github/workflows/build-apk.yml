@@ -45,6 +45,16 @@ jobs:
 
           cat > app-project/app/build.gradle << 'EOF'
           plugins { id 'com.android.application' }
+
+          // Read from the environment, never written into this file. The
+          // password used to sit here in plaintext in a public repo.
+          def keystorePassword = System.getenv("KEYSTORE_PASSWORD")
+          if (!keystorePassword) {
+              throw new GradleException(
+                  "KEYSTORE_PASSWORD is not set. Add it under Settings -> Secrets " +
+                  "and variables -> Actions, alongside KEYSTORE_BASE64. See PI-4.10.")
+          }
+
           android {
               namespace 'com.quoteapp.app'
               compileSdk 34
@@ -52,15 +62,17 @@ jobs:
                   applicationId 'com.quoteapp.app'
                   minSdk 21
                   targetSdk 34
+                  // Bump both after publishing a release, and set APK_VERSION
+                  // in src/appInfo.ts to the tag you just published.
                   versionCode 6
                   versionName '1.5'
               }
               signingConfigs {
                   release {
                       storeFile file("../quoteapp-release.jks")
-                      storePassword "quoteapp123"
+                      storePassword keystorePassword
                       keyAlias "quoteapp"
-                      keyPassword "quoteapp123"
+                      keyPassword keystorePassword
                   }
               }
               buildTypes {
@@ -241,6 +253,7 @@ jobs:
           gradle assembleDebug --no-daemon
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
