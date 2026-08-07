@@ -631,6 +631,29 @@ Playwright and a live Firestore); recipe is the same as PI-1's, plus
    revisit (AI4Bharat IndicWhisper is the best fit) if Dad complains about
    Telugu accuracy. **No work needed; nothing was changed here.**
 
+**The VoiceReader panel is now verified too — 2026-08-07, 26 checks, all
+passing.** It had the same gap ImageReader did: `voiceParse` was unit-tested,
+the panel around it had never been drawn. The Web Speech API does not exist in
+headless Chromium, so `window.SpeechRecognition` was replaced with a mock that
+fires `onresult`/`onerror`/`onend` on command — the component, `parseTranscript`
+and the confirm path are all real, only the recognition engine is faked.
+
+| Item | How it was verified | Result |
+|---|---|---|
+| Language toggle | English active by default with the English example; picking తెలుగు flipped `aria-pressed`, switched the example and hint to Telugu script, and wrote `te-IN` to `quoteapp.voiceLang`. | **PASS** |
+| Language persists | Closed and reopened the panel — still Telugu, since the choice is read from localStorage on mount. | **PASS** |
+| `stageRef` guard, both directions | Recognition ending *while listening* returned the panel to idle rather than leaving it stuck on "Listening…" — the exact regression the ref exists to prevent. Ending *after* a result left the confirm screen intact. | **PASS** |
+| Error branches | `no-speech` → "No speech detected"; `not-allowed` → "Microphone permission denied". Each renders its own message, not the generic one. | **PASS** |
+| Alternatives | Three alternatives came back; the top one showed as "I heard", and exactly the other two rendered as chips. Picking one replaced the transcript **and** re-parsed name/qty/rate from it. | **PASS** |
+| Parse into fields | `"6 wire 1.5sq rate 1650"` filled name `wire 1.5sq`, qty `6`, rate `1650` — the quantity-first idiom bug #5's closure note describes, working in the UI. | **PASS** |
+| Decimal entry | Typed `2.5` and `12.5`; fields held them, and the resulting quote row read `2.5 × 12.50` with an amount of `31`. | **PASS** |
+| Add gating | Disabled with an empty name, re-enabled once one is typed. | **PASS** |
+
+Same harness caveats as the ImageReader run: not in the repo, one throwaway
+customer per run deleted afterwards, Save never pressed. And the same limit —
+this proves the panel handles well-formed recognition results, not that Chrome's
+recogniser hears Dad's Telugu correctly. Only he can tell you that.
+
 ### PI-4 — Hygiene — 7 of 8 DONE 2026-08-07
 
 Everything here is done except **PI-4.1**, which needs Firebase console access.
