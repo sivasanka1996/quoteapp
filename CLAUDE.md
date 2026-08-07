@@ -58,10 +58,18 @@ section disagrees with git, git is right and this section is stale.*
 - **Image proxy:** https://quoteapp-image-reader.qouteappsub.workers.dev (live)
 - **APK:** GitHub Releases — check the repo Releases page for the current tag
 
-> **Version drift — fix before the next release.** Four sources disagree:
-> `appInfo.ts` has `APP_VERSION = "v1.5"` but `APK_URL` points at the **v1.4**
-> release asset; `build-apk.yml` builds `versionName '1.5'` / `versionCode 6`.
-> Verify against the actual Releases page before quoting a version anywhere.
+> **Version drift — resolved 2026-08-07 (PI-4.6), and it was never a conflict.**
+> Checked against the Releases API: the latest release is **v1.4**, and
+> `APK_URL` already pointed at it. Two different things were sharing one
+> unlabelled number. The APK is only a TWA wrapper around the hosted site, so
+> `APP_VERSION` (**v1.5**, the web app, redeployed on every push to main) and
+> `APK_VERSION` (**v1.4**, the newest release with an APK attached) are both
+> right. Dad on the v1.4 APK sees the v1.5 web app.
+>
+> `APK_URL` is now built from `APK_VERSION`, so the tag and the link cannot
+> disagree. `build-apk.yml` is staged to build the *next* one — `versionName
+> '1.5'` / `versionCode 6`. After publishing a release: set `APK_VERSION` to
+> the tag you just published, then bump `build-apk.yml` to the one after it.
 
 ---
 
@@ -83,9 +91,9 @@ npm install        # REQUIRED FIRST — node_modules is not committed and is
                    # often absent on a fresh clone. Without it `npm test`
                    # fails with "'vitest' is not recognized".
 npm run dev        # http://localhost:5173
-npm test           # 87 unit tests (Vitest) — 23 engine, 15 format, 9 voiceParse,
-                   # 16 types, 16 image-reader worker, 8 readImage
-npm run lint       # eslint — clean, keep it that way (NOT yet run in CI)
+npm test           # 96 unit tests (Vitest) — 23 engine, 15 format, 9 voiceParse,
+                   # 16 types, 25 image-reader worker, 8 readImage
+npm run lint       # eslint — clean, keep it that way (now enforced in CI)
 npm run build      # production build
 ```
 
@@ -151,8 +159,10 @@ src/
   firebase.ts            — Firebase init + Firestore db export
   types.ts               — shared types (UILine, Customer, QuoteDoc, QuoteStatus)
                            + pure helpers: quoteStatus, seedNextId, hasNoCost
-  types.test.ts          — 13 tests (quoteStatus, seedNextId, hasNoCost)
+  types.test.ts          — 16 tests (quoteStatus, seedNextId, hasNoCost, parseQty)
   useCustomers.ts        — Firestore CRUD for customers collection
+                           + deleteCustomerAndQuotes(db, id): one writeBatch so
+                           a customer and their quotes go together (bug #6)
   useQuotes.ts           — Firestore CRUD per customer + useAllQuotes() for home stats
   useCompanySettings.ts  — company details in localStorage (incl. validity + terms)
   sharePdf.ts            — element → A4 PDF → Web Share API (lazy-loads jspdf)
@@ -165,19 +175,27 @@ src/
   voiceParse.test.ts     — 9 parser tests
   VoiceReader.tsx/css    — mic UI, language toggle, alternatives
   calc/engine.ts         — PURE calc functions (no UI, no network)
-  calc/engine.test.ts    — 21 tests verifying fixture numbers
+  calc/engine.test.ts    — 23 tests verifying fixture numbers
   format.ts              — Indian number formatting (lakh/crore), short form, dates
-  format.test.ts         — 9 formatting tests
-
-DEAD CODE — imported by nothing but each other, delete on sight (PI-4):
-  QuoteDrawer.tsx/css    — pre-Firestore quote list drawer
-  useQuoteStorage.ts     — pre-Firestore localStorage quote storage
+  format.test.ts         — 15 formatting tests
 
 cf-worker/
   image-reader.js        — Gemini proxy. Schema-constrained JSON, Flash → Pro
-                           retry, derived confidence. Deployed separately.
-  image-reader.test.js   — 16 tests (structured output, escalation, confidence)
+                           retry, derived confidence, origin allowlist.
+                           Deployed separately.
+  image-reader.test.js   — 25 tests (structured output, escalation, confidence,
+                           origin allowlist)
+
+scripts/
+  cascade-check.ts       — live check for bug #6 against the REAL Firestore.
+                           Not a *.test.ts, so CI never runs it. Seeds two
+                           throwaway customers, deletes one, checks the other
+                           survives, cleans up after itself.
+                           npx vite-node scripts/cascade-check.ts
 ```
+
+(The pre-Firestore `QuoteDrawer.tsx/css` and `useQuoteStorage.ts` were deleted
+in PI-4.3 — 286 lines imported by nothing but each other. Git has them.)
 
 ### Design system
 
@@ -283,9 +301,12 @@ can reach the collections. For a two-user local app this is a **nuisance risk,
 not a breach risk** — it sits in PI-4 as hygiene, not as a blocker. A single
 shared Google sign-in plus `if request.auth != null` closes it in an afternoon.
 
-**Stale index:** `firestore.indexes.json` still declares a `customerId +
-updatedAt` composite index, but `useQuotes` dropped the `orderBy` and sorts
-client-side (commit 1ef97d9). The index is deployed and unused.
+**Stale index — removed from the file 2026-08-07 (PI-4.5).** It declared
+`customerId + updatedAt` while `useQuotes` had dropped the `orderBy` back in
+1ef97d9 and sorts client-side, leaving a single equality filter that needs no
+composite index. Note the index may **still exist in the Firebase console** —
+`firebase deploy` does not delete indexes it no longer sees. An unused index
+costs a little storage and nothing else; delete it there when convenient.
 
 ---
 
@@ -320,13 +341,24 @@ client-side (commit 1ef97d9). The index is deployed and unused.
       (few-shot examples) is **not done** — it needs real order slips from Dad;
       item 6 (keep Web Speech API) needed no work. See the PI-3 table below,
       and read the "not deployed" note before assuming any of this is live.
+- [x] **PI-4 Hygiene — 7 of 8 DONE 2026-08-07.** Dead code gone (286 lines);
+      the composite index nothing queries dropped; `npm run lint` enforced in
+      CI; a customer's quotes now deleted with them in one `writeBatch` (bug
+      #6), proved red-then-green against the real Firestore by
+      `scripts/cascade-check.ts`; the worker refuses any origin that is not the
+      app, and refuses a missing origin too, so it is no longer a free Gemini
+      relay; the version "drift" turned out to be two things sharing one
+      unlabelled number and is now labelled; the keystore password reads from a
+      secret instead of sitting in plaintext in a public repo. **Only PI-4.1
+      (auth) is left, and it is blocked on console access — see below.** The
+      worker half is committed but **not deployed**.
 - [x] Full visual redesign — design tokens, all four screens, mobile-first
 - [x] Quote status (draft/sent/accepted/declined) — badges, filter, home stat tiles
 - [x] Business / Customer view toggle in the quote editor
 - [x] Collapsed item rows + bottom-sheet line editor (cost, sell, GST, profit)
 - [x] Share as PDF / WhatsApp — Web Share API, falls back to file download
 - [x] Voice input — en-IN default, English/తెలుగు toggle, Telugu-aware parser
-- [x] Calc engine — 52 tests passing
+- [x] Calc engine — 23 engine tests (96 across the whole suite)
 - [x] Quote editor — card UI, blanket discount (apply to all / selected), profit summary
 - [x] Discount inputs — plain number fields (Discount % + Extra disc %), no % symbol to type
 - [x] Customer PDF — column toggles, company header (logo/name/address/GSTIN), print to PDF
@@ -345,11 +377,8 @@ client-side (commit 1ef97d9). The index is deployed and unused.
 ## KNOWN BUGS
 
 Audited 2026-08-05. Bugs 1, 2, 3, 4 and 7 were closed by PI-1; bugs 5 and 8 were
-closed by PI-2 on 2026-08-06 — see **WHAT IS DONE**. These are what is left.
-
-6. **Deleting a customer orphans their quotes.** `deleteCustomer` removes only
-   the customer document. The quotes survive, still counted in home stats,
-   unreachable in the UI. Scheduled as PI-4.4.
+closed by PI-2 on 2026-08-06; bug 6 was closed by PI-4.4 on 2026-08-07 — see
+**WHAT IS DONE**. This is what is left.
 
 9. **A quote saved before PI-2 with a fractional-quantity line can show a stale
    `totalSale` in the quote list and the home tiles.** `totalSale` is
@@ -363,8 +392,8 @@ closed by PI-2 on 2026-08-06 — see **WHAT IS DONE**. These are what is left.
    the correct total. Self-healing, and only in the direction of correctness;
    not worth a migration for a handful of pre-fix quotes.
 
-(Numbering is kept from the original audit so older notes still line up. 7 was
-closed by PI-1, hence the gap.)
+(Numbering is kept from the original audit so older notes still line up. Only
+#9 is open; the gaps are closed bugs.)
 
 ---
 
@@ -523,10 +552,11 @@ to paste into the prompt. Inventing handwriting samples would train the prompt
 on the wrong hand and is worse than leaving it out. Get the photos, then add
 them as `inline_data` parts ahead of the real image in `readWith`.
 
-**None of the worker half is live.** `cf-worker/image-reader.js` is committed
-but not deployed — deploying needs `npx wrangler deploy` from `cf-worker/`, and
-per the Deploy section that takes effect for Dad immediately, independent of
-this branch. The client half (downscale, offline message) ships normally with
+**None of the worker half is live** — and PI-4.2's origin allowlist has since
+landed on the same undeployed file, so one `wrangler deploy` now ships both.
+`cf-worker/image-reader.js` is committed but not deployed — deploying needs
+`npx wrangler deploy` from `cf-worker/`, and per the Deploy section that takes
+effect for Dad immediately, independent of this branch. The client half (downscale, offline message) ships normally with
 `main`. The two halves are independent: an old worker handles a downscaled
 image fine, and a new worker handles a full-size one fine, so they can go out
 in either order.
@@ -558,25 +588,50 @@ not.
    revisit (AI4Bharat IndicWhisper is the best fit) if Dad complains about
    Telugu accuracy. **No work needed; nothing was changed here.**
 
-### PI-4 — Hygiene
+### PI-4 — Hygiene — 7 of 8 DONE 2026-08-07
 
-Cheap. Do whenever there is a spare hour.
+Everything here is done except **PI-4.1**, which needs Firebase console access.
 
-1. Single shared Google sign-in + `if request.auth != null` on Firestore rules.
-2. Origin allowlist on the Cloudflare Worker — currently `*`, so the Gemini key
-   is an open relay for anyone who reads the public repo.
-3. Delete dead code — `QuoteDrawer.tsx`, `QuoteDrawer.css`, `useQuoteStorage.ts`.
-4. Cascade quote deletion when a customer is deleted (bug #6).
-5. Drop the stale composite index from `firestore.indexes.json`.
-6. Reconcile version drift across `appInfo.ts`, `build-apk.yml`, and Releases.
-7. Add `npm run lint` to `deploy.yml` — this file says keep lint clean, CI never
-   checks.
-8. ~~Replace `README.md`~~ — **done.** It is a real README, not the Vite
-   starter. (This list said otherwise until 2026-08-07; it was stale.)
-9. ~~Add `.env.example`~~ — **done.** It is tracked and documents
-   `VITE_IMAGE_PROXY_URL`. (Also stale until 2026-08-07.)
-10. Move the keystore password out of `build-apk.yml` (plaintext `quoteapp123`
-    in a public repo) into a GitHub secret.
+| Item | How it was verified | Result |
+|---|---|---|
+| 2. Worker answers only the app | 9 new worker tests: the app origin and both localhost ports are reflected back by name; an unknown origin gets 403 and Gemini is never called; a request with **no** Origin gets 403 too; a refused origin is never reflected; `/list` is behind the same check; `Vary: Origin` is set. | **PASS (no live API call)** |
+| 3. Dead code deleted | `QuoteDrawer.tsx/css` and `useQuoteStorage.ts` imported by nothing but each other, confirmed by grep across `src/`. Lint and build clean afterwards. | **PASS** |
+| 4. Cascade quote deletion (bug #6) | `scripts/cascade-check.ts` against the **real** Firestore. Against the old code: "2 orphan(s) left behind", 3 of 6 checks failed. Against the fix: all 6 pass — victim's quotes gone, bystander's customer and quote untouched. | **PASS (live Firestore)** |
+| 5. Stale index dropped | `useQuotes` issues one equality filter and sorts client-side, so no composite index applies. | **PASS** |
+| 6. Version drift | Releases API says latest is v1.4 and `APK_URL` already pointed there. Relabelled rather than "fixed" — see the note under Live URLs. | **PASS** |
+| 7. Lint in CI | Ran `npm run lint` clean before wiring it into `deploy.yml`, so it cannot fail the first deploy that hits it. | **PASS** |
+| 10. Keystore password | Gradle reads `KEYSTORE_PASSWORD` from the environment; a missing value fails with a message naming the setting. | **PASS (not run — workflow_dispatch only)** |
+| 8, 9. README, `.env.example` | Were already done; the list was stale. | — |
+
+**Two things need a human before the next APK build or worker deploy:**
+
+- **Add a `KEYSTORE_PASSWORD` secret** (Settings → Secrets and variables →
+  Actions) with the current value, or the next APK build fails with the
+  message above. `quoteapp123` is in the public git history for good — moving
+  it out stops republishing it, it does not unpublish it. Actually retiring it
+  means a new keystore and therefore a new signing key, which Android will not
+  install over the existing app: Dad would have to uninstall and reinstall.
+  Worth doing when he is around, not silently.
+- **The worker allowlist is not deployed.** `npx wrangler deploy` from
+  `cf-worker/` takes effect for Dad immediately. Read a real photo straight
+  after. If it fails, this is the first suspect and the revert is one line
+  plus a redeploy.
+
+**1. Single shared Google sign-in + `if request.auth != null` — NOT DONE, and
+deliberately not started.** Two hard blockers, neither of them code:
+
+- Enabling Google as a sign-in provider is a Firebase **console** action. There
+  is no console access here, and half-built auth is worse than none.
+- `deploy.yml` deploys `firestore:rules` automatically on every push to `main`.
+  Committing `if request.auth != null` before a working sign-in UI exists would
+  **lock Dad out of every quote the moment that deploy lands**. The rules and
+  the client have to go out together, verified together.
+
+When it is done, check what auth does to PI-1's offline story: Firestore serves
+cached reads with a cached token, but token *refresh* needs network, so an
+airplane-mode cold start after a long gap is the case to test. Until then this
+stays what CLAUDE.md has always called it — a nuisance risk, not a breach risk,
+and never a blocker.
 
 ### Deferred until Dad actually asks
 
@@ -592,6 +647,10 @@ Cheap. Do whenever there is a spare hour.
   `cf-worker/`, then photograph an actual slip and check the items come back.
   PI-3's worker changes have never touched the real Gemini API — every test
   stubs `fetch`. If the read comes back empty, suspect `maxOutputTokens` first.
+  Two distinct failures to tell apart on that first read: **403** means PI-4.2's
+  origin allowlist rejected the app (wrong hostname in `ALLOWED_ORIGINS`), while
+  an **empty item list** is the Gemini side. Read from the live site, not a file
+  opened off disk — a `file://` page sends `Origin: null` and will be refused.
 - Test on his actual phone/browser
 - **Share a real PDF from a phone-width browser and open the file.** Bug #8:
   with all five columns on, the Amount column can be clipped out of the shared
