@@ -33,9 +33,17 @@ Actions run go green through lint → test → build → deploy.
 
 ## 2. Deploy the Cloudflare Worker, then read one real slip
 
+- [ ] `npx wrangler login` — **checked 2026-08-07: not authenticated on this
+      machine.** It opens a browser for Cloudflare OAuth, so it needs a person.
 - [ ] `cd cf-worker && npx wrangler deploy`
 - [ ] Immediately after: open **https://quoteapp-3f48e.web.app** on a phone,
       photograph a real order slip, tap **📷 Read image**, confirm items come back.
+
+**Do not use `wrangler deploy --temporary`.** `whoami` suggests it when you are
+logged out, and it is wrong here: it deploys to a *temporary preview account*,
+which does not touch the live
+`quoteapp-image-reader.qouteappsub.workers.dev` that every build of the app
+points at. You would get a green deploy and change nothing for Dad.
 
 **This does not wait for item 1, and that is the whole point.** The worker
 deploys by hand to one live URL that every build of the app already points at.
@@ -59,6 +67,13 @@ Two failures to tell apart:
 
 **Test from the live site, not a file opened off disk** — a `file://` page sends
 `Origin: null` and is refused by design.
+
+**The app side is no longer a suspect.** On 2026-08-07 the ImageReader panel was
+driven in a real browser with a faked proxy reply: the confirm list, the
+qty/rate warning and the hand-off into the quote all render correctly on a
+well-formed response (23 checks, see `CLAUDE.md`). So if that first real read
+misbehaves, the fault is in the worker or in Gemini — not in the UI. That is the
+whole point of having checked it beforehand.
 
 **Revert if it goes wrong:** one line plus a redeploy. Low risk, but do it when
 you can watch it, not right before Dad needs the app.
