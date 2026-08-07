@@ -619,7 +619,7 @@ Everything here is done except **PI-4.1**, which needs Firebase console access.
 | 4. Cascade quote deletion (bug #6) | `scripts/cascade-check.ts` against the **real** Firestore. Against the old code: "2 orphan(s) left behind", 3 of 6 checks failed. Against the fix: all 6 pass — victim's quotes gone, bystander's customer and quote untouched. | **PASS (live Firestore)** |
 | 5. Stale index dropped | `useQuotes` issues one equality filter and sorts client-side, so no composite index applies. | **PASS** |
 | 6. Version drift | Releases API says latest is v1.4 and `APK_URL` already pointed there. Relabelled rather than "fixed" — see the note under Live URLs. | **PASS** |
-| 7. Lint in CI | Ran `npm run lint` clean before wiring it into `deploy.yml`, so it cannot fail the first deploy that hits it. | **PASS** |
+| 7. Lint in CI | Ran `npm run lint` clean before wiring it into `deploy.yml`, so it cannot fail the first deploy that hits it. Its reach was widened on 2026-08-07: the only config block matched `**/*.{ts,tsx}`, so the gate walked `cf-worker/image-reader.js`, its test and `eslint.config.js` with no rules at all. Separate blocks now lint them under `globals.serviceworker` and `globals.node`. | **PASS** |
 | 10. Keystore password | Gradle reads `KEYSTORE_PASSWORD` from the environment; a missing value fails with a message naming the setting. | **PASS (not run — workflow_dispatch only)** |
 | 8, 9. README, `.env.example` | Were already done; the list was stale. | — |
 
