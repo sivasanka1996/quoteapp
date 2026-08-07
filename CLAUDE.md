@@ -37,10 +37,12 @@ section disagrees with git, git is right and this section is stale.*
 - **Branch:** `feature/Vision_Draft`, not `main`. Branched off `a159e6a`.
 - **Deploys only happen from `main`** (`deploy.yml` triggers on push to main).
   Nothing on this branch is live. PI work has to reach `main` to ship.
-- **Push access is unresolved.** `git push` to `origin`
-  (`sivasanka1996/quoteapp`) returns 403 — the `RevanParimi` GitHub account
-  lacks write access. Siva is sorting this out with the repo owner. Until then
-  commit locally and do not burn time retrying the push.
+- **Push is Siva's job — commit locally and stop.** `git push` to `origin`
+  (`sivasanka1996/quoteapp`) returns 403 because the `RevanParimi` GitHub
+  account lacks write access, and Siva is resolving that with the repo owner
+  out of band. Do not retry it, do not offer to, and do not list it as a
+  blocker in status reports. The one consequence still worth stating: nothing
+  reaches Dad until it lands on `main`.
 - **Commit author must be `revan.datta132@gmail.com`.** With no `user.email`
   configured, git derives `revan.parimi@ibm.com` from the machine hostname,
   which is wrong. Global config is now set; verify with
@@ -402,6 +404,15 @@ closed by PI-2 on 2026-08-06; bug 6 was closed by PI-4.4 on 2026-08-07 — see
 Ordered by value to Dad. Do not jump ahead; PI-1 is what makes the app
 trustworthy, and nothing else matters until it is done.
 
+> **Anything needing a human — a console login, a repo permission, a photo, or
+> Dad's actual phone — lives in [`HUMAN-TASKS.md`](HUMAN-TASKS.md).** That is the
+> queue Siva works through with his colleague. Keep it in sync: when a task here
+> turns out to be blocked on a person, move it there rather than leaving it
+> looking actionable.
+>
+> **PI-4.1 (Firebase auth) is now the last task in the plan**, not the first item
+> of PI-4 — see the PI-4 section.
+
 ### PI-1 — Trust — DONE and VERIFIED 2026-08-05
 
 All six items shipped and were verified by driving the **built** app in
@@ -547,10 +558,19 @@ weak link was the prompt layer, not the model.
 | 7. `confidence` made honest | Unit tests: `"full"` only when every row has a qty **and** a rate, `"partial"` when a rate or qty is missing, `"low"` when nothing was read. | **PASS** |
 
 **Item 2 (few-shot examples) is the one thing still open, and it is blocked on
-Siva, not on code.** It needs two or three photos of Dad's *actual* order slips
-to paste into the prompt. Inventing handwriting samples would train the prompt
-on the wrong hand and is worse than leaving it out. Get the photos, then add
-them as `inline_data` parts ahead of the real image in `readWith`.
+Siva, not on code.** Tracked in [`HUMAN-TASKS.md`](HUMAN-TASKS.md) §4. It needs
+two or three photos of Dad's *actual* order slips to paste into the prompt. Get
+the photos, then add them as `inline_data` parts ahead of the real image in
+`readWith`.
+
+**No training and no ML are involved, despite how "few-shot" sounds.** The
+request today is *instructions + Dad's photo*; few-shot makes it *instructions +
+example photo + that example's correct answer + Dad's photo*, all in the same
+JSON body. Gemini copies the pattern in-context. No weights change, nothing is
+stored, nothing is fine-tuned — the cost is a few extra tokens per read. The
+examples must be Dad's real slips because they only help if they match what he
+actually sends; invented handwriting shows the model a pattern it will never see
+again, which is worse than no example at all.
 
 **None of the worker half is live** — and PI-4.2's origin allowlist has since
 landed on the same undeployed file, so one `wrangler deploy` now ships both.
@@ -617,8 +637,17 @@ Everything here is done except **PI-4.1**, which needs Firebase console access.
   after. If it fails, this is the first suspect and the revert is one line
   plus a redeploy.
 
-**1. Single shared Google sign-in + `if request.auth != null` — NOT DONE, and
-deliberately not started.** Two hard blockers, neither of them code:
+**1. Single shared Google sign-in + `if request.auth != null` — MOVED TO LAST,
+2026-08-07.** Siva's call: "can't we put the firebase at the end of all the
+tasks, we need to finish things before checking these." It is no longer item 1
+of PI-4 — it is **the final task in the whole plan**, after every other PI item
+is genuinely done. Reason to reorder: it was the only console-gated item sitting
+at the top of a list of buildable work, so it kept reading as the next thing up
+and stalling progress reports on a blocker nobody here could clear. It is also
+the item this file has always called a *nuisance* risk, not a breach risk.
+
+Do not raise it as "next" until everything else is finished. Two hard blockers,
+neither of them code:
 
 - Enabling Google as a sign-in provider is a Firebase **console** action. There
   is no console access here, and half-built auth is worse than none.
@@ -643,6 +672,9 @@ and never a blocker.
   ADDS today).
 
 ### Before handover to Dad
+
+*All of this is human work — the full, current queue with exact steps is
+[`HUMAN-TASKS.md`](HUMAN-TASKS.md). Kept here too because it is part of the plan.*
 - **Deploy the worker and read one real order slip.** `npx wrangler deploy` from
   `cf-worker/`, then photograph an actual slip and check the items come back.
   PI-3's worker changes have never touched the real Gemini API — every test
