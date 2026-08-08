@@ -49,7 +49,7 @@ Actions.
 ```bash
 npm install        # required first — node_modules is not committed
 npm run dev        # http://localhost:5173
-npm test           # 41 unit tests
+npm test           # 104 unit tests
 npm run lint
 npm run build
 ```
@@ -58,19 +58,28 @@ Copy `.env.example` to `.env.local` if you want the image reader to work
 locally. Without it the rest of the app runs fine and the reader shows a
 configuration message.
 
+There is **no application server to start** — no FastAPI, no uvicorn, no Python.
+Persistence is managed Firestore, which the browser talks to directly; the only
+process you can run locally is the image-reader Worker (`npx wrangler dev` in
+`cf-worker/`, port 8787). Full launch and connectivity commands are in
+[DESIGN.md §14](DESIGN.md#14-runbook).
+
 ---
 
 ## Architecture
 
+**Full end-to-end design, with diagrams: [DESIGN.md](DESIGN.md).** The short
+version:
+
 ```
 HomeScreen        search / add customers, headline stats
-  └─ CustomerScreen    that customer's quote history
+  └─ CustomerScreen    that customer's quote history, edit customer details
        └─ QuoteEditor       line items, pricing, margin  ← the business view
             └─ CustomerView      the document he sends   ← the customer view
 ```
 
 The pricing math lives in [`src/calc/engine.ts`](src/calc/engine.ts) — a pure
-module with no UI and no network, covered by 21 tests. Per-line rounding before
+module with no UI and no network, covered by 23 tests. Per-line rounding before
 summing is a correctness requirement, not a cosmetic choice.
 
 Cost and profit cannot reach the customer view: `CustomerView` accepts a
@@ -91,7 +100,14 @@ to a GitHub Release — Firebase's Spark plan refuses to host executables.
 
 ## Contributing
 
-Read [CLAUDE.md](CLAUDE.md) first. It carries the design decisions, the known
-bugs, and the prioritised roadmap, and it explains the one thing that shapes
-every trade-off here: this is a local app with about two users, so the right
-answer is usually the one with the fewest moving parts.
+Three files, in this order:
+
+| File | What it carries |
+|---|---|
+| [CLAUDE.md](CLAUDE.md) | The plan, the decisions and their history, known bugs, what is verified and how |
+| [DESIGN.md](DESIGN.md) | The shape of the system — diagrams, data model, deploy topology, the runbook |
+| [HUMAN-TASKS.md](HUMAN-TASKS.md) | Work blocked on a person: a console login, a repo permission, a photo, Dad's phone |
+
+Read `CLAUDE.md` first. It explains the one thing that shapes every trade-off
+here: this is a local app with about two users, so the right answer is usually
+the one with the fewest moving parts.

@@ -135,6 +135,22 @@ Manual APK build: Actions → **Build Android APK** → Run workflow → downloa
 
 ## Architecture
 
+> **The diagrammed, end-to-end version is [`DESIGN.md`](DESIGN.md)** — system
+> topology, data model, the calc engine, the three input paths, the offline
+> design, deploy topology, test coverage gaps, a swept inventory of leftover
+> design, and the runbook with launch and connectivity commands.
+>
+> Division of labour between the three docs: **this file** is the plan, the
+> decisions and their history, and what was verified how. **`DESIGN.md`** is the
+> shape of the system as it stands. **`HUMAN-TASKS.md`** is what only a person can
+> clear. When a design decision changes, change it in `DESIGN.md` in the same
+> commit as the code.
+>
+> One thing `DESIGN.md` says loudly because it keeps being assumed otherwise:
+> **there is no application server, no FastAPI and no uvicorn.** Firestore is
+> managed and the browser talks to it directly; the only locally runnable process
+> is the image-reader Worker.
+
 ### Screen flow
 ```
 HomeScreen (search/add customers)

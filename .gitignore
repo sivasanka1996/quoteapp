@@ -20,6 +20,13 @@ firebase-debug.log
 *.jks
 *.b64
 
+# Cloudflare Worker local development.
+# .dev.vars is where `wrangler dev` reads GEMINI_API_KEY from, so it holds a real
+# key. This repo is public; `*.local` above does not match it. See DESIGN.md §14.4.
+.dev.vars
+.dev.vars.*
+.wrangler/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
