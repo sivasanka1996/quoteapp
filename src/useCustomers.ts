@@ -4,7 +4,7 @@ import {
   doc, orderBy, query, where, serverTimestamp, type Firestore,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { type Customer } from "./types";
+import { type Customer, type CustomerEdits } from "./types";
 
 /**
  * Delete a customer and every quote that belongs to them (bug #6).
@@ -37,6 +37,28 @@ export async function deleteCustomerAndQuotes(db: Firestore, customerId: string)
   await batch.commit();
 }
 
+/**
+ * Apply an edit to one customer.
+ *
+ * Standalone, like the delete above, so a screen can correct a customer without
+ * opening a second `customers` snapshot listener just to reach the hook. Build
+ * the patch with `customerPatch` — it decides what changed and refuses a blank
+ * name; this function only writes what it is handed.
+ *
+ * No ack race here, unlike `saveQuote`, and callers must not `await` this to
+ * drive a button: offline the promise never settles, because Firestore resolves
+ * a write only on server ack. Nothing here claims Dad's data is safe, so there
+ * is no promise worth racing — apply the change locally, let the persistent
+ * cache replay the write, and treat a rejection as the rare real failure.
+ */
+export async function updateCustomerDoc(
+  db: Firestore,
+  customerId: string,
+  patch: CustomerEdits
+) {
+  await updateDoc(doc(db, "customers", customerId), patch);
+}
+
 export function useCustomers() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,8 +84,8 @@ export function useCustomers() {
     return ref.id;
   }
 
-  async function updateCustomer(id: string, patch: Partial<Omit<Customer, "id" | "createdAt">>) {
-    await updateDoc(doc(db, "customers", id), patch);
+  async function updateCustomer(id: string, patch: CustomerEdits) {
+    await updateCustomerDoc(db, id, patch);
   }
 
   async function deleteCustomer(id: string) {

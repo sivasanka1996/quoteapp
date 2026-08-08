@@ -102,3 +102,38 @@ export function parseQty(s: string): number {
   const n = parseFloat(s);
   return Number.isFinite(n) ? n : 0;
 }
+
+/** The editable half of a customer — id and createdAt are never touched. */
+export type CustomerEdits = Partial<Pick<Customer, "name" | "phone" | "address">>;
+
+/**
+ * What actually changed between a stored customer and the edit sheet's draft,
+ * or null when the answer is "nothing worth writing".
+ *
+ * Trims before comparing, so reopening the sheet and closing it writes nothing,
+ * and trims what it returns, because these three fields print on the To block of
+ * every quotation the customer receives — a trailing space is visible there.
+ *
+ * A blank name yields null rather than a partial patch: the name titles every
+ * quote and the customer row, so a draft that clears it is invalid as a whole,
+ * not an invitation to apply the rest of it. The sheet also disables Save in
+ * that state; this is the guard behind the guard.
+ *
+ * Reads the stored side defensively — customers written before a field existed
+ * have it `undefined`, and `undefined` must count as a change to "", not crash.
+ */
+export function customerPatch(
+  stored: Customer,
+  name: string,
+  phone: string,
+  address: string
+): CustomerEdits | null {
+  const draft = { name: name.trim(), phone: phone.trim(), address: address.trim() };
+  if (!draft.name) return null;
+
+  const patch: CustomerEdits = {};
+  for (const key of ["name", "phone", "address"] as const) {
+    if (draft[key] !== (stored[key] ?? "").trim()) patch[key] = draft[key];
+  }
+  return Object.keys(patch).length > 0 ? patch : null;
+}

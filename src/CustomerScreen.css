@@ -368,3 +368,145 @@
     display: none;
   }
 }
+
+/* --- Edit customer --- */
+
+.cs-edit-btn {
+  flex: 0 0 auto;
+  width: var(--tap);
+  height: var(--tap);
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink-3);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: all var(--dur) var(--ease);
+}
+
+.cs-edit-btn:hover {
+  background: var(--surface-2);
+  color: var(--green-600);
+  border-color: var(--green-600);
+}
+
+.cs-edit-error {
+  margin-bottom: var(--s-4);
+  padding: var(--s-3);
+  border-radius: var(--r-md);
+  background: var(--loss-bg);
+  color: var(--loss);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.cs-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(22, 32, 28, 0.5);
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.cs-sheet {
+  background: var(--surface);
+  width: 100%;
+  max-width: 520px;
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.cs-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--s-4) var(--s-4) 0;
+}
+
+.cs-sheet-header h2 {
+  margin: 0;
+  font-size: var(--fs-lg);
+}
+
+.cs-sheet-close {
+  width: var(--tap);
+  height: var(--tap);
+  border: none;
+  background: none;
+  font-size: var(--fs-md);
+  color: var(--ink-3);
+  cursor: pointer;
+  border-radius: var(--r-full);
+}
+
+.cs-sheet-body {
+  padding: var(--s-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.cs-sheet-body label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+  font-weight: 600;
+}
+
+.cs-sheet-body input {
+  min-height: var(--tap);
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 0 var(--s-3);
+  font-size: var(--fs-md);
+  color: var(--ink);
+}
+
+.cs-sheet-body input:focus {
+  outline: none;
+  border-color: var(--green-600);
+}
+
+.cs-sheet-note {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--ink-3);
+}
+
+.cs-sheet-footer {
+  display: flex;
+  gap: var(--s-3);
+  padding: 0 var(--s-4) var(--s-5);
+}
+
+.cs-btn-cancel,
+.cs-btn-save {
+  flex: 1;
+  min-height: var(--tap);
+  border-radius: var(--r-md);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cs-btn-cancel {
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-2);
+}
+
+.cs-btn-save {
+  border: none;
+  background: var(--green-700);
+  color: #fff;
+}
+
+.cs-btn-save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

@@ -46,6 +46,12 @@ export function AppRouter() {
           onOpenQuote={(quote) =>
             setScreen({ name: "quote", customer: screen.customer, quote })
           }
+          // `screen.customer` is a snapshot taken when the row was tapped and
+          // nothing else refreshes it, so an edit has to land here or the screen
+          // keeps showing what Dad just corrected. QuoteEditor reads the
+          // customer from this same object, which is why fixing a phone number
+          // fixes it on quotations already saved.
+          onCustomerChange={(customer) => setScreen({ name: "customer", customer })}
         />
       )}
 

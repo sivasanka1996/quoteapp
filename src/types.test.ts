@@ -4,6 +4,8 @@ import {
   seedNextId,
   hasNoCost,
   parseQty,
+  customerPatch,
+  type Customer,
   type QuoteDoc,
   type UILine,
 } from "./types";
@@ -120,5 +122,57 @@ describe("parseQty", () => {
   it("is 0 for anything unreadable, as parseInt(s) || 0 was", () => {
     expect(parseQty("")).toBe(0);
     expect(parseQty("abc")).toBe(0);
+  });
+});
+
+describe("customerPatch", () => {
+  const dad: Customer = {
+    id: "c1",
+    name: "Sri Balaji Electricals",
+    phone: "+91 98765 43210",
+    address: "Kukatpally",
+    createdAt: 0,
+  };
+
+  it("is null when nothing changed, so a no-op never writes", () => {
+    expect(customerPatch(dad, dad.name, dad.phone, dad.address)).toBeNull();
+  });
+
+  it("is null when only surrounding whitespace changed", () => {
+    expect(customerPatch(dad, "  Sri Balaji Electricals  ", dad.phone, dad.address)).toBeNull();
+  });
+
+  it("carries only the fields that actually changed", () => {
+    expect(customerPatch(dad, dad.name, "+91 90000 11111", dad.address)).toEqual({
+      phone: "+91 90000 11111",
+    });
+  });
+
+  it("trims what it does carry — a stray space reaches the customer's PDF", () => {
+    expect(customerPatch(dad, dad.name, dad.phone, "  Miyapur ")).toEqual({
+      address: "Miyapur",
+    });
+  });
+
+  it("carries several fields at once", () => {
+    expect(customerPatch(dad, "Balaji Electricals", "9000011111", dad.address)).toEqual({
+      name: "Balaji Electricals",
+      phone: "9000011111",
+    });
+  });
+
+  it("allows clearing an optional field", () => {
+    expect(customerPatch(dad, dad.name, "", dad.address)).toEqual({ phone: "" });
+  });
+
+  it("refuses to blank the name — every quote is titled with it", () => {
+    expect(customerPatch(dad, "   ", dad.phone, dad.address)).toBeNull();
+  });
+
+  it("tolerates a record saved before a field existed", () => {
+    const legacy = { ...dad, phone: undefined as unknown as string };
+    expect(customerPatch(legacy, dad.name, "9000011111", dad.address)).toEqual({
+      phone: "9000011111",
+    });
   });
 });

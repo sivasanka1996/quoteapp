@@ -93,8 +93,8 @@ npm install        # REQUIRED FIRST — node_modules is not committed and is
                    # often absent on a fresh clone. Without it `npm test`
                    # fails with "'vitest' is not recognized".
 npm run dev        # http://localhost:5173
-npm test           # 96 unit tests (Vitest) — 23 engine, 15 format, 9 voiceParse,
-                   # 16 types, 25 image-reader worker, 8 readImage
+npm test           # 104 unit tests (Vitest) — 23 engine, 15 format, 9 voiceParse,
+                   # 24 types, 25 image-reader worker, 8 readImage
 npm run lint       # eslint — clean, keep it that way (now enforced in CI)
 npm run build      # production build
 ```
@@ -160,13 +160,18 @@ src/
   appInfo.ts             — version, APK URL, isInstalledApp() standalone detection
   firebase.ts            — Firebase init + Firestore db export
   types.ts               — shared types (UILine, Customer, QuoteDoc, QuoteStatus)
-                           + pure helpers: quoteStatus, seedNextId, hasNoCost
-  types.test.ts          — 16 tests (quoteStatus, seedNextId, hasNoCost, parseQty)
+                           + pure helpers: quoteStatus, seedNextId, hasNoCost,
+                           parseQty, customerPatch
+  types.test.ts          — 24 tests (quoteStatus, seedNextId, hasNoCost, parseQty,
+                           customerPatch)
   useCustomers.ts        — Firestore CRUD for customers collection
                            + deleteCustomerAndQuotes(db, id): one writeBatch so
                            a customer and their quotes go together (bug #6).
-                           NOTE: no screen calls delete or update — see KNOWN
-                           GAPS. HomeScreen destructures add only.
+                           Still has NO caller outside scripts/ — there is no
+                           delete button. See KNOWN GAPS.
+                           + updateCustomerDoc(db, id, patch): standalone so
+                           CustomerScreen can edit without a second snapshot
+                           listener. Never await it to drive a button.
   useQuotes.ts           — Firestore CRUD per customer + useAllQuotes() for home stats
   useCompanySettings.ts  — company details in localStorage (incl. validity + terms)
   sharePdf.ts            — element → A4 PDF → Web Share API (lazy-loads jspdf)
@@ -356,13 +361,24 @@ costs a little storage and nothing else; delete it there when convenient.
       secret instead of sitting in plaintext in a public repo. **Only PI-4.1
       (auth) is left, and it is blocked on console access — see below.** The
       worker half is committed but **not deployed**.
+- [x] **Customer editing — DONE and VERIFIED 2026-08-08.** A pencil button on
+      the customer screen opens a sheet over the name, phone and address. It
+      exists because PI-2 put all three on the To block of every quotation while
+      leaving them uneditable, so a wrong phone number was reaching customers
+      with no way to correct it. Because
+      [QuoteEditor.tsx:281-283](src/QuoteEditor.tsx#L281-L283) passes the live
+      `customer` object to `CustomerView` rather than the quote's denormalized
+      `customerName`, **a correction fixes quotations already saved** — that is
+      the whole value, and it is checked below. Deleting a customer is still
+      deliberately absent; see KNOWN GAPS. Verified with 21 checks in Chromium
+      against the built app and the real Firestore, plus 8 new unit tests.
 - [x] Full visual redesign — design tokens, all four screens, mobile-first
 - [x] Quote status (draft/sent/accepted/declined) — badges, filter, home stat tiles
 - [x] Business / Customer view toggle in the quote editor
 - [x] Collapsed item rows + bottom-sheet line editor (cost, sell, GST, profit)
 - [x] Share as PDF / WhatsApp — Web Share API, falls back to file download
 - [x] Voice input — en-IN default, English/తెలుగు toggle, Telugu-aware parser
-- [x] Calc engine — 23 engine tests (96 across the whole suite)
+- [x] Calc engine — 23 engine tests (104 across the whole suite)
 - [x] Quote editor — card UI, blanket discount (apply to all / selected), profit summary
 - [x] Discount inputs — plain number fields (Discount % + Extra disc %), no % symbol to type
 - [x] Customer PDF — column toggles, company header (logo/name/address/GSTIN), print to PDF
@@ -403,33 +419,25 @@ closed by PI-2 on 2026-08-06; bug 6 was closed by PI-4.4 on 2026-08-07 — see
 
 ## KNOWN GAPS — not bugs, but not what the notes imply
 
-Found 2026-08-07 by reviewing the whole branch against `main` before merge. The
-code is correct; the surrounding claims were wider than the code.
+Found 2026-08-07 by reviewing the whole branch against `main` before merge:
+`useCustomers` returned `updateCustomer` and `deleteCustomer` and
+[HomeScreen.tsx:20](src/HomeScreen.tsx#L20) destructured
+`{ customers, loading, addCustomer }` — neither of the other two had a call site
+anywhere in `src/`. The edit half was built on 2026-08-08 (see **Customer
+editing** under WHAT IS DONE). What remains:
 
-**There is no way to delete or edit a customer in the app.** `useCustomers`
-returns `deleteCustomer` and `updateCustomer`, and
-[HomeScreen.tsx:20](src/HomeScreen.tsx#L20) destructures
-`{ customers, loading, addCustomer }` — the other two have no call site
-anywhere in `src/`. So:
+**There is still no way to delete a customer, deliberately.**
+`deleteCustomerAndQuotes` has no caller outside `scripts/cascade-check.ts`. So
+bug #6's fix is real and proved against live Firestore, but it is a *library*
+repair, not a user-facing one — PI-4.4's wording oversells it. Nothing
+regressed; there was never a delete button. Do not tell Dad the delete
+behaviour changed for him.
 
-- **Bug #6's fix is real, tested and unreachable from the UI.** PI-4.4 reads
-  like a user-facing repair; it is a library repair. The only live caller of
-  `deleteCustomerAndQuotes` is `scripts/cascade-check.ts`. Nothing regressed —
-  there was no delete button before either — but do not tell Dad the delete
-  behaviour changed for him, because he never had a delete button.
-- **A customer added by typo is permanent** as far as Dad is concerned, and so
-  is a wrong phone number, which PI-2 now prints on the To block of every
-  quotation that customer receives. That is the sharper half of this gap: the
-  address and phone became *customer-visible* in PI-2 while remaining
-  uneditable.
-
-Not fixed here because it is new scope, and a destructive control on a
-big-touch-target phone UI needs deciding, not defaulting. Two honest options
-when Siva wants it: **edit only** (lower risk, fixes the wrong-phone-number
-case, which is the one that reaches a customer), or **edit plus delete behind a
-type-the-name confirmation** (uses the batch that already exists and is already
-proved against real Firestore). Recommend edit first; delete has no demand
-behind it yet.
+Left undone because nothing is asking for it: a customer costs nothing to leave
+in the list, the search box handles a long list, and a destructive control on a
+big-touch-target phone UI is the easiest way to lose real data. If Dad does ask,
+the batch already exists and is already tested — put it behind a
+type-the-name confirmation, and say in the dialog how many quotes go with it.
 
 ---
 
@@ -741,6 +749,49 @@ cached reads with a cached token, but token *refresh* needs network, so an
 airplane-mode cold start after a long gap is the case to test. Until then this
 stays what CLAUDE.md has always called it — a nuisance risk, not a breach risk,
 and never a blocker.
+
+### Customer editing — DONE and VERIFIED 2026-08-08
+
+Not a PI item — it came out of the pre-merge whole-branch review, which found
+that `updateCustomer` had never had a call site. Verified by driving the
+**built** app in Chromium (Playwright, real Firestore) at 390px, with one
+`ZZ-edit-check-*` customer deleted afterwards along with its quotes. 21 checks,
+all passing, plus 8 unit tests on `customerPatch`.
+
+| Item | How it was verified | Result |
+|---|---|---|
+| Sheet opens on stored values | Seeded a customer through the UI, tapped the pencil: all three fields prefilled from the record. | **PASS** |
+| Reopening discards a cancelled draft | Typed into phone, hit Cancel, reopened — the stored phone was back, not the abandoned text. | **PASS** |
+| Save gated on a name | Blanked the name → Save disabled; typed one back → enabled. `customerPatch` returns null for a blank name as the guard behind that. | **PASS** |
+| The edit lands on screen | Changed the phone and saved: the header contact line showed the new number and not the old one. | **PASS** |
+| Padded input is trimmed | Entered `"  Miyapur "`; the header rendered `· Miyapur`. These fields print on a customer's PDF, where a stray space shows. | **PASS** |
+| A no-op save just closes | Reopened and saved with nothing changed — sheet closed, no write, values intact. | **PASS** |
+| **The correction reaches a quotation** | Opened a new quote → Customer view: the To block carried the new phone **and** the new address, and neither old value appeared anywhere in the document. | **PASS** |
+| Nothing renders broken | Document scanned for `undefined` / `NaN` / `[object`; no uncaught page errors for the whole run. | **PASS** |
+
+**The write is deliberately not awaited, and that is PI-1's lesson reused.**
+Firestore resolves a write only on *server* ack, so `await updateDoc(...)` would
+have hung the Save button forever with no signal — the same defect `saveQuote`
+needed `ACK_TIMEOUT_MS` to dodge. This path needs no ack race because it makes
+no promise worth racing: nothing tells Dad his data is safe, the sheet just
+closes and the screen shows what he typed. The persistent cache holds the write
+and replays it. A genuine rejection — rules refusing us once PI-4.1 lands —
+reverts the screen to the stored values and shows a banner, so the UI never
+displays a number Firestore rejected.
+
+**Why the change had to travel up to the router.**
+[AppRouter.tsx:17](src/AppRouter.tsx#L17) keeps the selected customer as a
+snapshot in its own state and nothing re-reads it, so writing to Firestore alone
+would have left Dad staring at the number he had just corrected. `CustomerScreen`
+takes an `onCustomerChange` callback and the router replaces the screen's
+customer with it. That is also why the fix is retroactive: `QuoteEditor` reads
+the customer from that same object.
+
+**What this did not check:** the generated PDF, same gap as PI-2 — every check
+reads the DOM that `sharePdf` rasterises. And the harness is not in the repo (it
+needs Playwright and live Firestore); recipe is PI-1's, plus a
+`ZZ-edit-check-*` customer and a cascade delete afterwards, since there is still
+no delete button in the UI.
 
 ### Deferred until Dad actually asks
 
