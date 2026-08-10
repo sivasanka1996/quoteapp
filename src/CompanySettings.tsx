@@ -1,5 +1,9 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { type CompanySettings } from "./useCompanySettings";
+import { exportLogs } from "./log/export";
+import { isDebugEnabled, setDebug, log } from "./log/logger";
+import * as LogBuffer from "./log/buffer";
+import { clearPersisted } from "./log/idb";
 import "./CompanySettings.css";
 
 interface Props {
@@ -10,6 +14,9 @@ interface Props {
 
 export function CompanySettingsPanel({ settings, onChange, onClose }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const [debugOn, setDebugOn] = useState(isDebugEnabled());
+  const [logNote, setLogNote] = useState("");
+  const [logCount, setLogCount] = useState(LogBuffer.count());
 
   function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -19,6 +26,35 @@ export function CompanySettingsPanel({ settings, onChange, onClose }: Props) {
       onChange({ logoDataUrl: reader.result as string });
     };
     reader.readAsDataURL(file);
+  }
+
+  function handleExport(kind: "info" | "error") {
+    const n = exportLogs(kind);
+    setLogNote(
+      n > 0
+        ? `Saved ${n} line${n === 1 ? "" : "s"} to your Downloads folder.`
+        : "Nothing to export yet."
+    );
+  }
+
+  function handleToggleDebug() {
+    const next = !debugOn;
+    setDebug(next);
+    setDebugOn(next);
+    log.info("ui", `detailed logging turned ${next ? "on" : "off"}`);
+    setLogCount(LogBuffer.count());
+    setLogNote(
+      next
+        ? "Detailed logging is on. Do the thing that went wrong, then export."
+        : "Detailed logging is off."
+    );
+  }
+
+  async function handleClearLogs() {
+    LogBuffer.clear();
+    await clearPersisted();
+    setLogCount(0);
+    setLogNote("Cleared.");
   }
 
   return (
@@ -99,6 +135,44 @@ export function CompanySettingsPanel({ settings, onChange, onClose }: Props) {
             placeholder={"Payment: 50% advance, balance on delivery\nDelivery: 3–4 working days"}
             onChange={(v) => onChange({ terms: v })}
           />
+
+          {/*
+            Diagnostics. This is the half of PI-5 Dad actually touches: when
+            something goes wrong, Siva asks him to tap Export and send the
+            file. The wording avoids the word "log" in the hint on purpose —
+            "what the app was doing" is what it means to him.
+          */}
+          <div className="cs-diag">
+            <div className="cs-diag-head">
+              <span className="cs-diag-title">Diagnostics</span>
+              <span className="cs-diag-count">
+                {logCount} record{logCount === 1 ? "" : "s"}
+              </span>
+            </div>
+            <p className="cs-diag-hint">
+              A record of what the app was doing. Send this to Siva if something
+              looks wrong.
+            </p>
+            <div className="cs-diag-actions">
+              <button className="cs-btn-upload" onClick={() => handleExport("error")}>
+                Export problems
+              </button>
+              <button className="cs-btn-upload" onClick={() => handleExport("info")}>
+                Export everything
+              </button>
+              <button
+                className="cs-btn-toggle"
+                aria-pressed={debugOn}
+                onClick={handleToggleDebug}
+              >
+                Detailed logging: {debugOn ? "On" : "Off"}
+              </button>
+              <button className="cs-btn-remove" onClick={handleClearLogs}>
+                Clear
+              </button>
+            </div>
+            {logNote && <p className="cs-diag-note">{logNote}</p>}
+          </div>
         </div>
 
         <div className="cs-footer">

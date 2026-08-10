@@ -101,8 +101,9 @@ npm install        # REQUIRED FIRST — node_modules is not committed and is
                    # often absent on a fresh clone. Without it `npm test`
                    # fails with "'vitest' is not recognized".
 npm run dev        # http://localhost:5173
-npm test           # 104 unit tests (Vitest) — 23 engine, 15 format, 9 voiceParse,
-                   # 24 types, 25 image-reader worker, 8 readImage
+npm test           # 182 unit tests (Vitest) — 31 engine, 31 image-reader worker,
+                   # 24 types, 22 logger, 17 numberWords, 16 voiceParse,
+                   # 15 format, 14 readImage, 12 log export
 npm run lint       # eslint — clean, keep it that way (now enforced in CI)
 npm run build      # production build
 ```
@@ -204,8 +205,24 @@ src/
                            with an honest message when offline
   readImage.test.ts      — 8 tests (fitWithin downscale maths, offline guard)
   ImageReader.tsx/css    — camera/gallery UI, confirmation list before adding
-  voiceParse.ts          — voice transcript parser (English + Telugu)
-  voiceParse.test.ts     — 9 parser tests
+  voiceParse.ts          — voice transcript parser, a TOKENIZER as of PI-6:
+                           tokenize → classify (NUM / NUM_WORD / UNIT / RATE_KW
+                           / CODE_KW / WORD) → assemble. Quantities are whole
+                           numbers only, deliberately — see spec §3.4.
+  voiceParse.test.ts     — 16 parser tests
+  parse/numberWords.ts   — English + Telugu number words 1–100, plus
+                           phraseToNumber for "twenty five". Both tables are
+                           always consulted; the recogniser does not respect
+                           the language setting for numbers.
+  parse/numberWords.test.ts — 17 tests
+  log/logger.ts          — levels, scopes, dispatch, the debug flag. NEVER
+                           THROWS — every entry point wrapped, every sink
+                           guarded. Read the header before changing it.
+  log/buffer.ts          — ring buffer, capped at 2000 records / ~1 MB
+  log/idb.ts             — IndexedDB persistence, batched, fully guarded
+  log/export.ts          — buffer → timestamped .log download
+  log/logger.test.ts     — 22 tests
+  log/export.test.ts     — 12 tests
   VoiceReader.tsx/css    — mic UI, language toggle, alternatives
   calc/engine.ts         — PURE calc functions (no UI, no network)
   calc/engine.test.ts    — 23 tests verifying fixture numbers
@@ -396,6 +413,27 @@ costs a little storage and nothing else; delete it there when convenient.
       the whole value, and it is checked below. Deleting a customer is still
       deliberately absent; see KNOWN GAPS. Verified with 21 checks in Chromium
       against the built app and the real Firestore, plus 8 new unit tests.
+- [x] **PI-5 Observability — DONE 2026-08-10.** `src/log/` gives the app an eye:
+      four levels, `debug` behind a flag Siva can turn on over the phone
+      (`?debug=1` or the settings toggle), a 2000-record / ~1 MB ring buffer
+      persisted to IndexedDB so it survives the reload a crash forces, and
+      **Export problems / Export everything** in settings writing timestamped
+      `.log` files. `try`/`catch` now covers the hooks, the readers, the PDF
+      path and the engine, on the layered ladder spec §2.4 defines. The Worker
+      writes one structured JSON line per request. **41 new unit tests.**
+      See the PI-5 table below for what was verified how — two items are
+      manual-only and are marked as such.
+- [x] **PI-6 Parsing — DONE 2026-08-10.** `voiceParse` is a tokenizer now
+      (tokenize → classify → assemble), not three regexes asking three
+      questions. The three defects the audit named are fixed and pinned by
+      tests: `"six wire rate 1650"` reads qty **6** (was 1), `"wire 6 nos rate
+      1650"` reads qty **6** (was 1), and `"2 wire code 4402"` reads rate
+      **null** (was 4402 — an item code priced as money). Number words now
+      cover English *and* Telugu 1–100 in `src/parse/numberWords.ts`; English
+      had none at all before, which is the likeliest root cause of what Siva
+      reported. `engine.ts` no longer round-trips money through
+      `"64.7% + 2%"`. **31 new unit tests, and all 9 original voiceParse tests
+      plus all 23 original engine tests still pass unchanged.**
 - [x] Full visual redesign — design tokens, all four screens, mobile-first
 - [x] Quote status (draft/sent/accepted/declined) — badges, filter, home stat tiles
 - [x] Business / Customer view toggle in the quote editor
@@ -436,8 +474,19 @@ closed by PI-2 on 2026-08-06; bug 6 was closed by PI-4.4 on 2026-08-07 — see
    the correct total. Self-healing, and only in the direction of correctness;
    not worth a migration for a handful of pre-fix quotes.
 
-(Numbering is kept from the original audit so older notes still line up. Only
-#9 is open; the gaps are closed bugs.)
+10. **Adding a customer with no signal waits instead of queueing.** Found
+   2026-08-10 while wiring PI-5's try/catch ladder. `useCustomers.addCustomer`
+   uses `addDoc`, and Firestore resolves a write promise only on **server**
+   ack — so offline it never settles. This is the same defect PI-1 fixed for
+   `saveQuote` with `ACK_TIMEOUT_MS` plus a client-minted `doc()` id, and the
+   fix here is the same shape. PI-5 made the failure **loud** — the button
+   releases and the reason is shown, where before it sat on "Saving…" forever
+   and silently lost what Dad had typed — but the underlying race is untouched.
+   Worth doing before handover: Dad adding a customer in a shop with no signal
+   is a real scenario, and the quote path already survives it.
+
+(Numbering is kept from the original audit so older notes still line up. #9 and
+#10 are open; the rest are closed bugs.)
 
 ---
 
@@ -828,8 +877,8 @@ three of those measurements overturn assumptions this file used to carry.
 
 | PI | What | Status |
 |---|---|---|
-| **PI-5 Observability** | `src/log/` — 4 levels, debug behind a flag, IndexedDB ring buffer, export to timestamped files, try/catch everywhere on a layered ladder | Not started — **ships first** |
-| **PI-6 Parsing** | `voiceParse` becomes a tokenizer, not a regex chain; English + Telugu number words; `engine.ts` stops round-tripping money through a string | Not started |
+| **PI-5 Observability** | `src/log/` — 4 levels, debug behind a flag, IndexedDB ring buffer, export to timestamped files, try/catch everywhere on a layered ladder | **DONE 2026-08-10** — see WHAT IS DONE |
+| **PI-6 Parsing** | `voiceParse` becomes a tokenizer, not a regex chain; English + Telugu number words; `engine.ts` stops round-tripping money through a string | **DONE 2026-08-10** — see WHAT IS DONE |
 | **PI-7 Providers** | `cf-worker/` splits into router + interchangeable providers; `AI_PROVIDER` env var; OpenRouter alongside Gemini | Not started |
 | **PI-8 Multi-page** | Multi-select slips, read sequentially, merged into one confirm list with page badges | Not started |
 
@@ -870,6 +919,80 @@ three of those measurements overturn assumptions this file used to carry.
   read on a long list.
 - `format.ts` and `sharePdf.ts` regex **stay**. "No regex" is a rule about
   parsing *human* input, not about deterministic digit grouping.
+
+### PI-5 — Observability — DONE 2026-08-10
+
+Shipped first, as planned, because it is the instrument for PI-6/7/8. 41 new
+unit tests (182 total, up from 104). Two items cannot be unit-tested in
+`environment: 'node'` and are recorded honestly as **manual**, not dressed up
+as tests.
+
+| Item | How it was verified | Result |
+|---|---|---|
+| Levels + debug gating | Unit tests: `debug` dropped with the flag off and kept with it on; `info`/`warn`/`error` always kept; scope, message and `ts` recorded. | **PASS** |
+| The debug flag | `detectDebug` is pure and tested against both inputs: `?debug=1`, `?foo=bar&debug=1`, the stored `quoteapp.debug`, and every "off" case. A **throwing** `localStorage` (private mode) returns off rather than crashing, and the URL still wins when storage throws. | **PASS** |
+| Ring buffer | Pushing 2100 records leaves exactly 2000, oldest evicted, newest last. The ~1 MB byte cap evicts before the record cap is reached. A single oversized record is **kept**, not evicted to nothing. `all()` returns a copy, so a caller cannot corrupt the ring. | **PASS** |
+| The logger cannot crash the app | A sink that throws does not escape `log.info`, and circular data does not either. This is the whole safety argument for logging from inside catch blocks. | **PASS** |
+| Error normalising | An `Error` becomes `{name, message, stack}`; a thrown string still yields a usable record; no `err` key when none was passed. | **PASS** |
+| Export format | Filename shape `quoteapp-error-2026-08-10T14-23-07.log`, no colons (illegal on Windows, where Siva opens them). Fixed columns stay aligned across every level and scope. `error` selects warn+error; `info` selects everything including debug. | **PASS** |
+| `calc/engine.ts` re-throws | All 23 original engine tests pass **unchanged** after wrapping — the wrapping is behaviour-preserving. The catch logs once at the innermost frame (a symbol marker stops `calcQuote → calcLine → resolvePrice` writing the same failure three times) and then re-throws. | **PASS** |
+| Worker logging | 6 new worker tests: one `read complete` line carrying provider, model, itemCount, confidence and ms; every line of one request shares an `rid`; the Flash→Pro escalation is recorded as warn-then-info; a refused origin is noted; `LOG_LEVEL=silent` silences it. | **PASS (no live API call)** |
+| No stack reaches the client | The `/list` branch awaits `fetch` with no guard of its own, so a throw there reaches the top-level handler. Test asserts the response is `{"error":"Image reading failed. Please try again."}` with status 500 and **no** trace of the message or file in the body — while the worker's own log keeps the full detail. | **PASS** |
+| IndexedDB persistence | **NOT UNIT-TESTED — cannot be.** `environment: 'node'` has no `indexedDB`, so `idb.ts` short-circuits and the tests never touch it. Needs a browser check (DevTools → Application → IndexedDB → `quoteapp-logs`). | **MANUAL — not yet done** |
+| The export download and the settings panel | **NOT UNIT-TESTED.** The pure parts (filename, line format, selection) are covered above; the `Blob` + object-URL download and the Diagnostics UI are component behaviour, which needs a jsdom switch that is deliberately out of scope. | **MANUAL — not yet done** |
+
+**The logger never throws, and that is load-bearing.** Every public entry point
+is wrapped, each sink is guarded individually, and `data` is put through a JSON
+round-trip on the way in — which both guarantees `structuredClone` will survive
+the IDB write and turns a circular reference into a caught error *at the log
+call* rather than a mysterious rejection later. Failure is silent by design.
+
+**Why IndexedDB and not a folder.** A browser cannot write to a directory —
+spec D1/D2. The File System Access API would come closest and was rejected
+because Android Chrome does not support it, so it could never work for Dad, who
+is the only user who matters here.
+
+**One real defect was found and fixed while wiring the ladder.**
+[HomeScreen.tsx](src/HomeScreen.tsx) `handleAdd` had **no catch at all**, so a
+rejection left the button on "Saving…" forever and lost what Dad had typed —
+PI-1's exact failure mode, still live in the add-customer path. It now catches,
+logs, releases the button and shows the reason. **The underlying ack race is
+deliberately not fixed:** `addCustomer` uses `addDoc`, which resolves only on
+*server* ack, so with no signal it does not settle. `saveQuote` needed
+`ACK_TIMEOUT_MS` and a client-minted id to dodge exactly this. Adding a
+customer offline therefore still waits rather than queueing. It is now loud
+instead of silent, which is the honest interim state — see KNOWN BUGS #10.
+
+### PI-6 — Remove the fragile parsing regex — DONE 2026-08-10
+
+31 new unit tests. **All 9 original `voiceParse` tests and all 23 original
+`engine` tests pass unchanged** — that is the proof the rewrite preserved
+behaviour rather than replacing it.
+
+| Item | How it was verified | Result |
+|---|---|---|
+| `"six wire rate 1650"` → qty **6** | Was qty 1: the old rule required a leading *digit*. Now a classification rule, and tested. | **PASS** |
+| `"wire 6 nos rate 1650"` → qty **6** | Was qty 1: the quantity was not at the front, so nothing looked for it. A number followed by a unit word is now a quantity wherever it sits. | **PASS** |
+| `"2 wire code 4402"` → rate **null** | Was rate 4402 — an item code read as a price, the worst kind of wrong because it looks deliberate. A code keyword before a trailing number refuses the trailing-number rule. | **PASS** |
+| `"twenty five wire rate 1650"` → qty **25** | Multi-token numbers join for the two patterns people say (tens+unit, hundreds), and only those. | **PASS** |
+| `"6 nos wire rate 1650"` → name `wire` | The unit word is consumed with the quantity rather than left in the item name. | **PASS** |
+| **Regression guard (spec §3.4)** | `"6 wire 1.5sq rate 1650"` still gives qty 6, name `wire 1.5sq`, rate 1650. And `"2.5 sq wire"` still parses as qty **1** with the decimal kept in the *name* — because "1.5 sq" and "2.5 sq" are item names in this trade. Teaching the qty rule decimals would turn a correct parse into a wrong one. | **PASS** |
+| Number words, both languages | 17 tests: English units, teens, tens and hundred; Telugu 1–19 (11–19 did not exist before), tens and వంద; case and trailing punctuation ignored; `"twenty-five"` hyphenated; unknown words → `null`. | **PASS** |
+| Both tables always consulted | Deliberate: the recogniser returns English digits and words in `te-IN` mode, so the language setting is not trusted for numbers. Tested in both directions. | **PASS** |
+| `"six six"` does **not** become 12 | Greedy addition would do that; only tens+unit and hundreds patterns join. Two quantities said in a row is far likelier than someone meaning twelve that way. | **PASS** |
+| Money stops round-tripping through text | `PriceMode` now carries `discounts: number[]`. 8 new engine tests, including one that resolves the whole fixture **both ways and asserts the same rupee**. | **PASS** |
+| Data-URL split hardened | 6 tests: a URL with no comma, an empty payload, `null`, and an `ArrayBuffer` each raise a readable error instead of yielding `undefined`. | **PASS** |
+
+**`parseDiscountChain` is still exported and still tested** — it parses
+*typed* input, which is a real job. What changed is that nothing internal
+round-trips through it: the editor passes `discountsFromPercents(d1, d2)`
+straight through, and `"64.7% + 2%"` is built only for display. `PriceMode`
+accepts either, preferring numbers, which is why the 23 original engine tests
+needed no edits.
+
+**What none of this proves: that Chrome hears Dad's Telugu correctly.** Every
+test here feeds `parseTranscript` a string. Recognition quality needs a mic and
+a human voice, and stays Siva's to check — spec §7.
 
 ### Deferred until Dad actually asks
 

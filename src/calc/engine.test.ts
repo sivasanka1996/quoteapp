@@ -5,6 +5,8 @@ import {
   resolvePrice,
   calcLine,
   calcQuote,
+  discountsFromPercents,
+  formatDiscountChain,
 } from "./engine";
 
 // ============================================================
@@ -212,5 +214,69 @@ describe("fractional quantities — wire and cable sell by the metre", () => {
     expect(r.resolvedCost).toBeCloseTo(6169.84, 2);
     expect(r.lineCostTotal).toBe(3085);
     expect(r.lineSaleTotal).toBe(3148);
+  });
+});
+
+// ============================================================
+// PI-6 — the discount chain as numbers, not text
+// ============================================================
+
+describe("discountsFromPercents", () => {
+  it("converts percentages to the fractions the engine compounds", () => {
+    expect(discountsFromPercents(64.7, 2)).toEqual([0.647, 0.02]);
+  });
+
+  it("reads the editor's string fields", () => {
+    expect(discountsFromPercents("64.7", "2")).toEqual([0.647, 0.02]);
+  });
+
+  it("drops blanks and zeroes instead of adding a no-op slab", () => {
+    expect(discountsFromPercents("30", "")).toEqual([0.3]);
+    expect(discountsFromPercents("", "")).toEqual([]);
+    expect(discountsFromPercents("0", "0")).toEqual([]);
+    expect(discountsFromPercents(null, undefined)).toEqual([]);
+  });
+});
+
+describe("formatDiscountChain — display only", () => {
+  it("renders the label the UI used to feed back into the parser", () => {
+    expect(formatDiscountChain([0.647, 0.02])).toBe("64.7% + 2%");
+  });
+
+  it("says 0% for an empty chain", () => {
+    expect(formatDiscountChain([])).toBe("0%");
+  });
+});
+
+describe("numeric and string chains agree", () => {
+  // The refactor is only safe if both entry points land on the same rupee.
+  it("resolves the fixture identically either way", () => {
+    for (const l of FIXTURE_LINES) {
+      const viaString = resolvePrice({
+        kind: "discount",
+        listPrice: l.listPrice,
+        discountExpr: COST_DISCOUNT_EXPR,
+      });
+      const viaNumbers = resolvePrice({
+        kind: "discount",
+        listPrice: l.listPrice,
+        discounts: discountsFromPercents(64.7, 2),
+      });
+      expect(viaNumbers).toBe(viaString);
+    }
+  });
+
+  it("prefers numbers when both are supplied", () => {
+    const price = resolvePrice({
+      kind: "discount",
+      listPrice: 1000,
+      discounts: [0.5],
+      discountExpr: "10%",
+    });
+    expect(price).toBe(500);
+  });
+
+  it("treats a discount mode with neither as no discount", () => {
+    expect(resolvePrice({ kind: "discount", listPrice: 1000 })).toBe(1000);
   });
 });

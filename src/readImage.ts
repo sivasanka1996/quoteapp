@@ -1,3 +1,5 @@
+import { log } from "./log/logger";
+
 export interface ReadItem {
   name: string;
   qty: number;
@@ -34,49 +36,107 @@ const OFFLINE_MESSAGE =
   "No internet connection — reading a photo needs one. Everything else in the app works offline.";
 
 export async function readImageItems(file: File): Promise<ReadResult> {
-  // Checked before the configuration error below: if Dad is in a basement with
-  // no signal, "not configured" would send him chasing the wrong problem.
-  if (isOffline()) throw new Error(OFFLINE_MESSAGE);
-
-  if (!PROXY_URL) {
-    throw new Error(
-      "Image reader not configured — add VITE_IMAGE_PROXY_URL=https://... to .env.local"
-    );
-  }
-
-  const { base64, mimeType } = await prepareImage(file);
-
-  let response: Response;
+  const startedAt = Date.now();
+  // I/O layer (spec §2.4): log everything, then let the existing errors through
+  // unchanged. ImageReader renders these messages verbatim, and PI-3 verified
+  // the exact wording — swallowing them here would replace an honest
+  // explanation with a silent empty list.
   try {
-    response = await fetch(PROXY_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ imageBase64: base64, mimeType }),
+    // Checked before the configuration error below: if Dad is in a basement with
+    // no signal, "not configured" would send him chasing the wrong problem.
+    if (isOffline()) throw new Error(OFFLINE_MESSAGE);
+
+    if (!PROXY_URL) {
+      throw new Error(
+        "Image reader not configured — add VITE_IMAGE_PROXY_URL=https://... to .env.local"
+      );
+    }
+
+    const { base64, mimeType } = await prepareImage(file);
+    log.debug("image", "upload prepared", {
+      originalBytes: file.size,
+      uploadBytes: base64.length,
+      mimeType,
     });
+
+    let response: Response;
+    try {
+      response = await fetch(PROXY_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageBase64: base64, mimeType }),
+      });
+    } catch (e) {
+      // fetch rejects with a bare TypeError on a dropped connection, which says
+      // nothing useful. If the signal went while we were uploading, say that.
+      if (isOffline()) throw new Error(OFFLINE_MESSAGE, { cause: e });
+      throw new Error(
+        `Could not reach the image reader — check your connection and try again. (${
+          e instanceof Error ? e.message : String(e)
+        })`,
+        { cause: e }
+      );
+    }
+
+    if (!response.ok) {
+      const msg = await response.text().catch(() => response.statusText);
+      // Logged with the status because 403 and an empty item list are the two
+      // distinct first-read failures CLAUDE.md tells you to tell apart: 403 is
+      // the worker's origin allowlist, anything else is the Gemini side.
+      log.warn("image", "reader returned an error status", {
+        status: response.status,
+        body: String(msg).slice(0, 300),
+      });
+      throw new Error(`Image reading failed: ${msg}`);
+    }
+
+    const result = await response.json();
+    if (result.error) throw new Error(result.error);
+
+    const read = result as ReadResult;
+    log.info("image", "image read", {
+      itemCount: read.items?.length ?? 0,
+      confidence: read.confidence,
+      ms: Date.now() - startedAt,
+    });
+    return read;
   } catch (e) {
-    // fetch rejects with a bare TypeError on a dropped connection, which says
-    // nothing useful. If the signal went while we were uploading, say that.
-    if (isOffline()) throw new Error(OFFLINE_MESSAGE, { cause: e });
-    throw new Error(
-      `Could not reach the image reader — check your connection and try again. (${
-        e instanceof Error ? e.message : String(e)
-      })`,
-      { cause: e }
-    );
+    log.error("image", "image read failed", e, {
+      ms: Date.now() - startedAt,
+      fileBytes: file?.size,
+    });
+    throw e;
   }
-
-  if (!response.ok) {
-    const msg = await response.text().catch(() => response.statusText);
-    throw new Error(`Image reading failed: ${msg}`);
-  }
-
-  const result = await response.json();
-  if (result.error) throw new Error(result.error);
-  return result as ReadResult;
 }
 
 function isOffline(): boolean {
   return typeof navigator !== "undefined" && navigator.onLine === false;
+}
+
+/**
+ * The base64 payload out of a `data:` URL.
+ *
+ * `dataUrl.split(",")[1]` was two silent `undefined`s waiting to happen: a
+ * canvas that exports nothing, or a FileReader handed something that is not an
+ * image, both produce a string with no comma in it. `undefined` then travelled
+ * all the way to `JSON.stringify` and left the worker to explain a request with
+ * no image in it — a confusing failure a long way from its cause.
+ */
+export function base64FromDataUrl(dataUrl: unknown): string {
+  if (typeof dataUrl !== "string" || dataUrl === "") {
+    throw new Error("Could not read the photo — the image data was empty.");
+  }
+  const comma = dataUrl.indexOf(",");
+  if (comma === -1) {
+    throw new Error(
+      "Could not read the photo — the image data was not in the expected format."
+    );
+  }
+  const base64 = dataUrl.slice(comma + 1);
+  if (!base64) {
+    throw new Error("Could not read the photo — the image data was empty.");
+  }
+  return base64;
 }
 
 /**
@@ -120,10 +180,15 @@ export async function prepareImage(file: File): Promise<{ base64: string; mimeTy
     bitmap.close();
 
     const dataUrl = canvas.toDataURL("image/jpeg", JPEG_QUALITY);
-    const base64 = dataUrl.split(",")[1];
-    if (!base64) throw new Error("empty canvas export");
-    return { base64, mimeType: "image/jpeg" };
-  } catch {
+    return { base64: base64FromDataUrl(dataUrl), mimeType: "image/jpeg" };
+  } catch (e) {
+    // A downscale failure is recoverable — send the original. Worth a warn
+    // though: it silently turns a 646 KB upload back into a 6 MB one, which
+    // looks like "the reader got slow" from the outside.
+    log.warn("image", "downscale failed, sending the original", {
+      reason: e instanceof Error ? e.message : String(e),
+      bytes: file.size,
+    });
     return { base64: await fileToBase64(file), mimeType: file.type || "image/jpeg" };
   }
 }
@@ -132,8 +197,14 @@ function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
-      const dataUrl = reader.result as string;
-      resolve(dataUrl.split(",")[1]);
+      try {
+        resolve(base64FromDataUrl(reader.result));
+      } catch (e) {
+        // This is the last fallback in the chain, so a throw here is the whole
+        // read failing. Reject with the explanation rather than resolving with
+        // `undefined` and failing at the worker instead.
+        reject(e);
+      }
     };
     reader.onerror = reject;
     reader.readAsDataURL(file);

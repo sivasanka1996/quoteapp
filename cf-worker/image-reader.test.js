@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import worker from "./image-reader.js";
 
-const ENV = { GEMINI_API_KEY: "test-key" };
+// LOG_LEVEL silent keeps the structured request log out of the test output.
+// The logging tests below pass their own env to exercise it deliberately.
+const ENV = { GEMINI_API_KEY: "test-key", LOG_LEVEL: "silent" };
+const LOUD_ENV = { GEMINI_API_KEY: "test-key" };
 
 /** The origin the live app actually calls from. */
 const APP_ORIGIN = "https://quoteapp-3f48e.web.app";
@@ -310,5 +313,108 @@ describe("only the app may spend the Gemini key", () => {
     const res = await worker.fetch(post(), ENV);
 
     expect(res.headers.get("Vary")).toBe("Origin");
+  });
+});
+
+describe("logging", () => {
+  /** Capture the worker's structured stdout lines as parsed objects. */
+  function captureLog() {
+    const lines = [];
+    vi.stubGlobal("console", {
+      ...console,
+      log: (s) => {
+        try {
+          lines.push(JSON.parse(s));
+        } catch {
+          lines.push({ raw: s });
+        }
+      },
+    });
+    return lines;
+  }
+
+  test("writes one structured line per read, with the fields worth grepping", async () => {
+    stubGemini(geminiItems([{ name: "Wire", qty: 2, rate: 100 }]));
+    const lines = captureLog();
+
+    await worker.fetch(post(), LOUD_ENV);
+
+    const done = lines.find((l) => l.msg === "read complete");
+    expect(done).toBeTruthy();
+    expect(done.provider).toBe("gemini");
+    expect(done.model).toBe("gemini-2.5-flash");
+    expect(done.itemCount).toBe(1);
+    expect(done.confidence).toBe("full");
+    expect(typeof done.ms).toBe("number");
+    expect(typeof done.rid).toBe("string");
+  });
+
+  test("ties every line of one request to the same id", async () => {
+    stubGemini(geminiItems([{ name: "Wire", qty: 2, rate: 100 }]));
+    const lines = captureLog();
+
+    await worker.fetch(post(), LOUD_ENV);
+
+    const ids = new Set(lines.filter((l) => l.rid).map((l) => l.rid));
+    expect(ids.size).toBe(1);
+  });
+
+  test("records the escalation to Pro", async () => {
+    stubGemini(geminiItems([]), geminiItems([{ name: "Wire", qty: 2, rate: 100 }]));
+    const lines = captureLog();
+
+    await worker.fetch(post(), LOUD_ENV);
+
+    const attempts = lines.filter((l) => l.msg === "model attempt");
+    expect(attempts.map((a) => a.model)).toEqual([
+      "gemini-2.5-flash",
+      "gemini-2.5-pro",
+    ]);
+    expect(attempts[0].level).toBe("warn");
+    expect(attempts[1].level).toBe("info");
+  });
+
+  test("notes a refused origin", async () => {
+    stubGemini();
+    const lines = captureLog();
+
+    await worker.fetch(post(undefined, "https://not-the-app.example"), LOUD_ENV);
+
+    const refused = lines.find((l) => l.msg === "origin refused");
+    expect(refused.origin).toBe("https://not-the-app.example");
+  });
+
+  test("says nothing at all when silenced", async () => {
+    stubGemini(geminiItems([{ name: "Wire", qty: 2, rate: 100 }]));
+    const lines = captureLog();
+
+    await worker.fetch(post(), ENV);
+
+    expect(lines).toHaveLength(0);
+  });
+
+  // The /list branch awaits fetch without its own guard, so a network throw
+  // there reaches the top-level handler — the exact case the outer catch is for.
+  test("never leaks a stack trace to the client", async () => {
+    vi.stubGlobal("fetch", async () => {
+      throw new Error("boom at internal.js:42");
+    });
+    const lines = captureLog();
+    const req = new Request("https://worker.test/list", {
+      headers: { Origin: APP_ORIGIN },
+    });
+
+    const res = await worker.fetch(req, LOUD_ENV);
+    const body = await res.text();
+
+    expect(res.status).toBe(500);
+    expect(JSON.parse(body)).toEqual({
+      error: "Image reading failed. Please try again.",
+    });
+    expect(body).not.toContain("internal.js");
+    expect(body).not.toContain("boom");
+    // …but the worker's own log keeps the full detail.
+    const logged = lines.find((l) => l.msg === "unhandled worker error");
+    expect(logged.err).toContain("boom");
   });
 });

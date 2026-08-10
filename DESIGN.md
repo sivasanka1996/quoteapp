@@ -469,13 +469,17 @@ executables**.
 ## 12. Test topology
 
 ```
-104 tests · 6 files · all environment: 'node'
-├── calc/engine.test.ts       23  the money, against fixtures
-├── cf-worker/…test.js        25  structured output, escalation, confidence, origin allowlist
+182 tests · 9 files · all environment: 'node'
+├── calc/engine.test.ts       31  the money, against fixtures (+8 numeric chain, PI-6)
+├── cf-worker/…test.js        31  structured output, escalation, confidence,
+│                                 origin allowlist (+6 structured logging, PI-5)
 ├── types.test.ts             24  quoteStatus, seedNextId, hasNoCost, parseQty, customerPatch
+├── log/logger.test.ts        22  levels, debug flag, ring buffer, error normalising, sinks
+├── parse/numberWords.test.ts 17  English + Telugu 1–100, multi-token numbers
+├── voiceParse.test.ts        16  English + Telugu transcripts (+7 tokenizer rules, PI-6)
 ├── format.test.ts            15  Indian lakh/crore, short form, dates, quote numbers
-├── voiceParse.test.ts         9  English + Telugu transcripts
-└── readImage.test.ts          8  downscale maths, offline guard
+├── readImage.test.ts         14  downscale maths, offline guard (+6 data-URL, PI-6)
+└── log/export.test.ts        12  filename shape, line format, level selection
 ```
 
 **Everything testable here is a pure function, and that is structural.**

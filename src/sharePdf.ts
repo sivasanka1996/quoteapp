@@ -11,6 +11,8 @@
  * app should not pay that on first load just to show the home screen.
  */
 
+import { log } from "./log/logger";
+
 export type ShareOutcome = "shared" | "downloaded" | "cancelled";
 
 interface ShareOpts {
@@ -26,6 +28,28 @@ const MARGIN = 24;
 export async function shareQuotePdf(
   node: HTMLElement,
   { filename, title, text }: ShareOpts
+): Promise<ShareOutcome> {
+  const startedAt = Date.now();
+  try {
+    return await buildAndShare(node, { filename, title, text }, startedAt);
+  } catch (e) {
+    // I/O layer: log, re-throw. CustomerView already surfaces the failure to
+    // Dad; this just leaves a record of which half broke. The generated PDF is
+    // the one thing no automated check in this repo has ever inspected
+    // (CLAUDE.md, PI-2), so a share that fails in the field is exactly the
+    // event worth having a line for.
+    log.error("pdf", "share failed", e, {
+      filename,
+      ms: Date.now() - startedAt,
+    });
+    throw e;
+  }
+}
+
+async function buildAndShare(
+  node: HTMLElement,
+  { filename, title, text }: ShareOpts,
+  startedAt: number
 ): Promise<ShareOutcome> {
   const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
     import("html2canvas"),
@@ -88,13 +112,23 @@ export async function shareQuotePdf(
   const blob = pdf.output("blob");
   const file = new File([blob], filename, { type: "application/pdf" });
 
+  log.info("pdf", "pdf built", {
+    filename,
+    bytes: blob.size,
+    canvasW: canvas.width,
+    canvasH: canvas.height,
+    ms: Date.now() - startedAt,
+  });
+
   // Web Share Level 2 — Android Chrome. Desktop browsers mostly lack file share.
   if (navigator.canShare?.({ files: [file] })) {
     try {
       await navigator.share({ files: [file], title, text });
+      log.info("pdf", "pdf shared", { filename });
       return "shared";
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
+        log.info("pdf", "share cancelled by the user", { filename });
         return "cancelled";
       }
       throw err;
@@ -109,6 +143,7 @@ export async function shareQuotePdf(
   a.click();
   // Revoke on the next tick so the click has taken effect
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+  log.info("pdf", "pdf downloaded (no share sheet on this device)", { filename });
   return "downloaded";
 }
 

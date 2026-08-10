@@ -16,6 +16,7 @@ import { StatusBadge } from "./StatusBadge";
 import { ImageReaderPanel } from "./ImageReader";
 import { VoiceReaderPanel } from "./VoiceReader";
 import { type ReadItem } from "./readImage";
+import { log } from "./log/logger";
 import "./CustomerScreen.css";
 
 interface Props {
@@ -90,6 +91,12 @@ export function CustomerScreen({
     setShowEdit(false);
     onCustomerChange({ ...customer, ...patch });
     updateCustomerDoc(db, customer.id, patch).catch((err) => {
+      // updateCustomerDoc logs the write failure; this records the visible
+      // consequence — Dad watched his correction appear and then vanish.
+      log.warn("ui", "customer edit reverted on screen", {
+        customerId: customer.id,
+        fields: Object.keys(patch),
+      });
       onCustomerChange(before);
       setEditError(err instanceof Error ? err.message : String(err));
     });

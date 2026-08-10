@@ -3,6 +3,7 @@ import { type Customer, quoteStatus } from "./types";
 import { useCustomers } from "./useCustomers";
 import { useAllQuotes } from "./useQuotes";
 import { formatMoney, formatINRShort, formatDate } from "./format";
+import { log } from "./log/logger";
 import { APK_URL, APP_VERSION, isInstalledApp } from "./appInfo";
 import "./HomeScreen.css";
 
@@ -25,6 +26,7 @@ export function HomeScreen({ onSelectCustomer }: Props) {
   const [newPhone, setNewPhone] = useState("");
   const [newAddress, setNewAddress] = useState("");
   const [saving, setSaving] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
 
   // Per-customer rollups, plus the four headline figures
   const { byCustomer, stats } = useMemo(() => {
@@ -75,19 +77,34 @@ export function HomeScreen({ onSelectCustomer }: Props) {
   async function handleAdd() {
     if (!newName.trim()) return;
     setSaving(true);
-    const id = await addCustomer(newName, newPhone, newAddress);
-    setSaving(false);
-    setShowAdd(false);
-    setNewName("");
-    setNewPhone("");
-    setNewAddress("");
-    onSelectCustomer({
-      id,
-      name: newName,
-      phone: newPhone,
-      address: newAddress,
-      createdAt: Date.now(),
-    });
+    setAddError(null);
+    try {
+      const id = await addCustomer(newName, newPhone, newAddress);
+      setShowAdd(false);
+      setNewName("");
+      setNewPhone("");
+      setNewAddress("");
+      onSelectCustomer({
+        id,
+        name: newName,
+        phone: newPhone,
+        address: newAddress,
+        createdAt: Date.now(),
+      });
+    } catch (err) {
+      // This path had no catch at all, so a rejection left the button on
+      // "Saving..." forever and lost what Dad had typed — PI-1's exact failure
+      // mode, still live here. `addCustomer` uses addDoc, which resolves only
+      // on *server* ack, so with no signal it does not settle. See the note in
+      // CLAUDE.md: the fix mirrors saveQuote's, but the ack race itself is
+      // deliberately left for a separate change.
+      log.error("ui", "add customer failed", err);
+      setAddError(
+        err instanceof Error ? err.message : "Could not add the customer."
+      );
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -266,6 +283,7 @@ export function HomeScreen({ onSelectCustomer }: Props) {
                 />
               </label>
             </div>
+            {addError && <p className="home-add-error">{addError}</p>}
             <div className="home-sheet-footer">
               <button
                 className="home-btn-cancel"

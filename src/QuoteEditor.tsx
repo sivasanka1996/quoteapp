@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { calcQuote, type LineInput, type LineResult, type PriceMode } from "./calc/engine";
+import {
+  calcQuote,
+  discountsFromPercents,
+  type LineInput,
+  type LineResult,
+  type PriceMode,
+} from "./calc/engine";
 import { formatINR, formatPct } from "./format";
 import { CustomerView, type CustomerLine } from "./CustomerView";
 import { useCompanySettings } from "./useCompanySettings";
@@ -10,6 +16,7 @@ import {
   type UILine, type Customer, type QuoteDoc, type QuoteStatus,
 } from "./types";
 import { ImageReaderPanel } from "./ImageReader";
+import { log } from "./log/logger";
 import { type ReadItem } from "./readImage";
 import { VoiceReaderPanel, type VoiceItem } from "./VoiceReader";
 import "./QuoteEditor.css";
@@ -26,19 +33,19 @@ function blankLine(): UILine {
   };
 }
 
-function buildDiscountExpr(d1: string, d2: string): string {
-  const v1 = parseFloat(d1), v2 = parseFloat(d2);
-  if (!v1 && !v2) return "0%";
-  if (v1 && v2) return `${v1}% + ${v2}%`;
-  return `${v1 || v2}%`;
-}
-
 function toPriceMode(
   mode: "discount" | "direct", list: string,
   disc1: string, disc2: string, rate: string
 ): PriceMode {
   if (mode === "direct") return { kind: "direct", rate: parseFloat(rate) || 0 };
-  return { kind: "discount", listPrice: parseFloat(list) || 0, discountExpr: buildDiscountExpr(disc1, disc2) };
+  // Numbers straight through. This used to format the two fields into
+  // "64.7% + 2%" so the engine could split them apart again — see the
+  // PriceMode doc comment in calc/engine.ts.
+  return {
+    kind: "discount",
+    listPrice: parseFloat(list) || 0,
+    discounts: discountsFromPercents(disc1, disc2),
+  };
 }
 
 function toLineInput(l: UILine): LineInput {
@@ -179,6 +186,11 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
   }
 
   function handleAddFromVoice(voiceItem: VoiceItem) {
+    log.info("voice", "line added from voice", {
+      qty: voiceItem.qty,
+      hasRate: voiceItem.rate != null,
+      nameLength: voiceItem.name.length,
+    });
     setLines((prev) => [...prev, {
       ...blankLine(),
       name: voiceItem.name,
@@ -190,6 +202,10 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
   }
 
   function handleAddFromImage(readItems: ReadItem[]) {
+    log.info("image", "lines added from image", {
+      itemCount: readItems.length,
+      withoutRate: readItems.filter((it) => it.rate == null).length,
+    });
     const newLines: UILine[] = readItems.map((it) => ({
       ...blankLine(),
       name: it.name,
@@ -222,6 +238,10 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
       return true;
     } catch (err) {
       // Without this the button sat on "Saving…" forever and the quote was lost.
+      log.error("ui", "quote save rejected in the editor", err, {
+        quoteId,
+        lineCount: lines.length,
+      });
       setSaveError(err instanceof Error ? err.message : String(err));
       return false;
     } finally {

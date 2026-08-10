@@ -31,6 +31,67 @@ describe("parseTranscript — English (en-IN)", () => {
   });
 });
 
+// The three defects spec §3.1 names, each a classification rule rather than
+// another branch in a regex.
+describe("parseTranscript — defects PI-6 fixes", () => {
+  it("reads a spelled-out English quantity", () => {
+    expect(parseTranscript("six wire rate 1650")).toEqual({
+      name: "wire",
+      qty: 6,
+      rate: 1650,
+    });
+  });
+
+  it("reads a quantity that is not at the front, when a unit marks it", () => {
+    expect(parseTranscript("wire 6 nos rate 1650")).toEqual({
+      name: "wire",
+      qty: 6,
+      rate: 1650,
+    });
+  });
+
+  it("does not read an item code as a price", () => {
+    expect(parseTranscript("2 wire code 4402")).toEqual({
+      name: "wire code 4402",
+      qty: 2,
+      rate: null,
+    });
+  });
+
+  it("joins a two-word quantity", () => {
+    expect(parseTranscript("twenty five wire rate 1650")).toEqual({
+      name: "wire",
+      qty: 25,
+      rate: 1650,
+    });
+  });
+
+  it("drops the unit word after a leading quantity", () => {
+    expect(parseTranscript("6 nos wire rate 1650")).toEqual({
+      name: "wire",
+      qty: 6,
+      rate: 1650,
+    });
+  });
+});
+
+// Spec §3.4. "1.5 sq" and "2.5 sq" are item names in this domain, and the
+// idiom is quantity-first-as-a-whole-number. Teaching the qty rule to accept
+// decimals turns a correct parse into a wrong one.
+describe("parseTranscript — decimals stay part of the name", () => {
+  it("keeps a leading decimal in the name, qty 1", () => {
+    expect(parseTranscript("2.5 sq wire")).toEqual({
+      name: "2.5 sq wire",
+      qty: 1,
+      rate: null,
+    });
+  });
+
+  it("still reads a decimal rate", () => {
+    expect(parseTranscript("4 lug rate 12.50").rate).toBe(12.5);
+  });
+});
+
 describe("parseTranscript — Telugu (te-IN)", () => {
   it("reads a Telugu rate keyword", () => {
     expect(parseTranscript("5 వైర్ రేటు 1650")).toEqual({

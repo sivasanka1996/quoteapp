@@ -4,6 +4,7 @@ import {
   doc, orderBy, query, where, serverTimestamp, type Firestore,
 } from "firebase/firestore";
 import { db } from "./firebase";
+import { log } from "./log/logger";
 import { type Customer, type CustomerEdits } from "./types";
 
 /**
@@ -28,13 +29,22 @@ import { type Customer, type CustomerEdits } from "./types";
  * note under KNOWN GAPS before assuming Dad can delete a customer in the app.
  */
 export async function deleteCustomerAndQuotes(db: Firestore, customerId: string) {
-  const theirs = await getDocs(
-    query(collection(db, "quotes"), where("customerId", "==", customerId))
-  );
-  const batch = writeBatch(db);
-  theirs.forEach((q) => batch.delete(q.ref));
-  batch.delete(doc(db, "customers", customerId));
-  await batch.commit();
+  try {
+    const theirs = await getDocs(
+      query(collection(db, "quotes"), where("customerId", "==", customerId))
+    );
+    const batch = writeBatch(db);
+    theirs.forEach((q) => batch.delete(q.ref));
+    batch.delete(doc(db, "customers", customerId));
+    await batch.commit();
+    log.info("firestore", "customer and quotes deleted", {
+      customerId,
+      quoteCount: theirs.size,
+    });
+  } catch (e) {
+    log.error("firestore", "customer delete failed", e, { customerId });
+    throw e;
+  }
 }
 
 /**
@@ -56,7 +66,22 @@ export async function updateCustomerDoc(
   customerId: string,
   patch: CustomerEdits
 ) {
-  await updateDoc(doc(db, "customers", customerId), patch);
+  try {
+    await updateDoc(doc(db, "customers", customerId), patch);
+    log.info("firestore", "customer updated", {
+      customerId,
+      fields: Object.keys(patch),
+    });
+  } catch (e) {
+    // Re-thrown: CustomerScreen reverts the sheet to the stored values and
+    // shows a banner on rejection, so the screen never displays a value
+    // Firestore refused.
+    log.error("firestore", "customer update failed", e, {
+      customerId,
+      fields: Object.keys(patch),
+    });
+    throw e;
+  }
 }
 
 export function useCustomers() {
@@ -64,24 +89,58 @@ export function useCustomers() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const q = query(collection(db, "customers"), orderBy("name"));
-    const unsub = onSnapshot(q, (snap) => {
-      setCustomers(
-        snap.docs.map((d) => ({ id: d.id, ...d.data() } as Customer))
+    try {
+      const q = query(collection(db, "customers"), orderBy("name"));
+      const unsub = onSnapshot(
+        q,
+        (snap) => {
+          try {
+            setCustomers(
+              snap.docs.map((d) => ({ id: d.id, ...d.data() } as Customer))
+            );
+            log.debug("firestore", "customers snapshot", {
+              count: snap.docs.length,
+              fromCache: snap.metadata.fromCache,
+            });
+          } catch (e) {
+            log.error("firestore", "customers snapshot could not be read", e);
+          } finally {
+            setLoading(false);
+          }
+        },
+        // This listener had no error callback at all, so a failure left the
+        // spinner up forever with nothing written anywhere.
+        (e) => {
+          log.error("firestore", "customers listener failed", e);
+          setLoading(false);
+        }
       );
-      setLoading(false);
-    });
-    return unsub;
+      return unsub;
+    } catch (e) {
+      // Log, then let it through. Failing to even attach a listener means the
+      // data layer is broken, and the ErrorBoundary's recovery card is the
+      // honest answer — swallowing it would leave the spinner up forever.
+      // This is also exactly what happened before the try/catch existed, so
+      // the wrapping stays behaviour-preserving.
+      log.error("firestore", "customers listener could not be attached", e);
+      throw e;
+    }
   }, []);
 
   async function addCustomer(name: string, phone: string, address: string): Promise<string> {
-    const ref = await addDoc(collection(db, "customers"), {
-      name: name.trim(),
-      phone: phone.trim(),
-      address: address.trim(),
-      createdAt: serverTimestamp(),
-    });
-    return ref.id;
+    try {
+      const ref = await addDoc(collection(db, "customers"), {
+        name: name.trim(),
+        phone: phone.trim(),
+        address: address.trim(),
+        createdAt: serverTimestamp(),
+      });
+      log.info("firestore", "customer added", { id: ref.id });
+      return ref.id;
+    } catch (e) {
+      log.error("firestore", "customer add failed", e);
+      throw e;
+    }
   }
 
   async function updateCustomer(id: string, patch: CustomerEdits) {

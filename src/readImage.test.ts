@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { fitWithin, MAX_EDGE, readImageItems } from "./readImage";
+import { base64FromDataUrl, fitWithin, MAX_EDGE, readImageItems } from "./readImage";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -44,5 +44,43 @@ describe("reading an image with no signal", () => {
     await expect(readImageItems(new File([], "slip.jpg"))).rejects.toThrow(
       /internet|offline|connection/i
     );
+  });
+});
+
+describe("base64FromDataUrl — a malformed data URL says so (PI-6)", () => {
+  test("returns the payload of a well-formed data URL", () => {
+    expect(base64FromDataUrl("data:image/jpeg;base64,AAAABBBB")).toBe("AAAABBBB");
+  });
+
+  test("keeps commas inside the payload", () => {
+    expect(base64FromDataUrl("data:image/jpeg;base64,AA,BB")).toBe("AA,BB");
+  });
+
+  // The whole point: these used to yield `undefined`, which travelled into the
+  // POST body and made the worker complain about a missing image instead.
+  test("throws a readable error when there is no comma", () => {
+    expect(() => base64FromDataUrl("not a data url")).toThrow(/expected format/i);
+  });
+
+  test("throws when the payload is empty", () => {
+    expect(() => base64FromDataUrl("data:image/jpeg;base64,")).toThrow(/empty/i);
+    expect(() => base64FromDataUrl("")).toThrow(/empty/i);
+  });
+
+  test("throws when handed something that is not a string at all", () => {
+    expect(() => base64FromDataUrl(null)).toThrow(/empty/i);
+    expect(() => base64FromDataUrl(new ArrayBuffer(8))).toThrow(/empty/i);
+  });
+
+  test("never returns undefined", () => {
+    for (const bad of ["", "nope", null, undefined, 42]) {
+      let out: unknown;
+      try {
+        out = base64FromDataUrl(bad);
+      } catch {
+        out = "threw";
+      }
+      expect(out).not.toBeUndefined();
+    }
   });
 });

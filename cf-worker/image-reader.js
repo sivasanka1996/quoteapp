@@ -39,6 +39,35 @@ const ALLOWED_ORIGINS = new Set([
   "http://localhost:4173",
 ]);
 
+// --- Logging ---
+//
+// A Worker has no filesystem and no ring buffer to export, so "logging" here
+// means one structured line per event on stdout, which `npx wrangler tail`
+// streams live and the Cloudflare dashboard keeps. JSON rather than prose so
+// the fields stay greppable.
+//
+// Set LOG_LEVEL=silent in wrangler.toml (or a test env) to turn it off. Same
+// rule as the client logger: this must never throw, because every call site is
+// on the request path.
+function wlog(env, level, msg, fields = {}) {
+  try {
+    if (env?.LOG_LEVEL === "silent") return;
+    console.log(
+      JSON.stringify({ t: new Date().toISOString(), level, msg, ...fields })
+    );
+  } catch {
+    /* a log line is never worth failing a read for */
+  }
+}
+
+function newRequestId() {
+  try {
+    return crypto.randomUUID().slice(0, 8);
+  } catch {
+    return Math.random().toString(36).slice(2, 10);
+  }
+}
+
 // Vary matters: without it a cache could hand one origin's answer to another.
 function corsFor(origin) {
   return {
@@ -51,6 +80,29 @@ function corsFor(origin) {
 
 export default {
   async fetch(request, env) {
+    const rid = newRequestId();
+    const startedAt = Date.now();
+    try {
+      return await handle(request, env, rid, startedAt);
+    } catch (e) {
+      // Worker layer (spec §2.4): log it fully, tell the client nothing but the
+      // shape it already expects. A stack trace in the response body would leak
+      // internals to anyone who can reach the URL.
+      wlog(env, "error", "unhandled worker error", {
+        rid,
+        ms: Date.now() - startedAt,
+        err: e?.message,
+        stack: e?.stack,
+      });
+      return new Response(
+        JSON.stringify({ error: "Image reading failed. Please try again." }),
+        { status: 500, headers: { "Content-Type": "application/json", "Vary": "Origin" } }
+      );
+    }
+  },
+};
+
+async function handle(request, env, rid, startedAt) {
     const url = new URL(request.url);
 
     // Refuse before doing any work, and refuse a *missing* Origin too. CORS
@@ -64,6 +116,7 @@ export default {
     // and that waits on PI-4.1.
     const origin = request.headers.get("Origin");
     if (!origin || !ALLOWED_ORIGINS.has(origin)) {
+      wlog(env, "warn", "origin refused", { rid, origin: origin ?? null });
       return new Response("Forbidden — this worker only answers the quotation app.", {
         status: 403,
         headers: { "Vary": "Origin" },
@@ -102,16 +155,40 @@ export default {
     if (!imageBase64) return json({ error: "imageBase64 is required" }, 400);
     if (!env.GEMINI_API_KEY) return json({ error: "GEMINI_API_KEY secret not set on this worker" }, 500);
 
+    wlog(env, "info", "read requested", {
+      rid,
+      provider: "gemini",
+      mimeType,
+      uploadBytes: imageBase64.length,
+    });
+
     let items = [];
+    let usedModel = null;
     const failures = [];
     for (const model of MODELS) {
+      const modelStartedAt = Date.now();
       const attempt = await readWith(model, imageBase64, mimeType, env.GEMINI_API_KEY);
       items = attempt.items;
+      usedModel = model;
+      wlog(env, items.length > 0 ? "info" : "warn", "model attempt", {
+        rid,
+        provider: "gemini",
+        model,
+        itemCount: items.length,
+        ms: Date.now() - modelStartedAt,
+        detail: attempt.detail || undefined,
+      });
       if (items.length > 0) break;
       failures.push(attempt.detail);
     }
 
     if (items.length === 0) {
+      wlog(env, "error", "read produced nothing", {
+        rid,
+        provider: "gemini",
+        ms: Date.now() - startedAt,
+        detail: failures.filter(Boolean).join(" | "),
+      });
       return json({
         items: [],
         confidence: "low",
@@ -120,9 +197,17 @@ export default {
       });
     }
 
-    return json({ items, confidence: confidenceOf(items), notes: "", detail: "" });
-  },
-};
+    const confidence = confidenceOf(items);
+    wlog(env, "info", "read complete", {
+      rid,
+      provider: "gemini",
+      model: usedModel,
+      itemCount: items.length,
+      confidence,
+      ms: Date.now() - startedAt,
+    });
+    return json({ items, confidence, notes: "", detail: "" });
+}
 
 /**
  * One read attempt against one model. Never throws: a failure comes back as an
