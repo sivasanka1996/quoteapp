@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import {
-  collection, onSnapshot, addDoc, updateDoc, getDocs, writeBatch,
-  doc, orderBy, query, where, serverTimestamp, type Firestore,
+  collection, onSnapshot, setDoc, updateDoc, getDocs, writeBatch,
+  doc, orderBy, query, where, type Firestore,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { log } from "./log/logger";
+import { ackOrQueued, type WriteResult } from "./firestoreAck";
 import { type Customer, type CustomerEdits } from "./types";
 
 /**
@@ -127,18 +128,40 @@ export function useCustomers() {
     }
   }, []);
 
-  async function addCustomer(name: string, phone: string, address: string): Promise<string> {
+  /**
+   * Add a customer, and never hang doing it (bug #10).
+   *
+   * This used `addDoc` with `serverTimestamp()`, which was wrong offline in two
+   * separate ways. `addDoc` waits for the server to mint the id, so with no
+   * signal the promise never settles and the button sits on "Saving…" forever —
+   * PI-1 fixed exactly this for `saveQuote` and the same defect survived here.
+   * And `serverTimestamp()` reads back as null from the local cache until the
+   * server confirms, while `Customer.createdAt` is declared `number`.
+   *
+   * So: mint the id on the device with `doc()`, write with `setDoc`, stamp the
+   * time locally, and race the ack. A customer added in a shop with no signal
+   * now works exactly as a quote saved there already did.
+   */
+  async function addCustomer(
+    name: string,
+    phone: string,
+    address: string
+  ): Promise<WriteResult> {
+    // doc() mints the id locally, so a new customer gets a stable id with no
+    // signal — and the caller can navigate straight into it.
+    const ref = doc(collection(db, "customers"));
     try {
-      const ref = await addDoc(collection(db, "customers"), {
+      const write = setDoc(ref, {
         name: name.trim(),
         phone: phone.trim(),
         address: address.trim(),
-        createdAt: serverTimestamp(),
+        createdAt: Date.now(),
       });
-      log.info("firestore", "customer added", { id: ref.id });
-      return ref.id;
+      const queued = await ackOrQueued(write);
+      log.info("firestore", "customer added", { id: ref.id, queued });
+      return { id: ref.id, queued };
     } catch (e) {
-      log.error("firestore", "customer add failed", e);
+      log.error("firestore", "customer add failed", e, { id: ref.id });
       throw e;
     }
   }

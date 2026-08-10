@@ -5,40 +5,13 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { log } from "./log/logger";
+import { ackOrQueued, type WriteResult } from "./firestoreAck";
 import { type UILine, type QuoteDoc, type QuoteStatus } from "./types";
 
-/**
- * How long to wait for the server to acknowledge a write before calling it
- * saved-but-not-synced.
- *
- * Firestore resolves a write promise only when the *server* has the data.
- * Offline that promise never settles, so awaiting it hangs the Save button
- * forever. The write is not lost — the persistent cache has already applied
- * it locally and will replay it when signal returns — so after this long we
- * report success and say it will sync.
- */
-const ACK_TIMEOUT_MS = 2500;
-
-export interface SaveResult {
-  id: string;
-  /** true = written locally and queued; the server has not confirmed yet */
-  queued: boolean;
-}
-
-/** Resolves false on ack, true on timeout. Rejects if the write genuinely fails. */
-async function ackOrQueued(write: Promise<unknown>): Promise<boolean> {
-  // A rejection arriving after the timeout would otherwise be unhandled.
-  write.catch(() => {});
-  let timer: ReturnType<typeof setTimeout>;
-  const timeout = new Promise<boolean>((resolve) => {
-    timer = setTimeout(() => resolve(true), ACK_TIMEOUT_MS);
-  });
-  try {
-    return await Promise.race([write.then(() => false), timeout]);
-  } finally {
-    clearTimeout(timer!);
-  }
-}
+// The ack race moved to firestoreAck.ts when bug #10 turned out to need the
+// same treatment — see the note there. Re-exported because this was its home
+// and callers import SaveResult from here.
+export type SaveResult = WriteResult;
 
 export function useQuotes(customerId: string) {
   const [quotes, setQuotes] = useState<QuoteDoc[]>([]);

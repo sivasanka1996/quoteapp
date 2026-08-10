@@ -79,7 +79,10 @@ export function HomeScreen({ onSelectCustomer }: Props) {
     setSaving(true);
     setAddError(null);
     try {
-      const id = await addCustomer(newName, newPhone, newAddress);
+      // Resolves even with no signal (bug #10): the id is minted on the device
+      // and `queued` says whether the server has confirmed yet. Either way the
+      // customer is usable immediately — the persistent cache replays the write.
+      const { id, queued } = await addCustomer(newName, newPhone, newAddress);
       setShowAdd(false);
       setNewName("");
       setNewPhone("");
@@ -91,13 +94,12 @@ export function HomeScreen({ onSelectCustomer }: Props) {
         address: newAddress,
         createdAt: Date.now(),
       });
+      if (queued) {
+        log.warn("ui", "customer added while offline — queued", { id });
+      }
     } catch (err) {
-      // This path had no catch at all, so a rejection left the button on
-      // "Saving..." forever and lost what Dad had typed — PI-1's exact failure
-      // mode, still live here. `addCustomer` uses addDoc, which resolves only
-      // on *server* ack, so with no signal it does not settle. See the note in
-      // CLAUDE.md: the fix mirrors saveQuote's, but the ack race itself is
-      // deliberately left for a separate change.
+      // A genuine failure — rules refusing us, say. "Slow or offline" no longer
+      // arrives here; it comes back as queued: true above.
       log.error("ui", "add customer failed", err);
       setAddError(
         err instanceof Error ? err.message : "Could not add the customer."

@@ -4,11 +4,29 @@ Everything in this file is blocked on a person: a console login, a repo
 permission, a photo of a piece of paper, or Dad's actual phone. None of it can
 be done from a checkout, which is why it is here and not in the PI plan.
 
-*Written 2026-08-07. Companion to `CLAUDE.md` — that file is the plan, this file
-is the queue of things only a human can clear.*
+*Written 2026-08-07, standing instruction added 2026-08-10. Companion to
+`CLAUDE.md` — that file is the plan, this file is the queue of things only a
+human can clear.*
 
 **Ordered by what unblocks the most.** Item 1 gates everything that reaches Dad
 through the website. Item 2 reaches him without item 1.
+
+> ## Standing instruction — Siva, 2026-08-10
+>
+> **This queue is drained in one sitting, at the end. It never paces the code.**
+>
+> Nothing in here blocks building. If a task turns out to need a photo, a mic,
+> a real phone or a console login, it moves here and the work continues around
+> it — it is not reported as a blocker and it does not become "the next thing".
+> When Siva has the time and the hardware, the whole file gets worked through
+> at once.
+>
+> The corollary matters just as much: **anything that can be built or checked
+> without a human must be, immediately.** Do not park a fix you already know
+> how to write. Several things that looked like they needed a person did not —
+> offline behaviour, multi-page reading and log export were all verified in a
+> headless browser. Only genuine handwriting, a real voice, a physical phone
+> and a console login are actually human.
 
 ---
 

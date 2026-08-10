@@ -101,13 +101,22 @@ npm install        # REQUIRED FIRST — node_modules is not committed and is
                    # often absent on a fresh clone. Without it `npm test`
                    # fails with "'vitest' is not recognized".
 npm run dev        # http://localhost:5173
-npm test           # 215 unit tests (Vitest) — 38 image-reader worker, 31 engine,
+npm test           # 221 unit tests (Vitest) — 38 image-reader worker, 31 engine,
                    # 24 types, 22 logger, 17 numberWords, 17 openrouter,
                    # 16 voiceParse, 15 format, 14 readImage, 12 log export,
-                   # 9 mergePages
+                   # 9 mergePages, 6 firestoreAck
 npm run lint       # eslint — clean, keep it that way (now enforced in CI)
-npm run build      # production build
+npm run build      # production build — AND the only real typecheck, see below
 ```
+
+**`npx tsc --noEmit` checks nothing here — do not trust it.** The root
+`tsconfig.json` is a solution file holding only `references`, so that command
+exits 0 having typechecked zero files. It reported clean on a file that
+`npm run build` then rejected (2026-08-10). **`npm run build` is the typecheck**
+— it runs `tsc -b`, which follows the references to `tsconfig.app.json` and
+`tsconfig.node.json`. Corollary: test files are compiled with the *app* config,
+which has no Node types, so `process` in a test needs reaching through
+`globalThis`.
 
 Tests are `environment: 'node'` (see `vite.config.ts`), so only pure functions
 are covered. There are no component or hook tests — adding any requires
@@ -199,6 +208,12 @@ src/
                            CustomerScreen can edit without a second snapshot
                            listener. Never await it to drive a button.
   useQuotes.ts           — Firestore CRUD per customer + useAllQuotes() for home stats
+  firestoreAck.ts        — ACK_TIMEOUT_MS + ackOrQueued(). Firestore resolves a
+                           write only on SERVER ack, so awaiting one offline
+                           hangs the button forever. Shared by saveQuote and
+                           addCustomer. Any new write that drives a button
+                           must go through this.
+  firestoreAck.test.ts   — 6 tests
   useCompanySettings.ts  — company details in localStorage (incl. validity + terms)
   sharePdf.ts            — element → A4 PDF → Web Share API (lazy-loads jspdf)
   readImage.ts           — swappable image reader (Gemini via CF Worker);
@@ -510,19 +525,9 @@ closed by PI-2 on 2026-08-06; bug 6 was closed by PI-4.4 on 2026-08-07 — see
    the correct total. Self-healing, and only in the direction of correctness;
    not worth a migration for a handful of pre-fix quotes.
 
-10. **Adding a customer with no signal waits instead of queueing.** Found
-   2026-08-10 while wiring PI-5's try/catch ladder. `useCustomers.addCustomer`
-   uses `addDoc`, and Firestore resolves a write promise only on **server**
-   ack — so offline it never settles. This is the same defect PI-1 fixed for
-   `saveQuote` with `ACK_TIMEOUT_MS` plus a client-minted `doc()` id, and the
-   fix here is the same shape. PI-5 made the failure **loud** — the button
-   releases and the reason is shown, where before it sat on "Saving…" forever
-   and silently lost what Dad had typed — but the underlying race is untouched.
-   Worth doing before handover: Dad adding a customer in a shop with no signal
-   is a real scenario, and the quote path already survives it.
-
-(Numbering is kept from the original audit so older notes still line up. #9 and
-#10 are open; the rest are closed bugs.)
+(Numbering is kept from the original audit so older notes still line up. Only
+#9 is open; the rest are closed bugs. #10 was found and closed the same day —
+see **WHAT IS DONE**.)
 
 ---
 
@@ -991,16 +996,42 @@ spec D1/D2. The File System Access API would come closest and was rejected
 because Android Chrome does not support it, so it could never work for Dad, who
 is the only user who matters here.
 
-**One real defect was found and fixed while wiring the ladder.**
-[HomeScreen.tsx](src/HomeScreen.tsx) `handleAdd` had **no catch at all**, so a
-rejection left the button on "Saving…" forever and lost what Dad had typed —
-PI-1's exact failure mode, still live in the add-customer path. It now catches,
-logs, releases the button and shows the reason. **The underlying ack race is
-deliberately not fixed:** `addCustomer` uses `addDoc`, which resolves only on
-*server* ack, so with no signal it does not settle. `saveQuote` needed
-`ACK_TIMEOUT_MS` and a client-minted id to dodge exactly this. Adding a
-customer offline therefore still waits rather than queueing. It is now loud
-instead of silent, which is the honest interim state — see KNOWN BUGS #10.
+**One real defect was found while wiring the ladder, and then fixed properly —
+bug #10, closed 2026-08-10.** [HomeScreen.tsx](src/HomeScreen.tsx) `handleAdd`
+had **no catch at all**, so a rejection left the button on "Saving…" forever and
+lost what Dad had typed — PI-1's exact failure mode, still live in the
+add-customer path a full PI after it was fixed for quotes.
+
+The first pass only made it loud. That was the wrong call and Siva said so:
+the fix was a known pattern already proven in this codebase, so deferring it
+bought nothing. `addCustomer` now mints its id on the device with `doc()`,
+writes with `setDoc`, and races the ack — exactly what `saveQuote` does.
+
+Two things came out of doing it properly:
+
+- **The ack race now lives in [`src/firestoreAck.ts`](src/firestoreAck.ts)**,
+  shared by both call sites instead of copied. It had never had a test of its
+  own despite being the thing standing between Dad and a hung button; it has
+  **6 now**, including one that pins the `write.catch(() => {})` line — it looks
+  like dead code and is not, because without it a write that fails *after* the
+  timeout is an unhandled rejection.
+- **`serverTimestamp()` was also wrong here.** It reads back as `null` from the
+  local cache until the server confirms, while `Customer.createdAt` is declared
+  `number`. Nothing read the field, so nothing noticed. It is `Date.now()` now,
+  matching quotes.
+
+**Proved red-then-green in a real browser, offline.** Against the old code the
+sheet sat on "Saving…" past 8s and never navigated; against the fix it released
+in **2624ms** — the `ACK_TIMEOUT_MS` path — navigated into the new customer,
+survived a reload while still offline, and the queued write drained when the
+connection came back. 7 checks.
+
+> **Harness note worth keeping:** the first version of that check waited for
+> `button:has-text('Add Customer')` to detach and "passed" in 52ms against the
+> *broken* code — the label merely flips to "Saving…", so the selector matched
+> nothing and the wait succeeded instantly. Watch the sheet, not the button. A
+> check that cannot fail is worse than no check, which is why this one was run
+> against the old code first.
 
 ### PI-6 — Remove the fragile parsing regex — DONE 2026-08-10
 
