@@ -1085,10 +1085,35 @@ and has not been deployed — so PI-3, PI-4.2, PI-5's worker logging and all of
 PI-7 are still absent from production, and per spec §0.1 **the deployed worker
 is still the pre-PI-4.2 one that answers anyone.** One deploy ships all of it.
 
-**Choosing a model is an experiment, not a decision.** `qwen/qwen3.7-flash` is
-the opening candidate, not a recommendation. Cost cannot decide it — every
-candidate is cents a month at Dad's volume — so **Telugu accuracy decides it**,
-and that needs real slips. See [`HUMAN-TASKS.md`](HUMAN-TASKS.md) §4 and §4a.
+**Switched to OpenRouter 2026-08-10, on Siva's call.** `wrangler.toml` now sets
+`AI_PROVIDER = "openrouter"` with `qwen/qwen3.5-flash-02-23`. Gemini remains the
+*code-level* fallback, so a deleted or misspelled var lands back on it — but as
+configured, the next deploy stops using Gemini.
+
+**The model the spec named does not exist.** §0.5 recorded
+`qwen/qwen3.7-flash` at $0.03/M in. The catalogue was re-fetched on 2026-08-10:
+399 models, 207 with vision *and* structured output, and that id is **not among
+them**. `openrouter.js` had it as `DEFAULT_MODEL`, so the first real read would
+have failed. Replaced with `qwen/qwen3.5-flash-02-23` — the cheapest Qwen that
+actually has both capabilities, $0.065/M in, $0.26/M out, 1M context, no
+per-image surcharge. **Verify a model id against the live catalogue before
+setting one**; these are not stable:
+
+```bash
+curl -s https://openrouter.ai/api/v1/models | grep -o '"id":"[^"]*"'
+```
+
+**Cost still is not what decides this.** Every candidate is cents a month at
+Dad's volume. **Telugu accuracy on his handwriting decides it**, and nothing has
+compared them on real input yet — that needs [`HUMAN-TASKS.md`](HUMAN-TASKS.md)
+§4's photos. Next rung up if Qwen3.5-Flash disappoints: `qwen/qwen3.6-flash`.
+Rolling back to Gemini is `AI_PROVIDER = "gemini"` in the Cloudflare dashboard,
+no deploy.
+
+**Keys are Worker secrets, never `.env`.** `npx wrangler secret put
+OPENROUTER_API_KEY`. `.env`/`.env.local` build the *frontend* — the Worker never
+reads them, and anything Vite exposes is compiled into the public bundle of a
+public repo. That is the whole reason the Worker exists.
 
 ### PI-8 — Multi-page slips — DONE and VERIFIED 2026-08-10
 

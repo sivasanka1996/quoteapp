@@ -42,7 +42,7 @@ describe("identity and configuration", () => {
   });
 
   test("opens on the cheapest vision-plus-structured-output model", () => {
-    expect(DEFAULT_MODEL).toBe("qwen/qwen3.7-flash");
+    expect(DEFAULT_MODEL).toBe("qwen/qwen3.5-flash-02-23");
   });
 
   test("reports a missing key rather than calling out with none", () => {
@@ -74,9 +74,9 @@ describe("the request", () => {
   test("takes the model from the environment when set", async () => {
     const calls = stubOpenRouter(completionItems([{ name: "Wire", qty: 2, rate: 100 }]));
 
-    await read("AAAA", "image/jpeg", { ...ENV, OPENROUTER_MODEL: "google/gemma-4-31b-it:free" }, "rid1");
+    await read("AAAA", "image/jpeg", { ...ENV, OPENROUTER_MODEL: "qwen/qwen3.6-flash" }, "rid1");
 
-    expect(calls[0].body.model).toBe("google/gemma-4-31b-it:free");
+    expect(calls[0].body.model).toBe("qwen/qwen3.6-flash");
   });
 
   test("sends the image as a base64 data URL part", async () => {

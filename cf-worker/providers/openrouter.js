@@ -6,9 +6,24 @@
 // volume (a few reads a day, cents a month either way), so **Telugu accuracy
 // decides it** (spec §4.4).
 //
-// `qwen/qwen3.7-flash` opens the batting because Qwen is the strongest
-// multilingual line at that price ($0.03/M in), out of the 218 models the
-// catalogue lists as having both vision and structured output (spec §0.5).
+// MODEL CHOICE — checked against the live catalogue on 2026-08-10.
+//
+// The spec named `qwen/qwen3.7-flash`. **That model does not exist** with
+// vision + structured output — the catalogue was re-fetched and it is not in
+// the list, so the spec's §0.5 note was wrong and this file used to default to
+// a model that would have 400'd on the first real read. Verify a model id
+// against the catalogue before trusting a note about it:
+//
+//   curl -s https://openrouter.ai/api/v1/models
+//
+// Of 207 models with both vision and structured output, the cheapest Qwen —
+// and the reason the spec wanted Qwen at all, being the strongest multilingual
+// line — is Qwen3.5-Flash at $0.065/M in, $0.26/M out, 1M context, with no
+// per-image surcharge. That is the default below.
+//
+// If Telugu accuracy disappoints, the next rung is `qwen/qwen3.6-flash`
+// ($0.188/M in) — newer generation, ~3x the price, which is still pennies a
+// month at Dad's volume. Change OPENROUTER_MODEL; no deploy needed.
 
 import { PROMPT, JSON_SCHEMA, normalize } from "../schema.js";
 import { wlog } from "../log.js";
@@ -16,7 +31,7 @@ import { wlog } from "../log.js";
 const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 
 export const id = "openrouter";
-export const DEFAULT_MODEL = "qwen/qwen3.7-flash";
+export const DEFAULT_MODEL = "qwen/qwen3.5-flash-02-23";
 
 /** The message to fail with when this provider has no key, or null if it does. */
 export function missingKey(env) {

@@ -76,27 +76,28 @@ It is the one improvement available today.
 - PI-5: one structured JSON log line per request — request id, provider, model,
   latency, item count — readable live with `npx wrangler tail`. Watch that while
   you take the first photo; it turns "it didn't work" into a specific line.
-- PI-7: the provider split. **Behaviour is identical** — Gemini is still the
-  default and the request it builds is unchanged — but afterwards, changing
-  model is an env var instead of a deploy.
+- PI-7: the provider split — **and a change of model**. `wrangler.toml` now sets
+  `AI_PROVIDER = "openrouter"`, so after this deploy slips are read by
+  `qwen/qwen3.5-flash-02-23`, **not Gemini**. See §4a: this needs
+  `OPENROUTER_API_KEY` set first, or every read fails with a clear message.
+  To ship the other three things without the model change, set
+  `AI_PROVIDER = "gemini"` before deploying.
 
-**Read this before you run it — no code here has ever met the real Gemini API.**
+**Read this before you run it — no code here has ever met a real model API.**
 Every worker test stubs `fetch`. The first genuine proof is that first photo.
-Two failures to tell apart on it: **403** is PI-4.2's allowlist rejecting the
-app (wrong hostname), while an **empty item list** is the Gemini side — and
-`maxOutputTokens` is the first suspect there. Read from the live site, not a
-file opened off disk: a `file://` page sends `Origin: null` and is refused.
 
 **Then try a multi-page read (PI-8).** Photograph a two- or three-page order and
 check the pages come back merged with `p1`/`p2` badges. The client half is
 verified in a browser, but only against a faked proxy — no real model has read
 page 3 of Dad's handwriting yet.
-Two failures to tell apart:
+
+Three failures to tell apart on that first read:
 
 | What you see | Cause | Fix |
 |---|---|---|
-| **403 Forbidden** | Origin allowlist rejected the app | Check the hostname is in `ALLOWED_ORIGINS`, [cf-worker/image-reader.js:35](cf-worker/image-reader.js#L35) — currently `quoteapp-3f48e.web.app`, `quoteapp-3f48e.firebaseapp.com`, `localhost:5173`, `localhost:4173` |
-| **Empty item list** | Gemini side, not origin | Suspect `maxOutputTokens` (still 8192; thinking tokens count against it on 2.5 models) |
+| **403 Forbidden** | Origin allowlist rejected the app | Check the hostname is in `ALLOWED_ORIGINS`, [cf-worker/image-reader.js:16](cf-worker/image-reader.js#L16) — currently `quoteapp-3f48e.web.app`, `quoteapp-3f48e.firebaseapp.com`, `localhost:5173`, `localhost:4173` |
+| **`OPENROUTER_API_KEY secret not set`** | §4a not done | `npx wrangler secret put OPENROUTER_API_KEY`, or set `AI_PROVIDER = "gemini"` |
+| **Empty item list** | The model side, not origin | Check `npx wrangler tail` for the `model attempt` line — it names the model, the item count and the reason. Suspect the token ceiling (8192) on a long list |
 
 **Test from the live site, not a file opened off disk** — a `file://` page sends
 `Origin: null` and is refused by design.
@@ -157,31 +158,57 @@ is the entire reason this is blocked on a human instead of already done.
 
 ---
 
-## 4a. Get an OpenRouter API key  ← *needed to try any non-Gemini model (PI-7)*
+## 4a. Get an OpenRouter API key  ← *now ACTIVE — the worker is set to use it*
 
-The code landed in PI-7: `cf-worker/providers/openrouter.js` implements the same
-contract Gemini does, and `AI_PROVIDER` chooses between them. **Nothing changes
-for Dad until a key exists and the worker is deployed** — Gemini stays the
-default and the app behaves exactly as it does today.
+**Changed 2026-08-10 on Siva's call: `AI_PROVIDER = "openrouter"` is now set in
+`cf-worker/wrangler.toml`.** Gemini is still the code-level fallback, so an
+unknown provider or a deleted var lands back on it — but as configured, the next
+deploy reads slips with **`qwen/qwen3.5-flash-02-23`**.
 
 - [ ] Create an account at <https://openrouter.ai> and generate an API key
 - [ ] Add credit — a few dollars covers many months at Dad's volume
 - [ ] From `cf-worker/`: `npx wrangler secret put OPENROUTER_API_KEY`
-- [ ] Leave `AI_PROVIDER` unset for now. Gemini stays default until something
-      beats it on Dad's real slips
+- [ ] Deploy (§2), then read one real slip and watch `npx wrangler tail`
 
-**Cost is not the reason to do this, and should not drive the choice.** At a few
-reads a day every candidate costs cents a month — the catalogue was fetched live
-on 2026-08-10 and the opening candidate `qwen/qwen3.7-flash` is $0.03 per million
-input tokens. **Telugu accuracy is the only thing that decides it**, and that
-cannot be judged without §4's photos. Until then this is a switch we own but have
-no evidence to flip.
+> ### The key does NOT go in `.env` or `.env.local`
+>
+> It would not work and it would leak. Those files build the **frontend**; the
+> Worker is a different program on a different machine and never reads them.
+> Anything Vite exposes is compiled into the public JS bundle, and this repo is
+> public — which is the exact thing the Worker exists to prevent.
+>
+> `wrangler secret put` prompts for the value and stores it encrypted at
+> Cloudflare. It never touches disk and is never committed.
 
-**How to compare, when the photos exist:** deploy the worker, read the same slip
-with `AI_PROVIDER` unset, then with `AI_PROVIDER=openrouter`, and watch
-`npx wrangler tail` — each read logs one line with the provider, the model, the
-item count and the latency. Change it back and the very next request uses the old
-path; no deploy, no build.
+**Without the key the read fails cleanly**, with `OPENROUTER_API_KEY secret not
+set on this worker` — it does not silently fall back to Gemini. If you deploy
+before adding the key, either add it or set `AI_PROVIDER = "gemini"`.
+
+**Rollback is an env var, not a deploy.** Set `AI_PROVIDER = "gemini"` in the
+Cloudflare dashboard and the very next request uses the old path. Same for
+`OPENROUTER_MODEL` — trying a different model needs no build.
+
+**A correction worth carrying:** the spec named `qwen/qwen3.7-flash`. **That
+model does not exist.** The catalogue was re-fetched on 2026-08-10 and it is not
+among the 207 models with vision *and* structured output — it would have failed
+on the first real read. Verify any model id before setting it:
+
+```bash
+curl -s https://openrouter.ai/api/v1/models | grep -o '"id":"[^"]*"'
+```
+
+Cheapest viable options, checked live (all trivial at Dad's volume):
+
+| Model | $/M in | $/M out | Note |
+|---|---|---|---|
+| `qwen/qwen3.5-flash-02-23` | 0.065 | 0.26 | **current pick** — cheapest Qwen with vision + structured output, 1M context |
+| `qwen/qwen3.6-flash` | 0.188 | — | next rung if Telugu accuracy disappoints |
+| `openai/gpt-5-nano` | 0.050 | 0.40 | cheaper in, dearer out, weaker multilingual |
+| `google/gemini-2.5-flash` | 0.300 | 2.50 | same model we already call directly — no reason to pay a middleman for it |
+
+**Cost is not what to judge this on.** A few reads a day costs cents a month
+whichever wins. **Telugu accuracy on Dad's handwriting decides it**, and that
+still needs §4's photos — nothing has yet compared these on real input.
 
 ---
 
