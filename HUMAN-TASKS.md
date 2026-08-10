@@ -50,14 +50,29 @@ deploys by hand to one live URL that every build of the app already points at.
 So this ships to Dad the moment it runs, from a feature branch, with no merge.
 It is the one improvement available today.
 
-**What it ships (two things, both currently committed but dead):**
+**What it ships (four things now, all committed but dead in production):**
 - PI-3: schema-constrained JSON output, Flash → Pro retry on a bad read, honest
   `confidence`.
 - PI-4.2: the origin allowlist — right now the worker answers **anyone**, so the
   Gemini API key is a free relay for whoever reads the public repo.
+- PI-5: one structured JSON log line per request — request id, provider, model,
+  latency, item count — readable live with `npx wrangler tail`. Watch that while
+  you take the first photo; it turns "it didn't work" into a specific line.
+- PI-7: the provider split. **Behaviour is identical** — Gemini is still the
+  default and the request it builds is unchanged — but afterwards, changing
+  model is an env var instead of a deploy.
 
 **Read this before you run it — no code here has ever met the real Gemini API.**
-All 25 worker tests stub `fetch`. The first genuine proof is that first photo.
+Every worker test stubs `fetch`. The first genuine proof is that first photo.
+Two failures to tell apart on it: **403** is PI-4.2's allowlist rejecting the
+app (wrong hostname), while an **empty item list** is the Gemini side — and
+`maxOutputTokens` is the first suspect there. Read from the live site, not a
+file opened off disk: a `file://` page sends `Origin: null` and is refused.
+
+**Then try a multi-page read (PI-8).** Photograph a two- or three-page order and
+check the pages come back merged with `p1`/`p2` badges. The client half is
+verified in a browser, but only against a faked proxy — no real model has read
+page 3 of Dad's handwriting yet.
 Two failures to tell apart:
 
 | What you see | Cause | Fix |
