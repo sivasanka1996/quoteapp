@@ -68,9 +68,12 @@ flowchart TB
     subgraph device["Dad's phone"]
         pwa["React PWA<br/>installed to home screen"]
         idb[("IndexedDB<br/>Firestore persistent cache")]
+        logs[("IndexedDB: quoteapp-logs<br/>ring buffer · 2000 / ~1MB")]
         ls[("localStorage<br/>company settings")]
         pwa <--> idb
         pwa <--> ls
+        pwa --> logs
+        logs -->|"Export → .log file"| share["Dad shares it with Siva"]
     end
 
     subgraph google["Google Cloud — managed, free tier"]
@@ -79,16 +82,20 @@ flowchart TB
     end
 
     subgraph cf["Cloudflare — one edge function"]
-        wk["Worker: image-reader.js<br/>origin allowlist · schema-constrained JSON"]
+        wk["image-reader.js — router<br/>origin allowlist · CORS · structured log"]
+        prov{"pickProvider(env)<br/>AI_PROVIDER"}
+        wk --> prov
     end
 
-    gem["Gemini 2.5 Flash<br/>→ Pro on retry"]
+    gem["Gemini 2.5 Flash<br/>→ Pro on retry · DEFAULT"]
+    orouter["OpenRouter<br/>qwen/qwen3.7-flash · opt-in"]
     speech["Browser Web Speech API<br/>on-device, no network"]
 
     pwa -->|"static assets, once"| host
     pwa <-->|"onSnapshot / writeBatch"| fs
-    pwa -->|"POST base64 photo ≤1600px"| wk
-    wk -->|"API key never leaves here"| gem
+    pwa -->|"POST base64 photo ≤1600px<br/>one call PER PAGE, sequential"| wk
+    prov -->|"API key never leaves here"| gem
+    prov -.->|"rollback is an env var,<br/>not a deploy"| orouter
     pwa <-.->|"no server involved"| speech
 
     subgraph ci["GitHub Actions"]
@@ -105,10 +112,16 @@ flowchart TB
     style fs fill:#68d391,stroke:#276749,color:#1a202c
     style gem fill:#90cdf4,stroke:#2b6cb0,color:#1a202c
     style pwa fill:#d6bcfa,stroke:#553c9a,color:#1a202c
+    style logs fill:#fbd38d,stroke:#b7791f,color:#1a202c
 ```
 
 **The whole system is four things:** a static React bundle, a managed database,
 one edge function, and two CI workflows. There is nothing else to operate.
+
+**Two things on that diagram are not live yet.** The provider split and
+everything else in `cf-worker/` deploys **by hand** — the box drawn above is the
+committed code, and production is still running a build that predates PI-3. The
+log ring buffer *is* live in the client the moment `main` deploys.
 
 ---
 
@@ -469,17 +482,19 @@ executables**.
 ## 12. Test topology
 
 ```
-182 tests · 9 files · all environment: 'node'
+215 tests · 11 files · all environment: 'node'
+├── cf-worker/image-reader…   38  structured output, escalation, confidence, origin
+│                                 allowlist, structured logging, AI_PROVIDER routing
 ├── calc/engine.test.ts       31  the money, against fixtures (+8 numeric chain, PI-6)
-├── cf-worker/…test.js        31  structured output, escalation, confidence,
-│                                 origin allowlist (+6 structured logging, PI-5)
 ├── types.test.ts             24  quoteStatus, seedNextId, hasNoCost, parseQty, customerPatch
 ├── log/logger.test.ts        22  levels, debug flag, ring buffer, error normalising, sinks
 ├── parse/numberWords.test.ts 17  English + Telugu 1–100, multi-token numbers
+├── cf-worker/providers/…     17  OpenRouter: request shape, normalising, never-throws
 ├── voiceParse.test.ts        16  English + Telugu transcripts (+7 tokenizer rules, PI-6)
 ├── format.test.ts            15  Indian lakh/crore, short form, dates, quote numbers
 ├── readImage.test.ts         14  downscale maths, offline guard (+6 data-URL, PI-6)
-└── log/export.test.ts        12  filename shape, line format, level selection
+├── log/export.test.ts        12  filename shape, line format, level selection
+└── parse/mergePages.test.ts   9  page order, badging, partial failure
 ```
 
 **Everything testable here is a pure function, and that is structural.**
@@ -496,7 +511,8 @@ the node environment with `globalThis.fetch` stubbed.
 
 | Gap | Why it exists | Closes when |
 |---|---|---|
-| **No real Gemini call, ever** | All 25 Worker tests stub `fetch` | The first real photo read after `wrangler deploy` |
+| **No real Gemini call, ever** | Every Worker test stubs `fetch` | The first real photo read after `wrangler deploy` |
+| **No real multi-page read** | PI-8's 18 browser checks fake the proxy, so they prove the *client* merges pages, not that the model reads page 3 of Dad's handwriting | The first real multi-page read after deploy |
 | **The generated PDF** | Every check reads the DOM `sharePdf` rasterises, not the file. This is exactly how bug #8 hid | Someone opens a shared file from a phone |
 | **Service-worker offline shell** | The SW never reaches `active` under Playwright — harness limit, not a build bug | Airplane-mode cold start on Dad's phone |
 | **Any component render** | `environment: 'node'` | A deliberate jsdom switch |

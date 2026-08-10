@@ -7,3 +7,24 @@ compatibility_date = "2024-09-23"
 #
 # Then copy the deployed URL and add to your frontend .env.local:
 #   VITE_IMAGE_PROXY_URL=https://quoteapp-image-reader.<your-account>.workers.dev
+
+# --- Which model reads the photo (PI-7) -------------------------------------
+#
+# Gemini is the default and the only provider ever proved against a real image.
+# Rollback is deliberately an env var, not a deploy: if a challenger reads Dad's
+# Telugu worse, change this back and the next request uses the old path.
+#
+# An unknown value falls back to gemini and logs a warn — a typo here must never
+# be why Dad cannot read a slip standing in a shop.
+#
+# [vars]
+# AI_PROVIDER = "gemini"        # gemini | openrouter
+# OPENROUTER_MODEL = "qwen/qwen3.7-flash"
+# LOG_LEVEL = "info"            # set to "silent" to stop the structured request log
+#
+# Keys are secrets, never vars — they do not belong in this file:
+#   npx wrangler secret put GEMINI_API_KEY
+#   npx wrangler secret put OPENROUTER_API_KEY
+#
+# Watch the structured log live while testing a switch:
+#   npx wrangler tail

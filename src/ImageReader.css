@@ -393,3 +393,103 @@
   font-size: var(--fs-sm);
   line-height: 1.4;
 }
+
+/* --- Multi-page (PI-8) --- */
+
+.ir-pages-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+/* A horizontal strip, so a five-page order does not push the Read button off
+   the screen on a phone. */
+.ir-pages {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  max-width: 100%;
+  padding: 2px;
+}
+
+.ir-page {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.ir-page-img {
+  height: 140px;
+  max-width: 190px;
+  border-radius: 10px;
+  object-fit: cover;
+  border: 1px solid #e5e7eb;
+  display: block;
+}
+
+.ir-page-num {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  background: rgba(0, 0, 0, 0.68);
+  color: #fff;
+  border-radius: 6px;
+  padding: 2px 7px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.ir-page-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.68);
+  color: #fff;
+  font-size: 0.8rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* Page badge on a confirm row — same shape as the thumbnail badge so they
+   read as the same idea. */
+.ir-item-page {
+  flex: 0 0 auto;
+  background: #eef2ff;
+  color: #3730a3;
+  border-radius: 6px;
+  padding: 3px 7px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.ir-failed-page {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #991b1b;
+  font-size: 0.85rem;
+}
+
+.ir-retry-page {
+  border: 1.5px solid #991b1b;
+  border-radius: 8px;
+  background: #fff;
+  color: #991b1b;
+  padding: 7px 14px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}

@@ -118,6 +118,38 @@ actually sends. Invented handwriting samples would show the model a pattern it
 will never see again — measurably worse than including no example at all. That
 is the entire reason this is blocked on a human instead of already done.
 
+> **The same photos unblock the PI-7 provider comparison** (§4a below). Getting
+> them is now the single highest-value human task in this file: it is the only
+> thing standing between us and knowing which model reads Telugu best.
+
+---
+
+## 4a. Get an OpenRouter API key  ← *needed to try any non-Gemini model (PI-7)*
+
+The code landed in PI-7: `cf-worker/providers/openrouter.js` implements the same
+contract Gemini does, and `AI_PROVIDER` chooses between them. **Nothing changes
+for Dad until a key exists and the worker is deployed** — Gemini stays the
+default and the app behaves exactly as it does today.
+
+- [ ] Create an account at <https://openrouter.ai> and generate an API key
+- [ ] Add credit — a few dollars covers many months at Dad's volume
+- [ ] From `cf-worker/`: `npx wrangler secret put OPENROUTER_API_KEY`
+- [ ] Leave `AI_PROVIDER` unset for now. Gemini stays default until something
+      beats it on Dad's real slips
+
+**Cost is not the reason to do this, and should not drive the choice.** At a few
+reads a day every candidate costs cents a month — the catalogue was fetched live
+on 2026-08-10 and the opening candidate `qwen/qwen3.7-flash` is $0.03 per million
+input tokens. **Telugu accuracy is the only thing that decides it**, and that
+cannot be judged without §4's photos. Until then this is a switch we own but have
+no evidence to flip.
+
+**How to compare, when the photos exist:** deploy the worker, read the same slip
+with `AI_PROVIDER` unset, then with `AI_PROVIDER=openrouter`, and watch
+`npx wrangler tail` — each read logs one line with the provider, the model, the
+item count and the latency. Change it back and the very next request uses the old
+path; no deploy, no build.
+
 ---
 
 ## 5. On Dad's actual phone — before handover

@@ -101,9 +101,10 @@ npm install        # REQUIRED FIRST — node_modules is not committed and is
                    # often absent on a fresh clone. Without it `npm test`
                    # fails with "'vitest' is not recognized".
 npm run dev        # http://localhost:5173
-npm test           # 182 unit tests (Vitest) — 31 engine, 31 image-reader worker,
-                   # 24 types, 22 logger, 17 numberWords, 16 voiceParse,
-                   # 15 format, 14 readImage, 12 log export
+npm test           # 215 unit tests (Vitest) — 38 image-reader worker, 31 engine,
+                   # 24 types, 22 logger, 17 numberWords, 17 openrouter,
+                   # 16 voiceParse, 15 format, 14 readImage, 12 log export,
+                   # 9 mergePages
 npm run lint       # eslint — clean, keep it that way (now enforced in CI)
 npm run build      # production build
 ```
@@ -204,7 +205,13 @@ src/
                            downscales to MAX_EDGE=1600 before upload, refuses
                            with an honest message when offline
   readImage.test.ts      — 8 tests (fitWithin downscale maths, offline guard)
-  ImageReader.tsx/css    — camera/gallery UI, confirmation list before adding
+  ImageReader.tsx/css    — camera/gallery UI, MULTI-PAGE as of PI-8: pick or
+                           photograph several pages, read one call each
+                           SEQUENTIALLY, merged confirm list with page badges
+                           and a per-page retry for a photo that failed
+  parse/mergePages.ts    — pure page merge: order, 1-based page badge, and the
+                           failed-page list. A bad page never loses the others
+  parse/mergePages.test.ts — 9 tests
   voiceParse.ts          — voice transcript parser, a TOKENIZER as of PI-6:
                            tokenize → classify (NUM / NUM_WORD / UNIT / RATE_KW
                            / CODE_KW / WORD) → assemble. Quantities are whole
@@ -229,12 +236,25 @@ src/
   format.ts              — Indian number formatting (lakh/crore), short form, dates
   format.test.ts         — 15 formatting tests
 
-cf-worker/
-  image-reader.js        — Gemini proxy. Schema-constrained JSON, Flash → Pro
-                           retry, derived confidence, origin allowlist.
-                           Deployed separately.
-  image-reader.test.js   — 25 tests (structured output, escalation, confidence,
-                           origin allowlist)
+cf-worker/               — Deployed separately, BY HAND. See Deploy.
+  image-reader.js        — the ROUTER only: origin allowlist, CORS, request
+                           shape, structured logging, and what an empty item
+                           list means. Knows nothing about any model.
+  providers/index.js     — pickProvider(env). Unknown AI_PROVIDER → gemini + warn
+  providers/gemini.js    — Flash → Pro retry. The default, and the only path
+                           ever proved against a real image
+  providers/openrouter.js— same contract, opt-in. NOT default
+  schema.js              — the shared prompt, both schema dialects, normalize,
+                           confidenceOf. Shared so swapping provider cannot
+                           quietly change what is asked for
+  log.js                 — wlog / newRequestId. LOG_LEVEL=silent turns it off
+  image-reader.test.js   — 38 tests (structured output, escalation, confidence,
+                           origin allowlist, logging, AI_PROVIDER routing)
+  providers/openrouter.test.js — 17 tests
+
+  THE PROVIDER CONTRACT: read(imageBase64, mimeType, env, rid) NEVER THROWS.
+  A failure is `items: []` with `detail` set. That is what lets the router have
+  no try/catch around the read — do not "improve" a provider by letting one out.
 
 scripts/
   cascade-check.ts       — live check for bug #6 against the REAL Firestore.
@@ -434,6 +454,22 @@ costs a little storage and nothing else; delete it there when convenient.
       reported. `engine.ts` no longer round-trips money through
       `"64.7% + 2%"`. **31 new unit tests, and all 9 original voiceParse tests
       plus all 23 original engine tests still pass unchanged.**
+- [x] **PI-7 Pluggable AI provider — DONE 2026-08-10, NOT DEPLOYED.**
+      `cf-worker/` is now a router plus interchangeable providers behind a
+      one-function contract that **never throws**. Gemini's Flash → Pro path
+      moved out unchanged — a pure move, proved by all 25 original worker tests
+      passing with **zero edits to their assertions**. OpenRouter sits beside
+      it, and `AI_PROVIDER` chooses. **Gemini stays the default**, so nothing
+      changes for Dad. 24 new worker tests (55 total). The point of the whole
+      abstraction: **rollback is an env var, not a deploy.**
+- [x] **PI-8 Multi-page slips — DONE and VERIFIED 2026-08-10.** Dad can pick or
+      photograph every page of a long order list. Pages read **sequentially,
+      one call each** — never batched (spec §5.2) — with "Reading page 2 of 3…"
+      while it works, and merge into one confirm list with a `p2` badge on each
+      row. A page that fails does **not** lose the others: it gets an inline
+      "Page 2 could not be read — retry" row, and retrying re-reads only that
+      page while keeping edits already made to the rows that worked. 9 new unit
+      tests on the pure merge, plus **18 browser checks, all passing.**
 - [x] Full visual redesign — design tokens, all four screens, mobile-first
 - [x] Quote status (draft/sent/accepted/declined) — badges, filter, home stat tiles
 - [x] Business / Customer view toggle in the quote editor
@@ -879,8 +915,8 @@ three of those measurements overturn assumptions this file used to carry.
 |---|---|---|
 | **PI-5 Observability** | `src/log/` — 4 levels, debug behind a flag, IndexedDB ring buffer, export to timestamped files, try/catch everywhere on a layered ladder | **DONE 2026-08-10** — see WHAT IS DONE |
 | **PI-6 Parsing** | `voiceParse` becomes a tokenizer, not a regex chain; English + Telugu number words; `engine.ts` stops round-tripping money through a string | **DONE 2026-08-10** — see WHAT IS DONE |
-| **PI-7 Providers** | `cf-worker/` splits into router + interchangeable providers; `AI_PROVIDER` env var; OpenRouter alongside Gemini | Not started |
-| **PI-8 Multi-page** | Multi-select slips, read sequentially, merged into one confirm list with page badges | Not started |
+| **PI-7 Providers** | `cf-worker/` splits into router + interchangeable providers; `AI_PROVIDER` env var; OpenRouter alongside Gemini | **DONE 2026-08-10** — see WHAT IS DONE. **NOT DEPLOYED** |
+| **PI-8 Multi-page** | Multi-select slips, read sequentially, merged into one confirm list with page badges | **DONE 2026-08-10** — see WHAT IS DONE |
 
 **Three things proved live on 2026-08-10 that change what you should believe:**
 
@@ -938,8 +974,11 @@ as tests.
 | `calc/engine.ts` re-throws | All 23 original engine tests pass **unchanged** after wrapping — the wrapping is behaviour-preserving. The catch logs once at the innermost frame (a symbol marker stops `calcQuote → calcLine → resolvePrice` writing the same failure three times) and then re-throws. | **PASS** |
 | Worker logging | 6 new worker tests: one `read complete` line carrying provider, model, itemCount, confidence and ms; every line of one request shares an `rid`; the Flash→Pro escalation is recorded as warn-then-info; a refused origin is noted; `LOG_LEVEL=silent` silences it. | **PASS (no live API call)** |
 | No stack reaches the client | The `/list` branch awaits `fetch` with no guard of its own, so a throw there reaches the top-level handler. Test asserts the response is `{"error":"Image reading failed. Please try again."}` with status 500 and **no** trace of the message or file in the body — while the worker's own log keeps the full detail. | **PASS** |
-| IndexedDB persistence | **NOT UNIT-TESTED — cannot be.** `environment: 'node'` has no `indexedDB`, so `idb.ts` short-circuits and the tests never touch it. Needs a browser check (DevTools → Application → IndexedDB → `quoteapp-logs`). | **MANUAL — not yet done** |
-| The export download and the settings panel | **NOT UNIT-TESTED.** The pure parts (filename, line format, selection) are covered above; the `Blob` + object-URL download and the Diagnostics UI are component behaviour, which needs a jsdom switch that is deliberately out of scope. | **MANUAL — not yet done** |
+| IndexedDB persistence | **Cannot be unit-tested** — `environment: 'node'` has no `indexedDB`, so `idb.ts` short-circuits and the tests never touch it. Checked instead in **Chromium against the built app**: the `quoteapp-logs` database is created alongside Firestore's own, holds records written by the real boot path, and each has the documented `{ts, level, scope, msg}` shape. | **PASS (browser)** |
+| The log survives a reload | Same run: record count went 1 → 2 across a reload, so `restorePersistedLogs` really does bring the previous session back. This is the whole reason for persisting — the log worth reading is the one from *before* the crash. | **PASS (browser)** |
+| The export download | Clicked **Export everything** and opened the file that landed: named `quoteapp-info-2026-08-10T11-06-26.log`, no colon in it, and the first line read `2026-08-10T11:05:49.439Z  INFO   ui         app started  {"url":"/"}` — the documented column layout, from a real download rather than a formatter test. **Export problems** produced `quoteapp-error-…` containing no INFO lines. | **PASS (browser)** |
+| The Diagnostics panel | Renders in settings at 390px, reports a live record count, and the toggle flips `aria-pressed` and writes `quoteapp.debug=1`. | **PASS (browser)** |
+| `?debug=1` end to end | A fresh tab opened at `/?debug=1` with **no stored flag** captured debug records. This is the form Siva talks Dad through on the phone, so it mattered that it works from the URL alone. | **PASS (browser)** |
 
 **The logger never throws, and that is load-bearing.** Every public entry point
 is wrapped, each sink is guarded individually, and `data` is put through a JSON
@@ -993,6 +1032,63 @@ needed no edits.
 **What none of this proves: that Chrome hears Dad's Telugu correctly.** Every
 test here feeds `parseTranscript` a string. Recognition quality needs a mic and
 a human voice, and stays Siva's to check — spec §7.
+
+### PI-7 — Pluggable AI provider — DONE 2026-08-10, NOT DEPLOYED
+
+24 new worker tests (55 total). **Gemini remains the default and nothing about
+Dad's experience changes** — this buys the ability to change model without a
+deploy, and nothing else, until there is evidence to change it.
+
+| Item | How it was verified | Result |
+|---|---|---|
+| The Gemini move was pure | All **25 original worker tests pass with zero edits to their assertions**. That was the acceptance condition in the plan: if a test had needed changing, the move would not have been pure. | **PASS** |
+| The contract holds | 17 provider tests: the request carries the model, a base64 image part and a JSON response format; malformed JSON, an empty reply, HTTP 429, a network throw and a valid-but-wrong-shape reply each yield `items: []` with `detail` set and **never** a throw. That "never throws" is what lets the router have no try/catch around the read. | **PASS (no live API call)** |
+| Both providers normalise identically | The blank-name drop, the null-rate rule and fractional quantities are asserted on the OpenRouter path too, against the shared `schema.js`. A model comparison is meaningless if the two paths clean up differently. | **PASS** |
+| `AI_PROVIDER` routes | End to end through `worker.fetch`: unset → Gemini's endpoint; `openrouter` → OpenRouter's; `GEMINI` (wrong case) → Gemini. | **PASS** |
+| A typo cannot break a read | `AI_PROVIDER=gemeni` returns **200** from Gemini and logs `unknown AI_PROVIDER, falling back`. A typo in an env var must never be why Dad cannot read a slip standing in a shop. | **PASS** |
+| The right key is demanded | With `AI_PROVIDER=openrouter` and no key, the error names `OPENROUTER_API_KEY`, not the Gemini one. | **PASS** |
+| The new files are actually linted | `cf-worker/**/*.js` is recursive, but that was **checked rather than assumed** — an unused variable planted in `schema.js` was caught by `npm run lint`, then removed. PI-4.7 fixed exactly this class of silent skip once already. | **PASS** |
+
+**Nothing here is live.** `cf-worker/` deploys by hand with `npx wrangler deploy`
+and has not been deployed — so PI-3, PI-4.2, PI-5's worker logging and all of
+PI-7 are still absent from production, and per spec §0.1 **the deployed worker
+is still the pre-PI-4.2 one that answers anyone.** One deploy ships all of it.
+
+**Choosing a model is an experiment, not a decision.** `qwen/qwen3.7-flash` is
+the opening candidate, not a recommendation. Cost cannot decide it — every
+candidate is cents a month at Dad's volume — so **Telugu accuracy decides it**,
+and that needs real slips. See [`HUMAN-TASKS.md`](HUMAN-TASKS.md) §4 and §4a.
+
+### PI-8 — Multi-page slips — DONE and VERIFIED 2026-08-10
+
+9 unit tests on the pure merge, plus 18 checks driving the **built** app in
+Chromium at 390px. Only the image proxy was faked, so the component,
+`readImageItems`, `mergePages` and the whole client path are real. One
+throwaway `ZZ-multipage-check-*` customer per run, both deleted afterwards via
+the tested cascade helper (0 quotes each — Save was never pressed).
+
+| Item | How it was verified | Result |
+|---|---|---|
+| Multi-select | The gallery input carries `multiple`; three files produced three thumbnails badged p1/p2/p3 and a button reading "Read 3 pages". | **PASS** |
+| **Reads are sequential, not batched** | The fake proxy recorded the start and end of every call. Three calls, and **no call started before the previous one finished** — `3083-3333 3350-3610 3623-3875`. This is spec §5.2's requirement measured rather than asserted: one 8192-token budget per page, never shared. | **PASS** |
+| Progress | "Reading page 2 of 3…" while it worked. | **PASS** |
+| Merge order and badges | Four items across three pages arrived in page order, each row badged p1/p2/p2/p3, header reading "Found 4 items across 3 pages". | **PASS** |
+| **Partial failure keeps the good pages** | Page 2 of 3 forced to fail: pages 1 and 3 still offered with their real page numbers, and an inline "⚠ Page 2 could not be read. Retry page 2". Losing a five-page order to one blurry photo is the failure Dad would actually hit (spec §5.3). | **PASS** |
+| Retry re-reads only that page | Exactly **one** proxy call, and its items slotted back into page order. | **PASS** |
+| **A retry does not cost Dad his typing** | A row on a surviving page was edited to "EDITED BY HAND" before retrying; after the retry it was still there, with page 2's fresh rows inserted around it. Re-reading everything would have thrown that away. | **PASS** |
+| Nothing renders broken | No uncaught page errors across the whole run. | **PASS** |
+
+**A defect the browser check found was in the harness, not the app** — worth
+recording because the first run looked like a real bug. The fake proxy keyed
+its reply by *call ordinal*, so on retry it served page 1's items while the app
+correctly labelled them page 2. The app was right; the fixture was wrong. The
+three fixture images are byte-identical, so the harness has to be told which
+page it is serving — it cannot infer it from the request.
+
+**What this still does not check:** a real Gemini response to a real multi-page
+slip. The proxy was faked, so this proves the *client* handles pages correctly,
+not that the model reads page 3 of Dad's handwriting. That closes on the first
+real multi-page read after the worker is deployed.
 
 ### Deferred until Dad actually asks
 

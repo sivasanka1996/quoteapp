@@ -418,3 +418,106 @@ describe("logging", () => {
     expect(logged.err).toContain("boom");
   });
 });
+
+describe("choosing a provider with AI_PROVIDER (PI-7)", () => {
+  function captureLog() {
+    const lines = [];
+    vi.stubGlobal("console", {
+      ...console,
+      log: (s) => {
+        try {
+          lines.push(JSON.parse(s));
+        } catch {
+          lines.push({ raw: s });
+        }
+      },
+    });
+    return lines;
+  }
+
+  test("defaults to Gemini when nothing is set", async () => {
+    const calls = stubGemini(geminiItems([{ name: "Wire", qty: 2, rate: 100 }]));
+
+    await worker.fetch(post(), ENV);
+
+    expect(calls[0].url).toContain("generativelanguage.googleapis.com");
+  });
+
+  test("routes to OpenRouter when asked", async () => {
+    const calls = [];
+    vi.stubGlobal("fetch", async (url, opts) => {
+      calls.push({ url: String(url), body: JSON.parse(opts.body) });
+      return new Response(
+        JSON.stringify({
+          choices: [
+            { message: { content: JSON.stringify({ items: [{ name: "Wire", qty: 2, rate: 100 }] }) } },
+          ],
+        }),
+        { status: 200 }
+      );
+    });
+
+    const body = await (
+      await worker.fetch(post(), {
+        ...ENV,
+        AI_PROVIDER: "openrouter",
+        OPENROUTER_API_KEY: "or-key",
+      })
+    ).json();
+
+    expect(calls[0].url).toBe("https://openrouter.ai/api/v1/chat/completions");
+    expect(body.items).toEqual([{ name: "Wire", qty: 2, rate: 100 }]);
+    expect(body.confidence).toBe("full");
+  });
+
+  test("is not case-sensitive about the name", async () => {
+    const calls = stubGemini(geminiItems([{ name: "Wire", qty: 2, rate: 100 }]));
+
+    await worker.fetch(post(), { ...ENV, AI_PROVIDER: "GEMINI" });
+
+    expect(calls[0].url).toContain("generativelanguage.googleapis.com");
+  });
+
+  // A typo in an env var must never be why Dad cannot read a slip in a shop.
+  test("falls back to Gemini on an unknown name, and says so", async () => {
+    const calls = stubGemini(geminiItems([{ name: "Wire", qty: 2, rate: 100 }]));
+    const lines = captureLog();
+
+    const res = await worker.fetch(post(), { ...LOUD_ENV, AI_PROVIDER: "gemeni" });
+
+    expect(res.status).toBe(200);
+    expect(calls[0].url).toContain("generativelanguage.googleapis.com");
+    const warned = lines.find((l) => l.msg === "unknown AI_PROVIDER, falling back");
+    expect(warned.requested).toBe("gemeni");
+    expect(warned.using).toBe("gemini");
+  });
+
+  test("reports the chosen provider's missing key, not the other one's", async () => {
+    stubGemini();
+
+    const body = await (
+      await worker.fetch(post(), { LOG_LEVEL: "silent", AI_PROVIDER: "openrouter" })
+    ).json();
+
+    expect(body.error).toMatch(/OPENROUTER_API_KEY/);
+  });
+
+  test("still refuses a request with no Gemini key on the default path", async () => {
+    stubGemini();
+
+    const res = await worker.fetch(post(), { LOG_LEVEL: "silent" });
+    const body = await res.json();
+
+    expect(res.status).toBe(500);
+    expect(body.error).toMatch(/GEMINI_API_KEY/);
+  });
+
+  test("names the provider in the completion log", async () => {
+    stubGemini(geminiItems([{ name: "Wire", qty: 2, rate: 100 }]));
+    const lines = captureLog();
+
+    await worker.fetch(post(), LOUD_ENV);
+
+    expect(lines.find((l) => l.msg === "read complete").provider).toBe("gemini");
+  });
+});

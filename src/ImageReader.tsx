@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { readImageItems, type ReadItem } from "./readImage";
+import { mergePages, type PageResult } from "./parse/mergePages";
 import { parseQty } from "./types";
+import { log } from "./log/logger";
 import "./ImageReader.css";
 
 interface Props {
@@ -10,9 +12,18 @@ interface Props {
 
 type Stage = "idle" | "camera" | "reading" | "confirming" | "error";
 
+/** One photo waiting to be read. A long order list runs to several. */
+interface PageFile {
+  id: number;
+  url: string;
+  blob: Blob;
+}
+
 interface ConfirmItem extends ReadItem {
   _id: number;
   checked: boolean;
+  /** 1-based page this row came from, so Dad can tell duplicates apart. */
+  page: number;
   // Qty/rate held as the text the user is actively typing, parsed only at
   // commit (handleAdd). A number input re-parsed on every keystroke gets its
   // DOM value stomped by React mid-edit — "2." becomes "2" before the "5" is
@@ -22,18 +33,31 @@ interface ConfirmItem extends ReadItem {
 }
 
 let _itemSeq = 0;
+let _pageSeq = 0;
+
+function toConfirmItem(it: ReadItem & { page: number }): ConfirmItem {
+  return {
+    ...it,
+    _id: _itemSeq++,
+    checked: true,
+    _qtyRaw: String(it.qty ?? ""),
+    _rateRaw: it.rate == null ? "" : String(it.rate),
+  };
+}
 
 export function ImageReaderPanel({ onAdd, onClose }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [imageBlob, setImageBlob] = useState<Blob | null>(null);
+  const [pages, setPages] = useState<PageFile[]>([]);
+  const [pageResults, setPageResults] = useState<PageResult[]>([]);
   const [stage, setStage] = useState<Stage>("idle");
   const [error, setError] = useState("");
   const [items, setItems] = useState<ConfirmItem[]>([]);
   const [notes, setNotes] = useState("");
+  const [failedPages, setFailedPages] = useState<number[]>([]);
+  const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
 
   // Reading a photo is the one thing in this app that genuinely needs a
   // connection. Say so before Dad takes the photo, not after he has waited.
@@ -52,6 +76,14 @@ export function ImageReaderPanel({ onAdd, onClose }: Props) {
   function stopCamera() {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
+  }
+
+  function resetRead() {
+    setItems([]);
+    setNotes("");
+    setFailedPages([]);
+    setPageResults([]);
+    setStage("idle");
   }
 
   async function openCamera() {
@@ -73,6 +105,9 @@ export function ImageReaderPanel({ onAdd, onClose }: Props) {
     }
   }
 
+  // The camera stays one shot per capture — it cannot multi-select — but each
+  // capture appends, so photographing a three-page list works the same way as
+  // picking three files.
   function capturePhoto() {
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -83,48 +118,126 @@ export function ImageReaderPanel({ onAdd, onClose }: Props) {
     canvas.toBlob((blob) => {
       if (!blob) return;
       stopCamera();
-      const url = URL.createObjectURL(blob);
-      setImageUrl(url);
-      setImageBlob(blob);
-      setStage("idle");
-      setItems([]);
-      setNotes("");
+      setPages((prev) => [
+        ...prev,
+        { id: _pageSeq++, url: URL.createObjectURL(blob), blob },
+      ]);
+      resetRead();
     }, "image/jpeg", 0.92);
   }
 
-  function handleFileChange(file: File) {
+  /** Picking files replaces the set — that is what "choose" means. */
+  function handleFilesChosen(files: File[]) {
+    if (files.length === 0) return;
     stopCamera();
-    if (imageUrl) URL.revokeObjectURL(imageUrl);
-    setImageUrl(URL.createObjectURL(file));
-    setImageBlob(file);
-    setStage("idle");
-    setItems([]);
+    for (const p of pages) URL.revokeObjectURL(p.url);
+    setPages(
+      files.map((f) => ({ id: _pageSeq++, url: URL.createObjectURL(f), blob: f }))
+    );
     setError("");
-    setNotes("");
+    resetRead();
+  }
+
+  function removePage(id: number) {
+    setPages((prev) => {
+      const gone = prev.find((p) => p.id === id);
+      if (gone) URL.revokeObjectURL(gone.url);
+      return prev.filter((p) => p.id !== id);
+    });
+    resetRead();
+  }
+
+  /** One page. Never throws — a failure is a `PageResult` the merge understands. */
+  async function readOne(page: PageFile): Promise<PageResult> {
+    try {
+      const file =
+        page.blob instanceof File
+          ? page.blob
+          : new File([page.blob], "photo.jpg", { type: "image/jpeg" });
+      const result = await readImageItems(file);
+      if (result.notes) setNotes(result.notes);
+      return { ok: true, items: result.items };
+    } catch (e) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e.message : "Reading failed. Please try again.",
+      };
+    }
   }
 
   async function handleRead() {
-    if (!imageBlob) return;
+    if (pages.length === 0) return;
     setStage("reading");
     setError("");
-    try {
-      const file = imageBlob instanceof File
-        ? imageBlob
-        : new File([imageBlob], "photo.jpg", { type: "image/jpeg" });
-      const result = await readImageItems(file);
-      setItems(result.items.map((it) => ({
-        ...it,
-        _id: _itemSeq++,
-        checked: true,
-        _qtyRaw: String(it.qty ?? ""),
-        _rateRaw: it.rate == null ? "" : String(it.rate),
-      })));
-      setNotes(result.notes ?? "");
-      setStage("confirming");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Reading failed. Please try again.");
-      setStage("error");
+    setNotes("");
+    const startedAt = Date.now();
+
+    // Sequential, one call per page, never batched (spec §5.2). A long list
+    // already sits against a single 8192-token ceiling — the first suspect for
+    // an empty read — and sharing that budget across pages would make a known
+    // risk worse to save a few cents.
+    const results: PageResult[] = [];
+    for (let i = 0; i < pages.length; i++) {
+      setProgress({ current: i + 1, total: pages.length });
+      results.push(await readOne(pages[i]));
     }
+    setProgress(null);
+    setPageResults(results);
+
+    const merged = mergePages(results);
+    setItems(merged.items.map(toConfirmItem));
+    setFailedPages(merged.failed);
+
+    log.info("image", "multi-page read finished", {
+      pageCount: pages.length,
+      itemCount: merged.items.length,
+      failed: merged.failed,
+      ms: Date.now() - startedAt,
+    });
+
+    // Every page failing is the old single-page failure, and keeps the old
+    // behaviour: the honest message (offline, 403, whatever it was) plus a
+    // Retry, rather than an empty confirm list that explains nothing.
+    if (merged.items.length === 0 && merged.failed.length === pages.length) {
+      const first = results.find((r) => !r.ok);
+      setError(!first?.ok ? first?.error ?? "Reading failed." : "Reading failed.");
+      setStage("error");
+      return;
+    }
+    setStage("confirming");
+  }
+
+  /**
+   * Re-read one page and slot its items back into place.
+   *
+   * The pages that worked keep their rows *and any edits Dad has already made
+   * to them* — re-reading everything would throw that typing away, which is
+   * the opposite of what a retry should cost him.
+   */
+  async function retryPage(pageNumber: number) {
+    const page = pages[pageNumber - 1];
+    if (!page) return;
+
+    setStage("reading");
+    setProgress({ current: pageNumber, total: pages.length });
+    const result = await readOne(page);
+    setProgress(null);
+
+    const next = [...pageResults];
+    next[pageNumber - 1] = result;
+    setPageResults(next);
+
+    const merged = mergePages(next);
+    setFailedPages(merged.failed);
+    setItems((prev) => {
+      const kept = prev.filter((it) => it.page !== pageNumber);
+      const fresh = merged.items
+        .filter((it) => it.page === pageNumber)
+        .map(toConfirmItem);
+      // Array.sort is stable, so within-page order survives.
+      return [...kept, ...fresh].sort((a, b) => a.page - b.page);
+    });
+    setStage("confirming");
   }
 
   function patchItem(id: number, patch: Partial<ConfirmItem>) {
@@ -151,6 +264,7 @@ export function ImageReaderPanel({ onAdd, onClose }: Props) {
   }
 
   const checkedCount = items.filter((it) => it.checked).length;
+  const multi = pages.length > 1;
 
   // A row with no rate is added with a blank sell price and quietly totals ₹0.
   // The editor's existing warning only covers the cost side, so this is the one
@@ -185,7 +299,7 @@ export function ImageReaderPanel({ onAdd, onClose }: Props) {
         )}
 
         {/* Idle: no image yet */}
-        {stage === "idle" && !imageUrl && (
+        {stage === "idle" && pages.length === 0 && (
           <div className="ir-prompt">
             <button className="ir-camera-btn" onClick={openCamera}>
               📷 Take photo
@@ -195,36 +309,61 @@ export function ImageReaderPanel({ onAdd, onClose }: Props) {
               <input
                 type="file"
                 accept="image/*"
+                multiple
                 style={{ display: "none" }}
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileChange(f); e.target.value = ""; }}
+                onChange={(e) => { handleFilesChosen(Array.from(e.target.files ?? [])); e.target.value = ""; }}
               />
             </label>
             {error && <p className="ir-hint" style={{ color: "#dc2626" }}>{error}</p>}
-            <p className="ir-hint">Supports Telugu &amp; English handwriting or printed lists</p>
+            <p className="ir-hint">
+              Supports Telugu &amp; English handwriting or printed lists.
+              A long list? Pick or photograph every page.
+            </p>
           </div>
         )}
 
-        {/* Image preview */}
-        {imageUrl && stage !== "camera" && (
-          <div className="ir-preview-wrap">
-            <img className="ir-preview" src={imageUrl} alt="Selected" />
+        {/* Page strip */}
+        {pages.length > 0 && stage !== "camera" && (
+          <div className="ir-pages-wrap">
+            <div className="ir-pages">
+              {pages.map((p, i) => (
+                <div className="ir-page" key={p.id}>
+                  <img className="ir-page-img" src={p.url} alt={`Page ${i + 1}`} />
+                  {multi && <span className="ir-page-num">p{i + 1}</span>}
+                  <button
+                    className="ir-page-remove"
+                    aria-label={`Remove page ${i + 1}`}
+                    onClick={() => removePage(p.id)}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
             <div className="ir-retake-row">
-              <button className="ir-retake" onClick={openCamera}>📷 Retake</button>
+              <button className="ir-retake" onClick={openCamera}>📷 Add photo</button>
               <label className="ir-retake">
                 🖼 Gallery
-                <input type="file" accept="image/*" style={{ display: "none" }}
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileChange(f); e.target.value = ""; }} />
+                <input type="file" accept="image/*" multiple style={{ display: "none" }}
+                  onChange={(e) => { handleFilesChosen(Array.from(e.target.files ?? [])); e.target.value = ""; }} />
               </label>
             </div>
           </div>
         )}
 
-        {imageUrl && stage === "idle" && (
-          <button className="ir-read-btn" onClick={handleRead}>Read items from image</button>
+        {pages.length > 0 && stage === "idle" && (
+          <button className="ir-read-btn" onClick={handleRead}>
+            {multi ? `Read ${pages.length} pages` : "Read items from image"}
+          </button>
         )}
 
         {stage === "reading" && (
-          <div className="ir-loading"><span className="ir-spinner" />Reading image…</div>
+          <div className="ir-loading">
+            <span className="ir-spinner" />
+            {progress && progress.total > 1
+              ? `Reading page ${progress.current} of ${progress.total}…`
+              : "Reading image…"}
+          </div>
         )}
 
         {stage === "error" && (
@@ -234,22 +373,40 @@ export function ImageReaderPanel({ onAdd, onClose }: Props) {
           </div>
         )}
 
-        {stage === "confirming" && items.length === 0 && (
+        {stage === "confirming" && items.length === 0 && failedPages.length === 0 && (
           <div className="ir-empty">
             No items found — try a clearer photo or add items manually.
             {notes && <div className="ir-empty-notes">{notes}</div>}
           </div>
         )}
 
-        {stage === "confirming" && items.length > 0 && (
+        {stage === "confirming" && (items.length > 0 || failedPages.length > 0) && (
           <div className="ir-confirm">
-            <div className="ir-confirm-hd">Found {items.length} item{items.length !== 1 ? "s" : ""} — review and add:</div>
+            <div className="ir-confirm-hd">
+              Found {items.length} item{items.length !== 1 ? "s" : ""}
+              {multi ? ` across ${pages.length} pages` : ""} — review and add:
+            </div>
             {notes && <div className="ir-notes">Note: {notes}</div>}
+
+            {/* Partial failure is normal, not exceptional (spec §5.3). Losing a
+                five-page order to one blurry photo is the failure Dad would
+                actually hit, so the good pages stay and only the bad one is
+                re-shot. */}
+            {failedPages.map((n) => (
+              <div className="ir-failed-page" key={n}>
+                <span>⚠ Page {n} could not be read.</span>
+                <button className="ir-retry-page" onClick={() => retryPage(n)}>
+                  Retry page {n}
+                </button>
+              </div>
+            ))}
+
             <div className="ir-items">
               {items.map((it) => (
                 <div key={it._id} className={"ir-item" + (it.checked ? "" : " ir-item-unchecked")}>
                   <input type="checkbox" className="ir-item-check" checked={it.checked}
                     onChange={(e) => patchItem(it._id, { checked: e.target.checked })} />
+                  {multi && <span className="ir-item-page">p{it.page}</span>}
                   <input className="ir-item-name" value={it.name} placeholder="Item name"
                     onChange={(e) => patchItem(it._id, { name: e.target.value })} />
                   <label className="ir-item-field">
