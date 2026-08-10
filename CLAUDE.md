@@ -31,18 +31,26 @@ adds a service to run.
 
 ## Current working state — check this before assuming
 
-*Last updated 2026-08-07. Re-check with `git status` and `git log -1`; if this
+*Last updated 2026-08-10. Re-check with `git status` and `git log -1`; if this
 section disagrees with git, git is right and this section is stale.*
 
 - **Branch:** `feature/Vision_Draft`, not `main`. Branched off `a159e6a`.
 - **Deploys only happen from `main`** (`deploy.yml` triggers on push to main).
   Nothing on this branch is live. PI work has to reach `main` to ship.
-- **Push is Siva's job — commit locally and stop.** `git push` to `origin`
-  (`sivasanka1996/quoteapp`) returns 403 because the `RevanParimi` GitHub
-  account lacks write access, and Siva is resolving that with the repo owner
-  out of band. Do not retry it, do not offer to, and do not list it as a
-  blocker in status reports. The one consequence still worth stating: nothing
-  reaches Dad until it lands on `main`.
+- **Push is Siva's job — commit locally and stop.** Retried once on 2026-08-10
+  after Siva said access was granted: **still 403.** The error names the
+  account — *"Permission to sivasanka1996/quoteapp.git denied to RevanParimi"* —
+  so authentication **succeeds** and authorization fails. That narrows it to a
+  pending collaborator invitation (check
+  `https://github.com/sivasanka1996/quoteapp/invitations`) or a cached
+  fine-grained PAT in Git Credential Manager lacking **Contents: write**. Both
+  need a human. Do not retry beyond that one attempt, and do not list it as a
+  blocker in status reports. `gh` is **not installed** on this machine, so
+  permissions cannot be checked from here.
+- **When the push does land, send it to `feature/Vision_Draft`, not `main`** —
+  Siva's instruction on 2026-08-10. Verified safe: `deploy.yml` triggers only on
+  `push: branches: [main]` and `build-apk.yml` is `workflow_dispatch`, so
+  pushing the feature branch runs no workflow and deploys nothing.
 - **Commit author must be `revan.datta132@gmail.com`.** With no `user.email`
   configured, git derives `revan.parimi@ibm.com` from the machine hostname,
   which is wrong. Global config is now set; verify with
@@ -808,6 +816,60 @@ reads the DOM that `sharePdf` rasterises. And the harness is not in the repo (it
 needs Playwright and live Firestore); recipe is PI-1's, plus a
 `ZZ-edit-check-*` customer and a cascade delete afterwards, since there is still
 no delete button in the UI.
+
+### PI-5 → PI-8 — planned 2026-08-10, NOT STARTED
+
+**Spec:** [`docs/superpowers/specs/2026-08-10-observability-parsing-and-providers-design.md`](docs/superpowers/specs/2026-08-10-observability-parsing-and-providers-design.md)
+**Plan:** [`docs/superpowers/plans/2026-08-10-pi-5-to-8-implementation.md`](docs/superpowers/plans/2026-08-10-pi-5-to-8-implementation.md)
+
+Four independent subsystems, deliberately sequenced. **Read the spec's §0 before
+re-deriving anything** — it records what was measured live on 2026-08-10, and
+three of those measurements overturn assumptions this file used to carry.
+
+| PI | What | Status |
+|---|---|---|
+| **PI-5 Observability** | `src/log/` — 4 levels, debug behind a flag, IndexedDB ring buffer, export to timestamped files, try/catch everywhere on a layered ladder | Not started — **ships first** |
+| **PI-6 Parsing** | `voiceParse` becomes a tokenizer, not a regex chain; English + Telugu number words; `engine.ts` stops round-tripping money through a string | Not started |
+| **PI-7 Providers** | `cf-worker/` splits into router + interchangeable providers; `AI_PROVIDER` env var; OpenRouter alongside Gemini | Not started |
+| **PI-8 Multi-page** | Multi-select slips, read sequentially, merged into one confirm list with page badges | Not started |
+
+**Three things proved live on 2026-08-10 that change what you should believe:**
+
+1. **Gemini 2.5 Flash reads a slip correctly** — first real response this
+   pipeline has ever produced. A mock slip POSTed to the live worker returned
+   all three rows with correct name, qty and rate in 5.6s. **The model is not
+   the problem.** (It was clean synthetic text, not Dad's handwriting — that
+   still needs a real slip.)
+2. **The deployed worker is stale, proved twice over.** A no-Origin request got
+   **200** (the committed allowlist returns 403), and `confidence` came back
+   `"partial"` on a fully-populated read (PI-3.7 made it derived). So PI-3 and
+   PI-4.2 are both still dead in production, and **the Gemini key is a free
+   relay right now**.
+3. **Voice has no backend model.** It is `window.SpeechRecognition` — the
+   browser's Web Speech API. Gemini never sees audio and the Worker is not in
+   the voice path. Any "the voice model is broken" theory is wrong by
+   construction; the fault is recognition or `voiceParse`.
+
+**Decisions locked with Siva on 2026-08-10:**
+
+- Logs go to an **IndexedDB ring buffer exported on demand** as timestamped
+  files. A browser cannot write to a folder — no filesystem API, no server, and
+  Workers have no filesystem either. The File System Access API was rejected
+  because it does not exist on Android Chrome, so it could never work for Dad.
+- **Gemini stays the default provider.** OpenRouter goes in behind the same
+  contract so a rollback is an env var, not a deploy. Opening candidate is
+  `qwen/qwen3.7-flash` ($0.03/M in). Cost is irrelevant at Dad's volume —
+  **Telugu accuracy decides it**, and that needs real slips.
+- **`try`/`catch` everywhere — Siva's explicit call, made after the trade-off
+  was put to him.** It is safe only because the *catch behaviour is layered*:
+  `calc/engine.ts` logs and then **re-throws**, so a math failure surfaces as
+  the ErrorBoundary card instead of a silently wrong total. Do not "simplify"
+  that into a fallback return.
+- **Multi-page reads are sequential, one call per page.** Batching shares one
+  8192-token budget, and that ceiling is already the first suspect for an empty
+  read on a long list.
+- `format.ts` and `sharePdf.ts` regex **stay**. "No regex" is a rule about
+  parsing *human* input, not about deterministic digit grouping.
 
 ### Deferred until Dad actually asks
 
