@@ -1,10 +1,15 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import worker from "./image-reader.js";
 
+// AI_PROVIDER is pinned rather than inherited. The default now lives in
+// config/app.config.ts (currently "openrouter"), and a test of Gemini's
+// Flash → Pro behaviour should say which provider it means — otherwise
+// editing the config file silently repoints the whole suite.
+//
 // LOG_LEVEL silent keeps the structured request log out of the test output.
 // The logging tests below pass their own env to exercise it deliberately.
-const ENV = { GEMINI_API_KEY: "test-key", LOG_LEVEL: "silent" };
-const LOUD_ENV = { GEMINI_API_KEY: "test-key" };
+const ENV = { GEMINI_API_KEY: "test-key", AI_PROVIDER: "gemini", LOG_LEVEL: "silent" };
+const LOUD_ENV = { GEMINI_API_KEY: "test-key", AI_PROVIDER: "gemini" };
 
 /** The origin the live app actually calls from. */
 const APP_ORIGIN = "https://quoteapp-3f48e.web.app";
@@ -435,10 +440,27 @@ describe("choosing a provider with AI_PROVIDER (PI-7)", () => {
     return lines;
   }
 
-  test("defaults to Gemini when nothing is set", async () => {
+  // With no AI_PROVIDER env var the config file decides. It currently says
+  // openrouter, so that is what an unconfigured worker uses.
+  test("falls back to the config file when no env var is set", async () => {
+    const calls = [];
+    vi.stubGlobal("fetch", async (url, opts) => {
+      calls.push({ url: String(url), body: JSON.parse(opts.body) });
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: JSON.stringify({ items: [{ name: "Wire", qty: 2, rate: 100 }] }) } }],
+      }), { status: 200 });
+    });
+
+    await worker.fetch(post(), { LOG_LEVEL: "silent", OPENROUTER_API_KEY: "or-key" });
+
+    expect(calls[0].url).toBe("https://openrouter.ai/api/v1/chat/completions");
+  });
+
+  // …and an env var beats it, which is the no-deploy rollback path.
+  test("an env var overrides the config file", async () => {
     const calls = stubGemini(geminiItems([{ name: "Wire", qty: 2, rate: 100 }]));
 
-    await worker.fetch(post(), ENV);
+    await worker.fetch(post(), { ...ENV, AI_PROVIDER: "gemini" });
 
     expect(calls[0].url).toContain("generativelanguage.googleapis.com");
   });
@@ -502,10 +524,10 @@ describe("choosing a provider with AI_PROVIDER (PI-7)", () => {
     expect(body.error).toMatch(/OPENROUTER_API_KEY/);
   });
 
-  test("still refuses a request with no Gemini key on the default path", async () => {
+  test("still refuses a request with no Gemini key on the Gemini path", async () => {
     stubGemini();
 
-    const res = await worker.fetch(post(), { LOG_LEVEL: "silent" });
+    const res = await worker.fetch(post(), { LOG_LEVEL: "silent", AI_PROVIDER: "gemini" });
     const body = await res.json();
 
     expect(res.status).toBe(500);

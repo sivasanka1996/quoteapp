@@ -9,9 +9,12 @@
 // rule as the client logger: this must never throw, because every call site is
 // on the request path.
 
+import { appConfig } from "../config/app.config";
+
 export function wlog(env, level, msg, fields = {}) {
   try {
-    if (env?.LOG_LEVEL === "silent") return;
+    // Env var beats config, so it can be silenced from the dashboard.
+    if ((env?.LOG_LEVEL || appConfig.worker.logLevel) === "silent") return;
     console.log(
       JSON.stringify({ t: new Date().toISOString(), level, msg, ...fields })
     );

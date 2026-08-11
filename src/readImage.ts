@@ -1,4 +1,5 @@
 import { log } from "./log/logger";
+import { appConfig } from "../config/app.config";
 
 export interface ReadItem {
   name: string;
@@ -16,9 +17,11 @@ export interface ReadResult {
   detail?: string;
 }
 
-// Point VITE_IMAGE_PROXY_URL at your deployed Cloudflare Worker.
-// Add to .env.local: VITE_IMAGE_PROXY_URL=https://your-worker.workers.dev
-const PROXY_URL = import.meta.env.VITE_IMAGE_PROXY_URL as string | undefined;
+// Configured in config/app.config.ts. VITE_IMAGE_PROXY_URL still overrides it
+// at build time, which is what deploy.yml uses for production.
+const PROXY_URL =
+  (import.meta.env.VITE_IMAGE_PROXY_URL as string | undefined) ||
+  appConfig.worker.url;
 
 /**
  * Longest edge, in pixels, of the image actually uploaded.
@@ -28,9 +31,9 @@ const PROXY_URL = import.meta.env.VITE_IMAGE_PROXY_URL as string | undefined;
  * times out. Gemini reads the image in tiles and gains nothing from the extra
  * pixels, so this costs no accuracy.
  */
-export const MAX_EDGE = 1600;
+export const MAX_EDGE = appConfig.image.maxEdge;
 
-const JPEG_QUALITY = 0.85;
+const JPEG_QUALITY = appConfig.image.jpegQuality;
 
 const OFFLINE_MESSAGE =
   "No internet connection — reading a photo needs one. Everything else in the app works offline.";
@@ -48,7 +51,7 @@ export async function readImageItems(file: File): Promise<ReadResult> {
 
     if (!PROXY_URL) {
       throw new Error(
-        "Image reader not configured — add VITE_IMAGE_PROXY_URL=https://... to .env.local"
+        "Image reader not configured — set worker.url in config/app.config.ts"
       );
     }
 

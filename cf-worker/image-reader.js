@@ -8,17 +8,13 @@
 import { pickProvider } from "./providers/index.js";
 import { confidenceOf } from "./schema.js";
 import { wlog, newRequestId } from "./log.js";
+import { appConfig } from "../config/app.config";
 
 // Who may spend the API key. The worker sits on one public URL with the key
 // in its environment, so with `*` anyone reading the public repo had a free
 // relay. Both Firebase hostnames are listed because Hosting answers on either,
 // and both local ports because `npm run dev` and `npm run preview` differ.
-const ALLOWED_ORIGINS = new Set([
-  "https://quoteapp-3f48e.web.app",
-  "https://quoteapp-3f48e.firebaseapp.com",
-  "http://localhost:5173",
-  "http://localhost:4173",
-]);
+const ALLOWED_ORIGINS = new Set(appConfig.worker.allowedOrigins);
 
 // Vary matters: without it a cache could hand one origin's answer to another.
 function corsFor(origin) {

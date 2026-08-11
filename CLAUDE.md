@@ -180,6 +180,17 @@ HomeScreen (search/add customers)
 
 ### Key files
 ```
+config/
+  app.config.ts          — THE CONFIG FILE. One place, imported by BOTH the
+                           React app (Vite) and the Worker (wrangler): which AI
+                           provider and model, token ceiling, worker URL,
+                           allowed origins, upload size, log caps, ack timeout.
+                           Change settings HERE, not in wrangler.toml or .env.
+                           API KEYS ARE NOT IN IT and cannot be — the repo is
+                           public. It names each secret and the command to set
+                           it, so it is still the one place to look.
+                           Precedence: env var > this file.
+
 src/
   index.css              — DESIGN TOKENS (color, type scale, spacing, radii, shadows)
   AppRouter.tsx          — view manager (home/customer/quote) + AppHeader + settings
@@ -1114,6 +1125,52 @@ no deploy.
 OPENROUTER_API_KEY`. `.env`/`.env.local` build the *frontend* — the Worker never
 reads them, and anything Vite exposes is compiled into the public bundle of a
 public repo. That is the whole reason the Worker exists.
+
+### One config file — added 2026-08-11
+
+Siva's call: "we need a file where it can be configured in a common place."
+Settings had spread across four — `.env.local`, `wrangler.toml [vars]`,
+`wrangler secret`, and constants inlined in source. Now
+[`config/app.config.ts`](config/app.config.ts) holds all of it, and **both
+halves import the same file**: Vite bundles it into the app, wrangler bundles it
+into the Worker. There is one answer instead of two that drift.
+
+| Was | Now |
+|---|---|
+| `MODELS` in `providers/gemini.js` | `ai.gemini.models` |
+| `DEFAULT_MODEL` in `providers/openrouter.js` | `ai.openrouter.model` |
+| `maxOutputTokens` / `temperature`, duplicated per provider | `ai.maxOutputTokens` / `ai.temperature` |
+| `ALLOWED_ORIGINS` in `image-reader.js` | `worker.allowedOrigins` |
+| `AI_PROVIDER` etc. in `wrangler.toml [vars]` | `ai.provider`, `worker.logLevel` |
+| `VITE_IMAGE_PROXY_URL` in `.env.local` | `worker.url` |
+| `MAX_EDGE` / `JPEG_QUALITY` in `readImage.ts` | `image.maxEdge` / `image.jpegQuality` |
+| `MAX_RECORDS` / `MAX_BYTES` in `log/buffer.ts` | `log.maxRecords` / `log.maxBytes` |
+| `ACK_TIMEOUT_MS` in `firestoreAck.ts` | `firestore.ackTimeoutMs` |
+
+**`wrangler.toml` now has no `[vars]` block at all**, deliberately — leaving one
+would recreate the two-places problem the file was created to solve.
+
+**Precedence is env var > config file, and that is load-bearing.** It keeps
+PI-7's guarantee that rollback is a Cloudflare dashboard edit taking effect on
+the next request, with no deploy and no build. The config file is the default;
+the dashboard is the emergency override.
+
+**Keys still cannot live there** — the repo is public, so a key written into a
+committed file is a key published. The file lists each secret *by name* with the
+command to set it, so it remains the one place to **look**; only the values live
+where they have to.
+
+Verified: `npx wrangler deploy --dry-run` bundles the shared file and inlines
+every value into the Worker output (`qwen/qwen3.5-flash-02-23`,
+`gemini-2.5-flash`, the origin list), reporting **no bindings** — confirming
+nothing is left in `[vars]`. `npm run build` inlines the same values into the
+frontend bundle with no env var set. `config/` is covered by eslint, checked by
+planting an unused variable and watching it fail.
+
+**Worker tests now pin `AI_PROVIDER` explicitly** rather than inheriting a
+default. A test of Gemini's Flash → Pro escalation should say which provider it
+means — otherwise editing the config file silently repoints the whole suite,
+which is exactly what happened on the first run.
 
 ### PI-8 — Multi-page slips — DONE and VERIFIED 2026-08-10
 

@@ -27,11 +27,12 @@
 
 import { PROMPT, JSON_SCHEMA, normalize } from "../schema.js";
 import { wlog } from "../log.js";
+import { appConfig } from "../../config/app.config";
 
-const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
+const ENDPOINT = appConfig.ai.openrouter.endpoint;
 
 export const id = "openrouter";
-export const DEFAULT_MODEL = "qwen/qwen3.5-flash-02-23";
+export const DEFAULT_MODEL = appConfig.ai.openrouter.model;
 
 /** The message to fail with when this provider has no key, or null if it does. */
 export function missingKey(env) {
@@ -67,8 +68,8 @@ export async function read(imageBase64, mimeType, env, rid) {
       },
       body: JSON.stringify({
         model,
-        temperature: 0.1,
-        max_tokens: 8192,
+        temperature: appConfig.ai.temperature,
+        max_tokens: appConfig.ai.maxOutputTokens,
         messages: [
           {
             role: "user",

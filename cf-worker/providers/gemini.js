@@ -8,8 +8,10 @@
 
 import { PROMPT, RESPONSE_SCHEMA, normalize } from "../schema.js";
 import { wlog } from "../log.js";
+import { appConfig } from "../../config/app.config";
 
-const MODELS = ["gemini-2.5-flash", "gemini-2.5-pro"];
+// Configured in config/app.config.ts — one place for every model id.
+const MODELS = appConfig.ai.gemini.models;
 
 export const id = "gemini";
 
@@ -74,8 +76,8 @@ async function readWith(model, imageBase64, mimeType, apiKey) {
             { inline_data: { mime_type: mimeType, data: imageBase64 } },
           ]}],
           generationConfig: {
-            temperature: 0.1,
-            maxOutputTokens: 8192,
+            temperature: appConfig.ai.temperature,
+            maxOutputTokens: appConfig.ai.maxOutputTokens,
             responseMimeType: "application/json",
             responseSchema: RESPONSE_SCHEMA,
           },

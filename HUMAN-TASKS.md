@@ -170,6 +170,11 @@ deploy reads slips with **`qwen/qwen3.5-flash-02-23`**.
 - [ ] From `cf-worker/`: `npx wrangler secret put OPENROUTER_API_KEY`
 - [ ] Deploy (§2), then read one real slip and watch `npx wrangler tail`
 
+**Everything except the key is configured in one file:**
+[`config/app.config.ts`](config/app.config.ts) — provider, model, token
+ceiling, worker URL, allowed origins. Both the app and the Worker import it.
+Change settings there, not in `wrangler.toml` or `.env`.
+
 > ### The key does NOT go in `.env` or `.env.local`
 >
 > It would not work and it would leak. Those files build the **frontend**; the

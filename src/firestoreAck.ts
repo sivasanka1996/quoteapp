@@ -11,6 +11,8 @@
 // found the same defect still live in the add-customer path (bug #10), which is
 // why it now lives here instead of inside useQuotes.
 
+import { appConfig } from "../config/app.config";
+
 /**
  * How long to wait for the server before calling a write saved-but-not-synced.
  *
@@ -18,7 +20,7 @@
  * case reports the plain truth), short enough that Dad is never left staring at
  * a stuck button.
  */
-export const ACK_TIMEOUT_MS = 2500;
+export const ACK_TIMEOUT_MS = appConfig.firestore.ackTimeoutMs;
 
 export interface WriteResult<T = string> {
   id: T;

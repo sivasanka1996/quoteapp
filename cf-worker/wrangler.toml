@@ -2,36 +2,35 @@ name = "quoteapp-image-reader"
 main = "image-reader.js"
 compatibility_date = "2024-09-23"
 
-# After deploying, set your Gemini API key as a secret (never in this file):
-#   npx wrangler secret put GEMINI_API_KEY
+# ---------------------------------------------------------------------------
+# There is deliberately NO [vars] block here.
+# ---------------------------------------------------------------------------
 #
-# Then copy the deployed URL and add to your frontend .env.local:
-#   VITE_IMAGE_PROXY_URL=https://quoteapp-image-reader.<your-account>.workers.dev
-
-# --- Which model reads the photo (PI-7) -------------------------------------
+# Provider, model, token limits, allowed origins and log level are all set in
 #
-# ACTIVE. Uncomment/edit and redeploy to change provider; edit OPENROUTER_MODEL
-# in the Cloudflare dashboard to change model with NO deploy at all.
+#     ../config/app.config.ts
 #
-# An unknown AI_PROVIDER falls back to gemini and logs a warn — a typo here must
-# never be why Dad cannot read a slip standing in a shop.
-[vars]
-AI_PROVIDER = "openrouter"
-OPENROUTER_MODEL = "qwen/qwen3.5-flash-02-23"
-LOG_LEVEL = "info"
-
-# Model ids are NOT stable — verify before setting one:
-#   curl -s https://openrouter.ai/api/v1/models | grep -o '"id":"[^"]*"'
-# The spec's original pick, qwen/qwen3.7-flash, does not exist. Checked
-# 2026-08-10: of 207 models with vision AND structured output, the cheapest
-# Qwen is qwen3.5-flash-02-23 at $0.065/M in. Next rung up if Telugu accuracy
-# disappoints: qwen/qwen3.6-flash ($0.188/M in).
+# which this worker imports and wrangler bundles. Duplicating them here would
+# recreate the exact problem that file was created to solve — two places to
+# change, one of which you forget.
 #
-# To roll back to Gemini: set AI_PROVIDER = "gemini" (or delete the line).
+# Environment variables still OVERRIDE the config file, and that is worth
+# keeping: set AI_PROVIDER or OPENROUTER_MODEL in the Cloudflare dashboard and
+# the change takes effect on the very next request, with no deploy and no
+# build. That is the emergency rollback path, not the normal way to configure.
 #
-# KEYS ARE SECRETS — never put them in this file, it is committed to a PUBLIC repo:
-#   npx wrangler secret put OPENROUTER_API_KEY
-#   npx wrangler secret put GEMINI_API_KEY
+# ---------------------------------------------------------------------------
+# KEYS ARE SECRETS. Never in this file — it is committed to a PUBLIC repo.
+# ---------------------------------------------------------------------------
 #
-# Watch reads live while testing a switch:
+#   npx wrangler secret put OPENROUTER_API_KEY    # provider = "openrouter"
+#   npx wrangler secret put GEMINI_API_KEY        # provider = "gemini"
+#
+# Deploy, then watch reads live:
+#
+#   npx wrangler deploy
 #   npx wrangler tail
+#
+# Check what will ship without uploading anything:
+#
+#   npx wrangler deploy --dry-run

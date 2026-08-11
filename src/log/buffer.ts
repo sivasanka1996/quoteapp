@@ -6,9 +6,10 @@
 // is a bounded footprint on Dad's phone, not a bounded count.
 
 import type { LogRecord } from "./logger";
+import { appConfig } from "../../config/app.config";
 
-export const MAX_RECORDS = 2000;
-export const MAX_BYTES = 1_000_000;
+export const MAX_RECORDS = appConfig.log.maxRecords;
+export const MAX_BYTES = appConfig.log.maxBytes;
 
 /**
  * Rough byte cost of a record. JSON length is close enough for a budget, and
