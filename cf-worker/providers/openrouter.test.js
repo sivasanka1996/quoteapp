@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { read, id, missingKey, DEFAULT_MODEL } from "./openrouter.js";
 
-const ENV = { OPENROUTER_API_KEY: "test-key", LOG_LEVEL: "silent" };
+import { openrouterEnv, TEST_KEY } from "../test-support/env.js";
+
+const ENV = openrouterEnv();
 
 /**
  * Stub OpenRouter. Each reply is either a plain object (200 JSON) or a
@@ -58,7 +60,7 @@ describe("the request", () => {
     await read("AAAA", "image/jpeg", ENV, "rid1");
 
     expect(calls[0].url).toBe("https://openrouter.ai/api/v1/chat/completions");
-    expect(calls[0].headers.Authorization).toBe("Bearer test-key");
+    expect(calls[0].headers.Authorization).toBe(`Bearer ${TEST_KEY}`);
   });
 
   test("carries the model, defaulting when none is configured", async () => {

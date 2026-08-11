@@ -1,15 +1,20 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import worker from "./image-reader.js";
+import {
+  geminiEnv,
+  openrouterEnv,
+  configuredByFileEnv,
+  missingKeyEnv,
+  loud,
+} from "./test-support/env.js";
+import { appConfig } from "../config/app.config";
 
-// AI_PROVIDER is pinned rather than inherited. The default now lives in
-// config/app.config.ts (currently "openrouter"), and a test of Gemini's
-// Flash → Pro behaviour should say which provider it means — otherwise
-// editing the config file silently repoints the whole suite.
-//
-// LOG_LEVEL silent keeps the structured request log out of the test output.
-// The logging tests below pass their own env to exercise it deliberately.
-const ENV = { GEMINI_API_KEY: "test-key", AI_PROVIDER: "gemini", LOG_LEVEL: "silent" };
-const LOUD_ENV = { GEMINI_API_KEY: "test-key", AI_PROVIDER: "gemini" };
+// Every environment here is built by a named factory, never spelled out inline
+// — see the header of test-support/env.js for the incident that made that a
+// rule. ENV pins Gemini because the bulk of this file is about Gemini's
+// behaviour; it is not a default to inherit.
+const ENV = geminiEnv();
+const LOUD_ENV = loud(geminiEnv());
 
 /** The origin the live app actually calls from. */
 const APP_ORIGIN = "https://quoteapp-3f48e.web.app";
@@ -440,27 +445,41 @@ describe("choosing a provider with AI_PROVIDER (PI-7)", () => {
     return lines;
   }
 
-  // With no AI_PROVIDER env var the config file decides. It currently says
-  // openrouter, so that is what an unconfigured worker uses.
+  // With no AI_PROVIDER env var, config/app.config.ts decides. Asserted
+  // against the config value itself rather than a hardcoded provider name —
+  // otherwise editing that file breaks this test, which is precisely the
+  // coupling test-support/env.js exists to remove.
   test("falls back to the config file when no env var is set", async () => {
     const calls = [];
     vi.stubGlobal("fetch", async (url, opts) => {
       calls.push({ url: String(url), body: JSON.parse(opts.body) });
-      return new Response(JSON.stringify({
+      const openrouterShaped = {
         choices: [{ message: { content: JSON.stringify({ items: [{ name: "Wire", qty: 2, rate: 100 }] }) } }],
-      }), { status: 200 });
+      };
+      return new Response(
+        JSON.stringify(
+          appConfig.ai.provider === "openrouter"
+            ? openrouterShaped
+            : geminiItems([{ name: "Wire", qty: 2, rate: 100 }])
+        ),
+        { status: 200 }
+      );
     });
 
-    await worker.fetch(post(), { LOG_LEVEL: "silent", OPENROUTER_API_KEY: "or-key" });
+    await worker.fetch(post(), configuredByFileEnv());
 
-    expect(calls[0].url).toBe("https://openrouter.ai/api/v1/chat/completions");
+    const expectedHost =
+      appConfig.ai.provider === "openrouter"
+        ? "openrouter.ai"
+        : "generativelanguage.googleapis.com";
+    expect(calls[0].url).toContain(expectedHost);
   });
 
   // …and an env var beats it, which is the no-deploy rollback path.
   test("an env var overrides the config file", async () => {
     const calls = stubGemini(geminiItems([{ name: "Wire", qty: 2, rate: 100 }]));
 
-    await worker.fetch(post(), { ...ENV, AI_PROVIDER: "gemini" });
+    await worker.fetch(post(), geminiEnv());
 
     expect(calls[0].url).toContain("generativelanguage.googleapis.com");
   });
@@ -480,11 +499,7 @@ describe("choosing a provider with AI_PROVIDER (PI-7)", () => {
     });
 
     const body = await (
-      await worker.fetch(post(), {
-        ...ENV,
-        AI_PROVIDER: "openrouter",
-        OPENROUTER_API_KEY: "or-key",
-      })
+      await worker.fetch(post(), openrouterEnv())
     ).json();
 
     expect(calls[0].url).toBe("https://openrouter.ai/api/v1/chat/completions");
@@ -495,7 +510,7 @@ describe("choosing a provider with AI_PROVIDER (PI-7)", () => {
   test("is not case-sensitive about the name", async () => {
     const calls = stubGemini(geminiItems([{ name: "Wire", qty: 2, rate: 100 }]));
 
-    await worker.fetch(post(), { ...ENV, AI_PROVIDER: "GEMINI" });
+    await worker.fetch(post(), geminiEnv({ AI_PROVIDER: "GEMINI" }));
 
     expect(calls[0].url).toContain("generativelanguage.googleapis.com");
   });
@@ -505,7 +520,7 @@ describe("choosing a provider with AI_PROVIDER (PI-7)", () => {
     const calls = stubGemini(geminiItems([{ name: "Wire", qty: 2, rate: 100 }]));
     const lines = captureLog();
 
-    const res = await worker.fetch(post(), { ...LOUD_ENV, AI_PROVIDER: "gemeni" });
+    const res = await worker.fetch(post(), loud(geminiEnv({ AI_PROVIDER: "gemeni" })));
 
     expect(res.status).toBe(200);
     expect(calls[0].url).toContain("generativelanguage.googleapis.com");
@@ -518,7 +533,7 @@ describe("choosing a provider with AI_PROVIDER (PI-7)", () => {
     stubGemini();
 
     const body = await (
-      await worker.fetch(post(), { LOG_LEVEL: "silent", AI_PROVIDER: "openrouter" })
+      await worker.fetch(post(), missingKeyEnv("openrouter"))
     ).json();
 
     expect(body.error).toMatch(/OPENROUTER_API_KEY/);
@@ -527,7 +542,7 @@ describe("choosing a provider with AI_PROVIDER (PI-7)", () => {
   test("still refuses a request with no Gemini key on the Gemini path", async () => {
     stubGemini();
 
-    const res = await worker.fetch(post(), { LOG_LEVEL: "silent", AI_PROVIDER: "gemini" });
+    const res = await worker.fetch(post(), missingKeyEnv("gemini"));
     const body = await res.json();
 
     expect(res.status).toBe(500);

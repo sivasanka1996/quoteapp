@@ -1121,10 +1121,23 @@ compared them on real input yet — that needs [`HUMAN-TASKS.md`](HUMAN-TASKS.md
 Rolling back to Gemini is `AI_PROVIDER = "gemini"` in the Cloudflare dashboard,
 no deploy.
 
-**Keys are Worker secrets, never `.env`.** `npx wrangler secret put
-OPENROUTER_API_KEY`. `.env`/`.env.local` build the *frontend* — the Worker never
-reads them, and anything Vite exposes is compiled into the public bundle of a
-public repo. That is the whole reason the Worker exists.
+**Keys live in `.env`, which is gitignored — settings do not.** Siva's split,
+2026-08-11: `.env` is the **reference sheet** of every secret a real environment
+needs, so standing up prod is reading down one file instead of remembering.
+Everything non-secret — model, provider, limits, URL — is in
+`config/app.config.ts`.
+
+**`.gitignore` was fixed first, and checked before a single key was written.**
+`*.local` did **not** match a bare `.env`, so the file would have been
+committed. `.env`, `.env.*` are now ignored with `!.env.example` excepted;
+verified with `git check-ignore` for `.env`, `.env.local` and `.env.production`.
+
+**Nothing reads `.env` at runtime, and it says so at the top.** Vite would
+compile any value into the public bundle, and the Worker never sees it at all.
+The values have to be copied to where each consumer actually reads them —
+`wrangler secret put` for the Worker, `cf-worker/.dev.vars` for local Worker
+dev, GitHub repo secrets for Actions. Each entry in `.env` names its
+destination.
 
 ### One config file — added 2026-08-11
 
@@ -1167,10 +1180,32 @@ nothing is left in `[vars]`. `npm run build` inlines the same values into the
 frontend bundle with no env var set. `config/` is covered by eslint, checked by
 planting an unused variable and watching it fail.
 
-**Worker tests now pin `AI_PROVIDER` explicitly** rather than inheriting a
-default. A test of Gemini's Flash → Pro escalation should say which provider it
-means — otherwise editing the config file silently repoints the whole suite,
-which is exactly what happened on the first run.
+### Test environments are built, not spelled out — 2026-08-11
+
+The config change broke twenty worker tests on the first run. Siva's read of
+that was right and is now the rule:
+
+> "this is our responsibility to set standards to path, not assigning static
+> values in middle of the file"
+
+The tests had `{ GEMINI_API_KEY: "test-key", ... }` written inline at a dozen
+sites, and several never named a provider at all — they passed because the
+*ambient* default happened to be Gemini. Tests about schema shape, escalation
+and confidence were silently depending on a value nobody had asked them to.
+
+**The rule: a test states the environment it needs; it never inherits one.**
+[`cf-worker/test-support/env.js`](cf-worker/test-support/env.js) is how it
+states it — `geminiEnv()`, `openrouterEnv()`, `configuredByFileEnv()`,
+`missingKeyEnv(provider)`, `loud()`. Silent by default, because a structured
+log line per request across 50 tests buries the actual failure.
+
+**Proved by flipping the config both ways.** With `ai.provider` set to
+`"gemini"`, then back to `"openrouter"`, **all 222 tests pass either way**.
+Before, that flip broke twenty. The one test that genuinely *is* about the
+fallback now asserts against `appConfig.ai.provider` rather than a hardcoded
+name, so it cannot rot when the setting changes.
+
+Do not add an inline env object to a worker test. Add a factory.
 
 ### PI-8 — Multi-page slips — DONE and VERIFIED 2026-08-10
 

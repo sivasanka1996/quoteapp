@@ -20,6 +20,18 @@ firebase-debug.log
 *.jks
 *.b64
 
+# Environment files — these hold real API keys. The repo is PUBLIC.
+#
+# `.env` is the reference sheet of every variable that must exist in a real
+# environment, with the real values filled in locally. `*.local` above does NOT
+# match a bare `.env`, so it is listed explicitly — without this line a key
+# written there would be committed.
+#
+# `.env.example` is the committed template: names only, never values.
+.env
+.env.*
+!.env.example
+
 # Cloudflare Worker local development.
 # .dev.vars is where `wrangler dev` reads GEMINI_API_KEY from, so it holds a real
 # key. This repo is public; `*.local` above does not match it. See DESIGN.md §14.4.
