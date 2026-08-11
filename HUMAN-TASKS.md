@@ -76,12 +76,14 @@ It is the one improvement available today.
 - PI-5: one structured JSON log line per request — request id, provider, model,
   latency, item count — readable live with `npx wrangler tail`. Watch that while
   you take the first photo; it turns "it didn't work" into a specific line.
-- PI-7: the provider split — **and a change of model**. `wrangler.toml` now sets
-  `AI_PROVIDER = "openrouter"`, so after this deploy slips are read by
+- PI-7: the provider split — **and a change of model**.
+  [`config/app.config.ts`](config/app.config.ts) sets `ai.provider =
+  "openrouter"`, so after this deploy slips are read by
   `qwen/qwen3.5-flash-02-23`, **not Gemini**. See §4a: this needs
   `OPENROUTER_API_KEY` set first, or every read fails with a clear message.
   To ship the other three things without the model change, set
-  `AI_PROVIDER = "gemini"` before deploying.
+  `ai.provider = "gemini"` in that file before deploying (or
+  `AI_PROVIDER=gemini` in the Cloudflare dashboard, which needs no rebuild).
 
 **Read this before you run it — no code here has ever met a real model API.**
 Every worker test stubs `fetch`. The first genuine proof is that first photo.
