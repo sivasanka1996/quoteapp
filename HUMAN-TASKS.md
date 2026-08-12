@@ -11,22 +11,30 @@ human can clear.*
 **Ordered by what unblocks the most.** Item 1 gates everything that reaches Dad
 through the website. Item 2 reaches him without item 1.
 
-> ## Standing instruction — Siva, 2026-08-10
+> ## Standing instruction — Siva, 2026-08-10, sharpened 2026-08-12
 >
-> **This queue is drained in one sitting, at the end. It never paces the code.**
+> **This file is the PRODUCTION HANDOVER queue, and it is drained last.**
+> Most of it is Siva's colleague's job, not ours: deploying, the Firebase
+> console, auth, production keys. Our job is to improve the features and prove
+> they work, then hand over.
 >
-> Nothing in here blocks building. If a task turns out to need a photo, a mic,
-> a real phone or a console login, it moves here and the work continues around
-> it — it is not reported as a blocker and it does not become "the next thing".
-> When Siva has the time and the hardware, the whole file gets worked through
-> at once.
+> **Nothing in here blocks feature work, and none of it is ever "the next
+> thing".** If a task turns out to need a console login or a deploy, it lands
+> here and the work continues around it.
 >
-> The corollary matters just as much: **anything that can be built or checked
-> without a human must be, immediately.** Do not park a fix you already know
-> how to write. Several things that looked like they needed a person did not —
-> offline behaviour, multi-page reading and log export were all verified in a
-> headless browser. Only genuine handwriting, a real voice, a physical phone
-> and a console login are actually human.
+> **For testing our own features, see [`TESTING.md`](TESTING.md)** — that is the
+> near-term list, and the only things Siva personally needs to supply are a few
+> photos and fifteen minutes at a microphone.
+>
+> The corollary still matters: **anything that can be built or checked without a
+> human must be, immediately.** Several things that looked like they needed a
+> person did not — offline behaviour, multi-page reading, log export and the
+> add-customer race were all verified in a headless browser. Only genuine
+> handwriting, a real voice, a physical phone and a console login are human.
+>
+> **Dad's own data is not our concern.** He manages his own customers and
+> quotes. Throwaway `ZZ-` records in the live project are fine; do not build
+> ceremony around avoiding them.
 
 ---
 

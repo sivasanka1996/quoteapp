@@ -111,15 +111,18 @@ npm run lint       # eslint — clean, keep it that way (now enforced in CI)
 npm run build      # production build — AND the only real typecheck, see below
 ```
 
-### `npm run dev` writes to Dad's real database — use `dev:local`
+### `npm run dev` uses the real Firestore; `dev:local` uses an emulator
 
-This is the sharpest edge in the repo. `src/firebase.ts` points at the live
-`quoteapp-3f48e` project, so a plain `npm run dev` reads and writes **production
-data**. Every browser check in this repo's history had to create throwaway `ZZ-`
-customers in Dad's database and delete them afterwards with a cascade script;
-one forgotten cleanup is one row of his real data gone.
+`src/firebase.ts` points at the live `quoteapp-3f48e` project, so a plain
+`npm run dev` reads and writes the real database.
 
-Two terminals, and nothing touches production:
+**This is a convenience, not a safety gate — Siva's call, 2026-08-12.** Dad
+manages his own data; testing with throwaway `ZZ-` records against the live
+project is fine and needs no ceremony. The emulator is here because a clean,
+empty database is *pleasant* to test against, not because production must be
+protected from us. If Java is not installed, use `npm run dev` and move on.
+
+Two terminals, when you want the clean one:
 
 ```bash
 npm run emulators   # local Firestore on :8080, Auth on :9099, UI on :4000
@@ -138,11 +141,14 @@ Against the emulator the Firestore cache is deliberately **memory-only**. A
 persisted cache would outlive `emulators:start`, so yesterday's test data would
 reappear against an empty database and look exactly like a bug.
 
-**One prerequisite, and it is a real one:** the Firestore emulator is a Java
-program, and `java` is **not installed on this machine** (checked 2026-08-12).
-Any JRE 11+ works. Without it `npm run emulators` fails immediately; `npm run
-dev` still works and still hits production, which is the trap this is meant to
-close.
+**One prerequisite:** the Firestore emulator is a Java program, and `java` is
+**not installed on this machine** (checked 2026-08-12). Any JRE 11+ works.
+Without it `npm run emulators` fails and `npm run dev` is the fallback — which
+is fine, per the note above.
+
+**What actually needs a human is in [`TESTING.md`](TESTING.md):** photos of
+handwritten slips, and fifteen minutes speaking into a microphone. Everything
+else about feature testing the agent can do alone.
 
 **`npx tsc --noEmit` checks nothing here — do not trust it.** The root
 `tsconfig.json` is a solution file holding only `references`, so that command

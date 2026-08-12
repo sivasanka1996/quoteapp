@@ -20,6 +20,9 @@ firebase-debug.log
 *.jks
 *.b64
 
+# Test fixtures — photos of order slips. Binary, personal, and not source.
+fixtures/
+
 # Environment files — these hold real API keys. The repo is PUBLIC.
 #
 # `.env` is the reference sheet of every variable that must exist in a real
