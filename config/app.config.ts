@@ -139,6 +139,27 @@ export const appConfig = {
   // --------------------------------------------------------------------------
   firestore: {
     /**
+     * Local Firebase Emulator Suite — a throwaway Firestore on this machine.
+     *
+     * Off by default, and switched on per-run rather than per-project because
+     * it is a property of how you are working, not of the app:
+     *
+     *     npm run dev:local
+     *
+     * Why it matters: without it, `npm run dev` reads and writes Dad's REAL
+     * database. Every browser check in this repo's history had to create
+     * throwaway `ZZ-` customers in production and delete them afterwards. One
+     * forgotten cleanup is one row of real data gone.
+     *
+     * Ports match the `emulators` block in firebase.json — change both together.
+     */
+    emulator: {
+      firestorePort: 8080,
+      authPort: 9099,
+      uiPort: 4000,
+    },
+
+    /**
      * How long to wait for the server before calling a write
      * saved-but-not-synced.
      *

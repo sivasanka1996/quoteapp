@@ -100,7 +100,9 @@ section disagrees with git, git is right and this section is stale.*
 npm install        # REQUIRED FIRST — node_modules is not committed and is
                    # often absent on a fresh clone. Without it `npm test`
                    # fails with "'vitest' is not recognized".
-npm run dev        # http://localhost:5173
+npm run dev        # http://localhost:5173 — talks to the REAL Firestore
+npm run dev:local  # http://localhost:5173 — talks to the LOCAL emulator instead
+npm run emulators  # start the emulator suite first, in another terminal
 npm test           # 221 unit tests (Vitest) — 38 image-reader worker, 31 engine,
                    # 24 types, 22 logger, 17 numberWords, 17 openrouter,
                    # 16 voiceParse, 15 format, 14 readImage, 12 log export,
@@ -108,6 +110,39 @@ npm test           # 221 unit tests (Vitest) — 38 image-reader worker, 31 engi
 npm run lint       # eslint — clean, keep it that way (now enforced in CI)
 npm run build      # production build — AND the only real typecheck, see below
 ```
+
+### `npm run dev` writes to Dad's real database — use `dev:local`
+
+This is the sharpest edge in the repo. `src/firebase.ts` points at the live
+`quoteapp-3f48e` project, so a plain `npm run dev` reads and writes **production
+data**. Every browser check in this repo's history had to create throwaway `ZZ-`
+customers in Dad's database and delete them afterwards with a cascade script;
+one forgotten cleanup is one row of his real data gone.
+
+Two terminals, and nothing touches production:
+
+```bash
+npm run emulators   # local Firestore on :8080, Auth on :9099, UI on :4000
+npm run dev:local   # the app, pointed at them
+```
+
+The switch is Vite's own `--mode` (`vite --mode emulator`), so it needs no extra
+dependency and behaves identically in PowerShell, where `VITE_FOO=1 vite` does
+not work. **`deploy.yml` runs plain `npm run build`**, whose mode is
+`production`, so a deploy cannot point at localhost — verified by grepping the
+production bundle: `connectFirestoreEmulator`, `127.0.0.1` and the warning
+banner are all **absent**, tree-shaken by the constant fold. Only the inert port
+number survives, in the config object, read by nothing.
+
+Against the emulator the Firestore cache is deliberately **memory-only**. A
+persisted cache would outlive `emulators:start`, so yesterday's test data would
+reappear against an empty database and look exactly like a bug.
+
+**One prerequisite, and it is a real one:** the Firestore emulator is a Java
+program, and `java` is **not installed on this machine** (checked 2026-08-12).
+Any JRE 11+ works. Without it `npm run emulators` fails immediately; `npm run
+dev` still works and still hits production, which is the trap this is meant to
+close.
 
 **`npx tsc --noEmit` checks nothing here — do not trust it.** The root
 `tsconfig.json` is a solution file holding only `references`, so that command

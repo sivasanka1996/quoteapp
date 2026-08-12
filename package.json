@@ -11,7 +11,9 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "emulators": "npx firebase-tools emulators:start --only firestore,auth",
+    "dev:local": "vite --mode emulator"
   },
   "dependencies": {
     "firebase": "^12.14.0",
