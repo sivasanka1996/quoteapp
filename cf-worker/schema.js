@@ -11,8 +11,9 @@ Understand the document and extract every line item, top to bottom.
 - name: what the item is, in English (wire size, MCB, socket, lug, pipe, fan, isolator, etc.)
 - qty: the quantity for that line item
 - rate: the unit price per item.
-  - If the line has ONE price on it, that price IS the rate. Return it exactly as written. Do not treat it as a line total and do not divide it by the quantity.
-  - If the line has TWO prices on it, the smaller is the rate and the larger is the line total (quantity x rate). Return the smaller one.
+  - NEVER CALCULATE. Do not divide, multiply, add or average anything. Every number you return must be a number you can actually see written on the page, copied digit for digit.
+  - If the line has ONE price on it, that price IS the rate — however large it looks next to the quantity. A large price beside a large quantity is still the rate. Do NOT divide it by the quantity.
+  - If the line has TWO prices on it, the smaller is the rate and the larger is the line total (quantity x rate). Return the smaller one, copied as written.
   - Only leave rate out when the line has no price written on it at all.`;
 
 // The reply shape is enforced by the API, not by parsing prose. Gemini takes an

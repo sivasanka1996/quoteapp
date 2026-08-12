@@ -80,7 +80,36 @@ from fonts. Nothing here says a model can read real handwriting.
 
 ---
 
-## 2. Image reading on real handwriting — needs Siva
+## 2. Image reading on real handwriting — DONE 2026-08-12
+
+**Status: done. Five slips supplied, 106 checks passing — and the rate defect
+from §1 came back and had to be fixed properly.**
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/prepare-slips.ps1
+npx vite-node scripts/openrouter-live-check.ts
+```
+
+`prepare-slips.ps1` mimics `prepareImage` (1600px, JPEG q85) so the model sees
+what the phone would really upload, and splits the three-page photo into three.
+
+- **All five rows exact on all three photo conditions** — flat, shadowed and
+  creased, crumpled — including the smudged `3100`.
+- **Telugu handwriting works.** వైర్ / స్విచ్ / సాకెట్ → Wire, Switch, Socket,
+  every qty and rate exact.
+- **PI-8 multi-page proved against a real model** for the first time: 3 pages,
+  one call each, merged in order with correct page badges.
+- **The §1 prompt fix was not enough.** On 2 of 6 real images the model went
+  back to dividing — 1650÷10 = **165** — with `confidence: "full"`, so nothing
+  warned Dad. Fixed by banning arithmetic outright ("NEVER CALCULATE… copied
+  digit for digit"), verified three times on both failing images.
+
+**The caveat that remains:** these were AI-generated images of handwriting, not
+camera photos, and they are Siva's slips rather than Dad's. Real biro under shop
+light is still the untested case — worth one more round when Dad is around.
+
+<details>
+<summary>Original brief (kept for the next round)</summary>
 
 **Siva provides: 3–5 photos.** They do not need to be Dad's. Siva writing an
 order slip himself in the same style is enough to test the feature.
@@ -104,6 +133,8 @@ photos, not source.
 **What the agent does with them:** reads each through the real pipeline, reports
 per-slip what came back versus what is written on the paper, and says plainly
 which errors are the model's and which are ours.
+
+</details>
 
 ---
 
@@ -205,7 +236,7 @@ together if a tidy-up is wanted.
 
 1. ~~**Real AI read**~~ — **DONE 2026-08-12**, two defects fixed (§1)
 2. ~~**PDF file check**~~ — **DONE 2026-08-12**, one defect fixed (§4)
-3. **Photos** — Siva, ~15 minutes, unblocks real-handwriting and multi-page
+3. ~~**Photos**~~ — **DONE 2026-08-12**, and they caught a defect the mocks missed (§2)
 4. **Voice script** — Siva, ~15 minutes at a mic, the only truly unautomatable one
 
 **Both agent items are closed. §2 and §3 are the whole remaining queue and both

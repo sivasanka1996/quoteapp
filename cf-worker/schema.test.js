@@ -31,6 +31,27 @@ describe("the rate instruction", () => {
     expect(PROMPT).toMatch(/not divide it by the quantity/i);
   });
 
+  // ROUND TWO, 2026-08-12. The wording above was not enough.
+  //
+  // Against real photographs of handwritten slips, the model went back to
+  // dividing on 2 of 6 images — and did the arithmetic exactly: 1650÷10 = 165,
+  // 2450÷6 = 408, 3100÷4 = 775, 120÷12 = 10, 185÷8 = 23. Five rows of
+  // plausible-looking wrong money, reported with `confidence: "full"` because
+  // every row did have a qty and a rate, so nothing warned Dad.
+  //
+  // The per-branch prohibition was overridable by the model's own sense of what
+  // a wire "should" cost. A blanket ban on arithmetic was not: with the
+  // sentence below, both failing images return every rate as written, and the
+  // two-price trap row still returns 95 rather than the 2375 total.
+  test("bans arithmetic outright, not just in the one-price case", () => {
+    expect(PROMPT).toMatch(/NEVER CALCULATE/);
+    expect(PROMPT).toMatch(/copied digit for digit/i);
+  });
+
+  test("says a big price next to a big quantity is still the rate", () => {
+    expect(PROMPT).toMatch(/however large it looks next to the quantity/i);
+  });
+
   // The other half of the rule, and the reason the sentence existed at all.
   // The mock slip's row 3 reads "25 no  95 = 2375"; quoting 2375 as the unit
   // rate would be the same class of error in the other direction. Both models

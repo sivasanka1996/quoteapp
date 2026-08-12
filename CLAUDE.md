@@ -103,9 +103,9 @@ npm install        # REQUIRED FIRST — node_modules is not committed and is
 npm run dev        # http://localhost:5173 — talks to the REAL Firestore
 npm run dev:local  # http://localhost:5173 — talks to the LOCAL emulator instead
 npm run emulators  # start the emulator suite first, in another terminal
-npm test           # 239 unit tests (Vitest) — 38 image-reader worker, 31 engine,
+npm test           # 241 unit tests (Vitest) — 38 image-reader worker, 31 engine,
                    # 24 types, 22 logger, 19 openrouter, 17 numberWords,
-                   # 5 schema prompt (the rate rule, pinned by its defect),
+                   # 7 schema prompt (the rate rule, pinned by its defect),
                    # 10 sharePdf (page-break maths, filename),
                    # 16 voiceParse, 15 format, 14 readImage, 12 log export,
                    # 9 mergePages, 6 firestoreAck
@@ -1352,12 +1352,38 @@ locked to Dad's real handwriting, not a mock, and qwen3.7-flash advertises
 `response_format` but *not* `structured_outputs`, so schema conformance may be
 advisory rather than enforced there. Both questions the real slips answer.
 
-**What this still does not prove: that any model reads Dad's actual
-handwriting.** The slips are generated from fonts — clean, evenly spaced, no
-smudges, no slant beyond a deliberate 1.2°. This proves the *pipeline* carries a
-correct read from the API to the confirm list. Whether the model can read a
-biro-on-carbon-copy slip in shop lighting is [`TESTING.md`](TESTING.md) §2 and
-needs Siva's photos.
+### Round two — real handwritten slips, 2026-08-12
+
+Siva supplied five images of handwritten order slips the same day: a flat
+evenly-lit one, two handheld shots (shadow, creases, a hand in frame, the `3100`
+smudged into ink blobs), a three-page order, and one with Telugu item names.
+They run through `scripts/prepare-slips.ps1` first, which mimics `prepareImage`
+— longest edge to 1600, JPEG q85 — so the model sees the bytes Dad's phone would
+actually upload rather than a 3 MB PNG. That script also splits the three-page
+photo into the three separate images PI-8 expects.
+
+**106 checks, all passing.** But only after the rate defect came back.
+
+| Item | How it was verified | Result |
+|---|---|---|
+| **Defect 2 was NOT fixed — it returned on real photographs** | The prompt rewritten earlier that day held on the font-rendered mocks and **failed on 2 of 6 real images**. On the crumpled shot every row came back divided: 1650÷10=**165**, 2450÷6=**408**, 3100÷4=**775**, 120÷12=**10**, 185÷8=**23**. Page 1 of the three-page order did the same. Reproduced deterministically before being touched. | **FOUND** |
+| Why the first fix was not enough | It forbade dividing *inside the one-price branch*, which the model overrode with its own sense of what wire should cost. A blanket **"NEVER CALCULATE… copied digit for digit"** was not overridable. Verified three consecutive times on both failing images. | **FIXED** |
+| The trap row still works | The blanket ban does not break the two-price rule: `25 no 95 = 2375` still returns **95**. Selection is not calculation. | **PASS** |
+| Handwriting, three photo conditions | Flat, shadowed-and-creased, and crumpled — all five rows exact on each, including the smudged `3100`. | **PASS (live API)** |
+| **Telugu handwriting** | వైర్ 1.5 / వైర్ 2.5 / స్విచ్ / సాకెట్ → "Wire 1.5", "Wire 2.5", "Switch", "Socket", every qty and rate exact. The thing the whole multilingual model choice was for, and it works on real handwriting. | **PASS (live API)** |
+| **PI-8 multi-page against a real model** | Three pages read one call each (2.9s, 3.9s, 2.4s), merged by the real `mergePages`: 8 items, correct order, correct `p1`/`p2`/`p3` badges, no failed pages. PI-8's 18 browser checks all used a faked proxy — this is the first real one. | **PASS (live API)** |
+
+**The lesson worth keeping: font-rendered mocks did not predict real
+handwriting.** The first prompt fix passed every mock and still put five wrong
+rupee figures on screen with `confidence: "full"` — every row had a qty and a
+rate, so nothing warned Dad. A prompt rule the model can weigh against its own
+commercial intuition is not a rule. Ban the behaviour outright.
+
+**What this still does not prove:** these are Siva's slips, not Dad's, and they
+were AI-generated images of handwriting rather than camera photographs — clean
+ink, even strokes, no motion blur or focus miss. Real biro on a carbon copy in
+shop light is still untested, and the smudge on one shot is the only genuine
+degradation in the set.
 
 **The Gemini path could not be checked at all.** `GEMINI_API_KEY` is empty in
 `.env` — only `OPENROUTER_API_KEY` is set. Gemini is the code-level fallback, it
