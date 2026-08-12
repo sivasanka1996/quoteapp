@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { read, id, missingKey, DEFAULT_MODEL } from "./openrouter.js";
 
 import { openrouterEnv, TEST_KEY } from "../test-support/env.js";
+import { appConfig } from "../../config/app.config";
 
 const ENV = openrouterEnv();
 
@@ -90,6 +91,32 @@ describe("the request", () => {
     const image = parts.find((p) => p.type === "image_url");
     expect(image.image_url.url).toBe("data:image/png;base64,AAAA");
     expect(parts.find((p) => p.type === "text").text).toMatch(/electrical materials/i);
+  });
+
+  // MEASURED AGAINST THE LIVE API, 2026-08-12 — this is not a style preference.
+  //
+  // `max_tokens` is one budget covering reasoning AND content. Reading the
+  // six-line mock slip, qwen3.5-flash spent **5902 reasoning tokens** of the
+  // 8192 available and scraped in at 6074 completion tokens. The Telugu slip
+  // did not: it hit `finish_reason: "length"` after **70 seconds** and returned
+  // an empty content string — which reaches Dad as "could not read any items".
+  //
+  // With reasoning off the same slip costs 232 completion tokens, answers in
+  // 2.2s, and reads every row correctly. Reading a slip is transcription; the
+  // thinking was the model talking itself out of correct answers (it reasoned
+  // "1650 is probably the line total" and returned rate: null).
+  test("asks the model not to think — reasoning is charged against max_tokens", async () => {
+    const calls = stubOpenRouter(completionItems([{ name: "Wire", qty: 2, rate: 100 }]));
+
+    await read("AAAA", "image/jpeg", ENV, "rid1");
+
+    expect(calls[0].body.reasoning).toEqual({
+      enabled: appConfig.ai.openrouter.reasoning,
+    });
+  });
+
+  test("ships with reasoning off", () => {
+    expect(appConfig.ai.openrouter.reasoning).toBe(false);
   });
 
   test("asks for structured output, not prose", async () => {

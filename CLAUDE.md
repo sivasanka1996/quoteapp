@@ -103,8 +103,9 @@ npm install        # REQUIRED FIRST — node_modules is not committed and is
 npm run dev        # http://localhost:5173 — talks to the REAL Firestore
 npm run dev:local  # http://localhost:5173 — talks to the LOCAL emulator instead
 npm run emulators  # start the emulator suite first, in another terminal
-npm test           # 221 unit tests (Vitest) — 38 image-reader worker, 31 engine,
-                   # 24 types, 22 logger, 17 numberWords, 17 openrouter,
+npm test           # 229 unit tests (Vitest) — 38 image-reader worker, 31 engine,
+                   # 24 types, 22 logger, 19 openrouter, 17 numberWords,
+                   # 5 schema prompt (the rate rule, pinned by its defect),
                    # 16 voiceParse, 15 format, 14 readImage, 12 log export,
                    # 9 mergePages, 6 firestoreAck
 npm run lint       # eslint — clean, keep it that way (now enforced in CI)
@@ -537,6 +538,16 @@ costs a little storage and nothing else; delete it there when convenient.
       "Page 2 could not be read — retry" row, and retrying re-reads only that
       page while keeping edits already made to the rows that worked. 9 new unit
       tests on the pure merge, plus **18 browser checks, all passing.**
+- [x] **The real AI read — DONE 2026-08-12. Two production defects found and
+      fixed.** All 57 worker tests stubbed `fetch`, so no request this repo
+      builds had ever received a real 200. It has now:
+      `scripts/openrouter-live-check.ts` drives the **real** worker — router,
+      origin allowlist, `pickProvider`, provider and `normalize` all the
+      shipping ones — against generated mock slips, on the live OpenRouter API.
+      **30 checks, all passing**, after two genuine defects were fixed. The
+      contract itself was sound: model id, `response_format` dialect, image part
+      shape and base64 encoding were all correct first time. What was broken was
+      subtler and worse. See the table below.
 - [x] Full visual redesign — design tokens, all four screens, mobile-first
 - [x] Quote status (draft/sent/accepted/declined) — badges, filter, home stat tiles
 - [x] Business / Customer view toggle in the quote editor
@@ -1142,14 +1153,15 @@ is still the pre-PI-4.2 one that answers anyone.** One deploy ships all of it.
 *code-level* fallback, so a deleted or misspelled var lands back on it — but as
 configured, the next deploy stops using Gemini.
 
-**The model the spec named does not exist.** §0.5 recorded
-`qwen/qwen3.7-flash` at $0.03/M in. The catalogue was re-fetched on 2026-08-10:
-399 models, 207 with vision *and* structured output, and that id is **not among
-them**. `openrouter.js` had it as `DEFAULT_MODEL`, so the first real read would
-have failed. Replaced with `qwen/qwen3.5-flash-02-23` — the cheapest Qwen that
-actually has both capabilities, $0.065/M in, $0.26/M out, 1M context, no
-per-image surcharge. **Verify a model id against the live catalogue before
-setting one**; these are not stable:
+**~~The model the spec named does not exist.~~ WRONG — corrected 2026-08-12 by
+a live read; see "The real AI read" above.** This paragraph used to say
+`qwen/qwen3.7-flash` was absent from the catalogue and would have 400'd on the
+first real read. It is in the catalogue, it takes images, it is *half* the price
+of the model that replaced it, and pointed at the mock slips it read every
+number correctly. The 2026-08-10 "re-fetch" recorded here did not establish what
+it claimed. The advice below stands and is the reason the error was catchable —
+it was simply not followed at the time. **Verify a model id against the live
+catalogue before setting one, and before writing a note saying one is missing:**
 
 ```bash
 curl -s https://openrouter.ai/api/v1/models | grep -o '"id":"[^"]*"'
@@ -1278,6 +1290,77 @@ page it is serving — it cannot infer it from the request.
 slip. The proxy was faked, so this proves the *client* handles pages correctly,
 not that the model reads page 3 of Dad's handwriting. That closes on the first
 real multi-page read after the worker is deployed.
+
+### The real AI read — DONE and VERIFIED 2026-08-12
+
+The biggest untested thing in the repo, closed. Every worker test stubs
+`globalThis.fetch`, so the model id, the prompt, the `response_format` dialect
+and the image encoding had never met the live API — and if any one of them were
+wrong, **every read Dad ever attempted would fail**.
+
+`scripts/openrouter-live-check.ts` now proves it end to end. It calls the real
+`cf-worker/image-reader.js` default export with a real `Request`, so the origin
+allowlist, `pickProvider`, the provider, `normalize` and `confidenceOf` are all
+the shipping code. Nothing is stubbed but the transport into the Worker.
+`scripts/make-mock-slips.ps1` generates the images (handwriting font for
+English, Nirmala UI for Telugu, at the 1200×1600 / JPEG-q85 shape
+`prepareImage` produces). Deliberately not a `*.test.ts`, like
+`cascade-check.ts` — it spends money and CI must never run it.
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/make-mock-slips.ps1
+npx vite-node scripts/openrouter-live-check.ts
+```
+
+**The API contract was right first time.** Model id, `response_format:
+json_schema` dialect, the `image_url` data-URL part, base64 with no prefix —
+all correct, all confirmed by a 200. The two defects were subtler, and both
+would have hurt Dad.
+
+| Item | How it was verified | Result |
+|---|---|---|
+| **Defect 1 — thinking tokens ate the whole reply** | `max_tokens` is ONE budget covering reasoning *and* content. Reading the six-line English slip, qwen3.5-flash spent **5902 reasoning tokens** of 8192 and only just finished. The Telugu slip did not: `finish_reason: "length"` after **70 seconds**, empty content, which reaches Dad as "could not read any items from this photo". Fixed by sending `reasoning: { enabled: false }` — 232 completion tokens, 2.2s, ~8x cheaper. | **FIXED, verified live** |
+| **Defect 2 — the prompt told the model to divide the rate** | The old wording ("if a line shows both a smaller and a larger number, the smaller one is usually the unit rate") made both models read a *lone* price as a line total. On the Telugu slip "5 no 1650" came back as **rate 330** (1650÷5) and "3 no 240" as **rate 80**. Three of five rows silently wrong, each by a plausible amount. Rewritten to state that one price IS the rate and must not be divided. | **FIXED, verified live** |
+| Every quantity and rate, English slip | All 6 rows exact: 6×1650, 4×450, 25×95, 30×48, 12×125, 8×70. | **PASS (live API)** |
+| Every quantity and rate, Telugu slip | All 5 rows exact: 5×1650, 3×240, 10×450, 20×48, 8×70. | **PASS (live API)** |
+| The line-total trap | Row 3 reads "25 no 95 = 2375" on the paper. The model returns **95**, not 2375 — so the two-price half of the rule still works after the rewrite. | **PASS (live API)** |
+| `confidence` is derived, on real data | `"full"` on both slips once every row had a qty and a rate; `"low"` on the failed control. PI-3.7's derived confidence, finally seen against a real response. | **PASS (live API)** |
+| Origin allowlist, on the real path | A request with no Origin gets **403** and no API call is made. PI-4.2 exercised for real rather than against a stub. | **PASS** |
+| **The check can fail** | Run first against a made-up model id: 0 items, `confidence: "low"`, detail naming HTTP 400. Run before trusting any green above. | **PASS (red control)** |
+
+**Telugu item *names* are the weak spot, and they are graded separately on
+purpose.** A wrong number is money Dad never sees; a wrong name sits in the
+confirm list in front of him and he retypes it. On the mock slip qwen3.5-flash
+rendered ఎంసిబి (MCB) as "Fan Switch 32A" and ఫ్యాన్ బాక్స్ as "Fan Hook".
+Numbers were perfect. The script reports these as `NOTE`, not `FAIL`.
+
+**A documentation error was found and corrected, and it is worth naming.** This
+file and `openrouter.js` both asserted that `qwen/qwen3.7-flash` "does not
+exist" with vision and structured output, citing a catalogue check. The
+catalogue was re-fetched on 2026-08-12 — 406 entries — and **it is there**, takes
+images, costs **half** the configured model ($0.030/M in vs $0.065), answered
+slightly faster, and got the Telugu MCB row right where the incumbent did not.
+The claim was simply wrong. **The model was not switched**: the decision is
+locked to Dad's real handwriting, not a mock, and qwen3.7-flash advertises
+`response_format` but *not* `structured_outputs`, so schema conformance may be
+advisory rather than enforced there. Both questions the real slips answer.
+
+**What this still does not prove: that any model reads Dad's actual
+handwriting.** The slips are generated from fonts — clean, evenly spaced, no
+smudges, no slant beyond a deliberate 1.2°. This proves the *pipeline* carries a
+correct read from the API to the confirm list. Whether the model can read a
+biro-on-carbon-copy slip in shop lighting is [`TESTING.md`](TESTING.md) §2 and
+needs Siva's photos.
+
+**The Gemini path could not be checked at all.** `GEMINI_API_KEY` is empty in
+`.env` — only `OPENROUTER_API_KEY` is set. Gemini is the code-level fallback, it
+shares the rewritten prompt (so defect 2 is fixed there too), and it has the
+**same latent defect 1**: `gemini.js` sends no `thinkingConfig`, so thinking
+tokens are charged against the same 8192 ceiling. The one-line fix would be
+`generationConfig.thinkingConfig = { thinkingBudget: 0 }` — **deliberately not
+applied**, because this file's standing rule is that changing that ceiling blind
+is a worse bet than leaving it, and with no key there is no way to verify. Left
+for whoever has a Gemini key; the evidence that it matters is in this table.
 
 ### Deferred until Dad actually asks
 

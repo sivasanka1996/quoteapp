@@ -6,7 +6,11 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // `.wrangler/` is wrangler's build scratch — bundled copies of our own worker
+  // plus Cloudflare's middleware shims. It is gitignored, but flat config does
+  // not read .gitignore, so `npm run lint` was failing on generated code the
+  // moment anyone ran `wrangler deploy` or `--dry-run`.
+  globalIgnores(['dist', '**/.wrangler']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

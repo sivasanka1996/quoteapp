@@ -56,17 +56,45 @@ export const appConfig = {
        * MODEL IDS ARE NOT STABLE — verify before changing this:
        *   curl -s https://openrouter.ai/api/v1/models | grep -o '"id":"[^"]*"'
        *
-       * The spec originally named `qwen/qwen3.7-flash`, which does not exist
-       * with vision + structured output; it would have failed on the first real
-       * read. Checked 2026-08-10: of 207 models having both, this is the
-       * cheapest Qwen — $0.065/M in, $0.26/M out, 1M context, no per-image fee.
-       * Qwen because multilingual strength is the point: this has to read Telugu.
+       * PROVED ON A REAL READ, 2026-08-12: this model reads the mock slips
+       * correctly — every quantity and every rate, in both English and Telugu,
+       * in about 3 seconds. See `scripts/openrouter-live-check.ts`.
        *
-       * Next rung up if accuracy disappoints: "qwen/qwen3.6-flash" ($0.188/M in).
-       * Still pennies a month at Dad's volume.
+       * A correction, because this comment used to say otherwise. It claimed
+       * `qwen/qwen3.7-flash` "does not exist with vision + structured output",
+       * citing a 2026-08-10 catalogue check. The catalogue was re-fetched on
+       * 2026-08-12 (406 entries) and it is there, takes images, and costs
+       * $0.030/M in + $0.130/M out — HALF this one. Pointed at the same slips
+       * it read every number correctly too, was slightly faster, and got the
+       * Telugu word for MCB right where this model returned "Fan Switch".
+       *
+       * It is NOT switched to, on purpose. Two reasons: CLAUDE.md locks the
+       * model decision to Dad's real handwriting rather than a mock, and
+       * qwen3.7-flash advertises `response_format` but NOT `structured_outputs`
+       * in the catalogue, so schema conformance may be advisory there rather
+       * than enforced. Both are questions the real slips answer. Until then the
+       * incumbent works and is proved.
        */
       model: "qwen/qwen3.5-flash-02-23",
       endpoint: "https://openrouter.ai/api/v1/chat/completions",
+
+      /**
+       * Let the model think before answering. **Off, and measured.**
+       *
+       * `maxOutputTokens` below is ONE budget covering reasoning *and* the
+       * reply. Reading the six-line mock slip on 2026-08-12, this model spent
+       * **5902 reasoning tokens** of 8192 and only just finished; the Telugu
+       * slip hit the ceiling, took **70 seconds** and returned nothing at all,
+       * which reaches Dad as "could not read any items from this photo".
+       *
+       * Worse, the thinking made it *less* accurate: the trace shows it
+       * reasoning "1650 is probably the line total, not the rate" and returning
+       * no rate. Reading a slip is transcription, not deliberation.
+       *
+       * Off: 232 completion tokens, 2.2s, every row correct, ~8x cheaper.
+       * Turn it back on only with a live read to compare against.
+       */
+      reasoning: false,
     },
 
     /**

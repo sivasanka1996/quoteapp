@@ -10,7 +10,10 @@ Understand the document and extract every line item, top to bottom.
 
 - name: what the item is, in English (wire size, MCB, socket, lug, pipe, fan, isolator, etc.)
 - qty: the quantity for that line item
-- rate: the unit price per item — NOT the line total. If a line shows both a smaller and a larger number, the smaller one is usually the unit rate. If no unit rate is written, leave rate out rather than guessing.`;
+- rate: the unit price per item.
+  - If the line has ONE price on it, that price IS the rate. Return it exactly as written. Do not treat it as a line total and do not divide it by the quantity.
+  - If the line has TWO prices on it, the smaller is the rate and the larger is the line total (quantity x rate). Return the smaller one.
+  - Only leave rate out when the line has no price written on it at all.`;
 
 // The reply shape is enforced by the API, not by parsing prose. Gemini takes an
 // OpenAPI subset here; keep it to types it actually supports.

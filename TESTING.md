@@ -42,23 +42,41 @@ test stubs `fetch`; every voice test feeds a string straight to the parser.
 
 ---
 
-## 1. The real AI read — the biggest untested thing
+## 1. The real AI read — ~~the biggest untested thing~~ DONE 2026-08-12
 
-**Status: unblocked. `OPENROUTER_API_KEY` is set in `.env`.**
+**Status: done. 30 checks passing against the live API, after two real defects
+were found and fixed.** Full write-up in [`CLAUDE.md`](CLAUDE.md) under "The
+real AI read". To re-run:
 
-No code in this repo has ever received a real response from OpenRouter. The
-model id, the prompt, the JSON-schema dialect and the image encoding are all
-unproven against the live API. If the schema shape is wrong, every read fails.
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/make-mock-slips.ps1
+npx vite-node scripts/openrouter-live-check.ts
+```
 
-**Siva provides:** nothing. The key is enough. The agent can generate a mock
-slip image and read it.
+**The API contract was correct first time** — model id, `response_format`
+dialect, image part shape and base64 encoding all worked on the first 200. The
+two things that were broken were worse than a broken contract, because neither
+announces itself:
 
-**Agent does:**
-- Call OpenRouter with exactly the body `cf-worker/providers/openrouter.js`
-  builds, against a generated slip
-- Confirm items come back with name / qty / rate
-- If it fails, the likely suspects in order: model id, `response_format`
-  dialect, image part shape, token ceiling
+1. **Thinking tokens ate the reply.** `max_tokens` is one budget covering
+   reasoning *and* content. The Telugu slip spent all 8192 on reasoning, took
+   **70 seconds**, and returned nothing — which Dad sees as "could not read any
+   items". Fixed with `reasoning: { enabled: false }`.
+2. **The prompt told the model to divide.** The old rate instruction made both
+   models read a lone price as a line total: "5 no 1650" came back as
+   **₹330**. Three of five rows silently wrong by a plausible amount. Fixed by
+   rewriting the rule; pinned by `cf-worker/schema.test.js`.
+
+Every quantity and rate on both slips is now exact, in ~3s per page. Item
+*names* in Telugu are the remaining weak spot (ఎంసిబి read as "Fan Switch") and
+are reported as `NOTE` rather than `FAIL` — a wrong name is visible to Dad and
+editable, a wrong number is not.
+
+**Still unproven, and only §2 below can close it:** these slips are generated
+from fonts. Nothing here says a model can read real handwriting.
+
+**The Gemini fallback could not be tested** — `GEMINI_API_KEY` is empty in
+`.env`. It shares the fixed prompt but still has the thinking-budget defect.
 
 ---
 
@@ -169,10 +187,13 @@ together if a tidy-up is wanted.
 
 ## Priority order
 
-1. **Real AI read** — agent, unblocked now, biggest unknown
+1. ~~**Real AI read**~~ — **DONE 2026-08-12**, two defects fixed (§1)
 2. **PDF file check** — agent, unblocked now
 3. **Photos** — Siva, ~15 minutes, unblocks real-handwriting and multi-page
 4. **Voice script** — Siva, ~15 minutes at a mic, the only truly unautomatable one
+
+Now that §1 is closed, **§2 and §3 are the whole remaining queue and both are
+Siva's**. Nothing else in the plan is blocked on them.
 
 Everything else in the plan is done. Production and auth are the colleague's,
 at handover.

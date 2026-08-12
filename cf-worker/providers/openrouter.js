@@ -6,24 +6,19 @@
 // volume (a few reads a day, cents a month either way), so **Telugu accuracy
 // decides it** (spec §4.4).
 //
-// MODEL CHOICE — checked against the live catalogue on 2026-08-10.
+// MODEL CHOICE — see config/app.config.ts. Corrected 2026-08-12 by a live read.
 //
-// The spec named `qwen/qwen3.7-flash`. **That model does not exist** with
-// vision + structured output — the catalogue was re-fetched and it is not in
-// the list, so the spec's §0.5 note was wrong and this file used to default to
-// a model that would have 400'd on the first real read. Verify a model id
-// against the catalogue before trusting a note about it:
+// This header used to state that `qwen/qwen3.7-flash` "does not exist" with
+// vision and structured output, and that a 2026-08-10 catalogue re-fetch had
+// proved it. Both claims were false. The catalogue was fetched again on
+// 2026-08-12 — 406 entries — and that id is present, takes text+image+video,
+// and is HALF the price of the model configured here. It was then pointed at a
+// real slip and read all six rows correctly.
 //
-//   curl -s https://openrouter.ai/api/v1/models
+// Nothing was wrong with the model id in use; the note about the other one was
+// invented. Verify against the catalogue rather than against a comment:
 //
-// Of 207 models with both vision and structured output, the cheapest Qwen —
-// and the reason the spec wanted Qwen at all, being the strongest multilingual
-// line — is Qwen3.5-Flash at $0.065/M in, $0.26/M out, 1M context, with no
-// per-image surcharge. That is the default below.
-//
-// If Telugu accuracy disappoints, the next rung is `qwen/qwen3.6-flash`
-// ($0.188/M in) — newer generation, ~3x the price, which is still pennies a
-// month at Dad's volume. Change OPENROUTER_MODEL; no deploy needed.
+//   curl -s https://openrouter.ai/api/v1/models | grep -o '"id":"[^"]*"'
 
 import { PROMPT, JSON_SCHEMA, normalize } from "../schema.js";
 import { wlog } from "../log.js";
@@ -70,6 +65,10 @@ export async function read(imageBase64, mimeType, env, rid) {
         model,
         temperature: appConfig.ai.temperature,
         max_tokens: appConfig.ai.maxOutputTokens,
+        // Reasoning tokens are charged against max_tokens, so a thinking model
+        // can spend the whole budget deliberating and return an empty string.
+        // Measured doing exactly that — see config/app.config.ts.
+        reasoning: { enabled: appConfig.ai.openrouter.reasoning },
         messages: [
           {
             role: "user",
