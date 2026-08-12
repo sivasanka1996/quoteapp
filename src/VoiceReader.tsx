@@ -6,6 +6,7 @@ import {
   type VoiceLang,
 } from "./voiceParse";
 import { parseQty } from "./types";
+import { log } from "./log/logger";
 import "./VoiceReader.css";
 
 export type { VoiceItem } from "./voiceParse";
@@ -24,6 +25,41 @@ interface ISpeechRecognition extends EventTarget {
   onresult: ((e: SpeechRecognitionEvent) => void) | null;
   onerror: ((e: { error: string }) => void) | null;
   onend: (() => void) | null;
+  // The lifecycle events, declared because they are the only way to tell three
+  // very different failures apart: the microphone never opened, it opened but
+  // no sound arrived, or sound arrived and was not recognised as words.
+  onaudiostart: (() => void) | null;
+  onsoundstart: (() => void) | null;
+  onspeechstart: (() => void) | null;
+}
+
+/**
+ * What to tell Dad for each Web Speech error code.
+ *
+ * `network` matters more than it looks: Chrome does not recognise speech on the
+ * device, it uploads the audio to Google. No signal means no voice input, and
+ * "Voice error: network" does not tell anyone that.
+ */
+function messageForError(code: string, lang: VoiceLang): string {
+  switch (code) {
+    case "no-speech":
+      return "No speech detected — try again.";
+    case "not-allowed":
+    case "service-not-allowed":
+      return "Microphone permission denied. Please allow mic access.";
+    case "audio-capture":
+      return "No microphone found. Check one is connected and not in use by another app.";
+    case "network":
+      return "Voice input needs an internet connection — the browser sends the audio to Google to recognise it.";
+    case "language-not-supported":
+      return lang === "te-IN"
+        ? "This browser cannot recognise Telugu. Switch to English and try again."
+        : "This browser cannot recognise English (India). Switch language and try again.";
+    case "aborted":
+      return "Listening was interrupted before anything was said.";
+    default:
+      return `Voice error: ${code}`;
+  }
 }
 declare global {
   interface Window {
@@ -55,6 +91,11 @@ export function VoiceReaderPanel({ onAdd, onClose }: Props) {
   useEffect(() => {
     stageRef.current = stage;
   }, [stage]);
+
+  // Per-session facts, so `onend` can say WHY nothing came back rather than
+  // dropping silently to idle.
+  const heardSoundRef = useRef(false);
+  const gotSpeechRef = useRef(false);
 
   function pickLang(next: VoiceLang) {
     setLang(next);
@@ -88,6 +129,24 @@ export function VoiceReaderPanel({ onAdd, onClose }: Props) {
     setStage("listening");
     setError("");
     setAlternatives([]);
+    heardSoundRef.current = false;
+    gotSpeechRef.current = false;
+    const startedAt = Date.now();
+    log.info("voice", "listening started", { lang });
+
+    // Diagnostics, not decoration. Voice is the one feature no automated check
+    // in this repo can reach — it needs a human at a microphone — so when it
+    // fails for Dad in a shop, these three lines are the only evidence there
+    // will ever be about which half broke.
+    recognition.onaudiostart = () => log.debug("voice", "microphone opened", { lang });
+    recognition.onsoundstart = () => {
+      heardSoundRef.current = true;
+      log.debug("voice", "sound detected", { lang });
+    };
+    recognition.onspeechstart = () => {
+      gotSpeechRef.current = true;
+      log.debug("voice", "speech detected", { lang });
+    };
 
     recognition.onresult = (e) => {
       const result = e.results[0];
@@ -99,24 +158,57 @@ export function VoiceReaderPanel({ onAdd, onClose }: Props) {
       applyTranscript(heard[0] ?? "");
       setAlternatives(heard);
       setStage("confirming");
+      log.info("voice", "transcript received", {
+        lang,
+        alternatives: heard.length,
+        transcript: heard[0] ?? "",
+        ms: Date.now() - startedAt,
+      });
     };
 
     recognition.onerror = (e) => {
-      if (e.error === "no-speech") {
-        setError("No speech detected — try again.");
-      } else if (e.error === "not-allowed") {
-        setError("Microphone permission denied. Please allow mic access.");
-      } else {
-        setError(`Voice error: ${e.error}`);
-      }
+      setError(messageForError(e.error, lang));
       setStage("error");
+      log.warn("voice", "recognition error", {
+        lang,
+        error: e.error,
+        heardSound: heardSoundRef.current,
+        ms: Date.now() - startedAt,
+      });
     };
 
     recognition.onend = () => {
-      if (stageRef.current === "listening") setStage("idle");
+      log.info("voice", "recognition ended", {
+        lang,
+        stage: stageRef.current,
+        heardSound: heardSoundRef.current,
+        gotSpeech: gotSpeechRef.current,
+        ms: Date.now() - startedAt,
+      });
+
+      // Still listening here means recognition stopped without a result AND
+      // without an error — Chrome does this, and the panel used to drop
+      // silently back to the mic button, which reads as "it just gave up".
+      // Say which half failed instead: no sound at all is a microphone
+      // problem, sound without words is a recognition problem.
+      if (stageRef.current === "listening") {
+        setError(
+          heardSoundRef.current
+            ? "Heard something but could not make out any words. Try again, speaking a little closer to the microphone."
+            : "The microphone did not pick up any sound. Check it is not muted or in use by another app, then try again."
+        );
+        setStage("error");
+      }
     };
 
-    recognition.start();
+    try {
+      recognition.start();
+    } catch (e) {
+      // start() throws if a previous recognition is still running.
+      setError("Voice input is already running — wait a moment and try again.");
+      setStage("error");
+      log.error("voice", "could not start recognition", e, { lang });
+    }
   }
 
   function handleAdd() {
