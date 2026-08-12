@@ -162,15 +162,31 @@ detected", or the panel getting stuck on "Listening…".
 
 ---
 
-## 4. The generated PDF — automatable, not yet done
+## 4. The generated PDF — DONE 2026-08-12
 
-Every PI-2 check reads the **DOM** that `sharePdf` rasterises, never the file
-it produces. That is exactly how bug #8 hid: with all five columns on, the
-Amount column was clipped out of the shared PDF while the DOM looked perfect.
+**Status: done. 20 checks passing on the real file, and one defect fixed.**
+Full write-up in [`CLAUDE.md`](CLAUDE.md) under "The generated PDF". To re-run:
 
-**Siva provides:** nothing.
-**Agent does:** generate a real PDF headlessly and inspect the output file, at
-phone width, with every column enabled.
+```bash
+npm run build && npm run preview        # :4173, in another terminal
+npm install --no-save playwright-core   # not a dependency, on purpose
+npx vite-node scripts/pdf-check.ts
+```
+
+It drives Chrome at 390px, clicks the real Share button, catches the real
+download, and opens the file — extracting the embedded page images so they can
+be looked at rather than asserted about.
+
+- **Bug #8 does not reproduce.** With all five columns on at phone width, the
+  page image is 1520px — the full 760px document at scale 2. Nothing clipped,
+  even with an unbreakable part number and a ₹9,98,99,001 amount.
+- **A new defect was found and fixed:** a 20-item quote's page break fell
+  *through* item 12, its name on page 1 and the rest of the same row on page 2.
+  `sharePdf` now slices at row boundaries (`pageSlices`, 10 unit tests).
+
+**Still needs a phone:** headless Chrome resolves `navigator.share` without
+showing a share sheet, so the file is proved and the *sharing* is not. Tapping
+Share on Dad's actual phone is on the handover list.
 
 ---
 
@@ -188,12 +204,13 @@ together if a tidy-up is wanted.
 ## Priority order
 
 1. ~~**Real AI read**~~ — **DONE 2026-08-12**, two defects fixed (§1)
-2. **PDF file check** — agent, unblocked now
+2. ~~**PDF file check**~~ — **DONE 2026-08-12**, one defect fixed (§4)
 3. **Photos** — Siva, ~15 minutes, unblocks real-handwriting and multi-page
 4. **Voice script** — Siva, ~15 minutes at a mic, the only truly unautomatable one
 
-Now that §1 is closed, **§2 and §3 are the whole remaining queue and both are
-Siva's**. Nothing else in the plan is blocked on them.
+**Both agent items are closed. §2 and §3 are the whole remaining queue and both
+are Siva's** — about half an hour in total, and nothing else in the plan is
+waiting on them.
 
 Everything else in the plan is done. Production and auth are the colleague's,
 at handover.

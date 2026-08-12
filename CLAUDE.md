@@ -103,9 +103,10 @@ npm install        # REQUIRED FIRST — node_modules is not committed and is
 npm run dev        # http://localhost:5173 — talks to the REAL Firestore
 npm run dev:local  # http://localhost:5173 — talks to the LOCAL emulator instead
 npm run emulators  # start the emulator suite first, in another terminal
-npm test           # 229 unit tests (Vitest) — 38 image-reader worker, 31 engine,
+npm test           # 239 unit tests (Vitest) — 38 image-reader worker, 31 engine,
                    # 24 types, 22 logger, 19 openrouter, 17 numberWords,
                    # 5 schema prompt (the rate rule, pinned by its defect),
+                   # 10 sharePdf (page-break maths, filename),
                    # 16 voiceParse, 15 format, 14 readImage, 12 log export,
                    # 9 mergePages, 6 firestoreAck
 npm run lint       # eslint — clean, keep it that way (now enforced in CI)
@@ -269,6 +270,12 @@ src/
   firestoreAck.test.ts   — 6 tests
   useCompanySettings.ts  — company details in localStorage (incl. validity + terms)
   sharePdf.ts            — element → A4 PDF → Web Share API (lazy-loads jspdf)
+                           + pageSlices(): pure page-break maths. A multi-page
+                           quotation used to be cut into fixed bands, which
+                           guillotined an item row through the middle of its
+                           glyphs. It slices at row boundaries now, and always
+                           sums to the full height so no row can be dropped.
+  sharePdf.test.ts       — 10 tests (pageSlices, pdfFilename)
   readImage.ts           — swappable image reader (Gemini via CF Worker);
                            downscales to MAX_EDGE=1600 before upload, refuses
                            with an honest message when offline
@@ -1362,6 +1369,36 @@ applied**, because this file's standing rule is that changing that ceiling blind
 is a worse bet than leaving it, and with no key there is no way to verify. Left
 for whoever has a Gemini key; the evidence that it matters is in this table.
 
+### The generated PDF — DONE and VERIFIED 2026-08-12
+
+The other thing nothing had ever looked at. Every PI-2 check read the **DOM**
+that `sharePdf` rasterises, never the file — which is exactly how bug #8 hid.
+
+`scripts/pdf-check.ts` closes it: it drives the built app in Chrome at **390px**,
+seeds a quote, clicks the real Share button, catches the real download, and then
+opens the file — page count, page geometry, and the embedded JPEGs extracted and
+written out so they can be looked at. **20 checks, all passing.** It needs
+`npm install --no-save playwright-core`, deliberately not a dependency, and it
+drives the Chrome already on the machine rather than downloading one.
+
+| Item | How it was verified | Result |
+|---|---|---|
+| **Bug #8 does not reproduce** | All five columns on, 390px viewport: the extracted page image is **1520px** wide — exactly the 760px document at html2canvas's scale 2 — so nothing is cropped. Checked on the file, not the DOM. | **PASS** |
+| The table cannot spill out of the capture | The mechanism itself: `.cv-table` right edge (746.0) against `.cv-doc` right edge (774.0). Held even in the stress case below. | **PASS** |
+| The numbers survive rasterising | Read off the generated image: ₹17,835 at 60%+1.5% → ₹7,026.99 × 6 = **₹42,162**; per-line GST summing to **₹9,013**; grand total **₹59,085**. The engine's per-line rounding, seen in the actual customer document. | **PASS** |
+| Stress: unbreakable name, crore amounts, 20 rows | A part number with no spaces and a ₹9,98,99,001 amount — the widest a cell ever gets, since `formatMoney` groups Indian-style. Still 1520px, still not clipped, and the crore totals render (₹11,80,60,552). | **PASS** |
+| **Defect found — a page break guillotined an item row** | The 20-row quote broke at canvas y=2204, **through the middle of item 12**: its name on page 1, the rest of the same row on page 2, both halves sliced through the glyphs. `sharePdf` cut fixed page-sized bands with no regard for content. Fixed by `pageSlices()`, which prefers row boundaries; the break moved to 2107 and page 2 now opens on a whole row. | **FIXED** |
+| Nothing is lost between pages | The page images sum to the document height (3576px of image vs 3574px of document), so slicing cannot silently drop a row. Asserted on both scenarios. | **PASS** |
+| **The check can fail** | The mid-row check was run against the old code first: it failed on the 20-row quote and passed on the 6-row one. A check that cannot fail is worse than no check. | **PASS (red control)** |
+
+**What this still does not check: the Web Share arm.** Headless Chrome *has*
+`navigator.share`, and it **resolves** — silently, with no share sheet and no
+file anywhere. The first run looked like a hang: no download, no error, the
+button back to normal. The PDF had been built and handed to a share sheet that
+does not exist. The check therefore forces the download branch, which receives
+the identical blob — so this proves the *file*, and says nothing about the
+Android share sheet. That stays on the handover list, where it needs a phone.
+
 ### Deferred until Dad actually asks
 
 - Natural-language questions over quote history. If it happens the answer is
@@ -1384,9 +1421,12 @@ for whoever has a Gemini key; the evidence that it matters is in this table.
   an **empty item list** is the Gemini side. Read from the live site, not a file
   opened off disk — a `file://` page sends `Origin: null` and will be refused.
 - Test on his actual phone/browser
-- **Share a real PDF from a phone-width browser and open the file.** Bug #8:
-  with all five columns on, the Amount column can be clipped out of the shared
-  PDF. Every PI-2 check read the DOM, not the generated file.
+- ~~**Share a real PDF from a phone-width browser and open the file.**~~ **Done
+  2026-08-12** by `scripts/pdf-check.ts` — bug #8 does not reproduce, and a
+  separate page-break defect was found and fixed. What is left here is only the
+  half a machine cannot reach: **tap Share on the actual phone** and confirm the
+  Android share sheet opens and WhatsApp receives the file. Headless Chrome
+  resolves `navigator.share` without showing anything, so that arm is untested.
 - **Airplane-mode cold start.** Load the live site with signal, force-close it,
   turn on airplane mode, reopen. Customers and quotes must list. This is the
   one PI-1 claim no automated check could reach — it needs the service worker

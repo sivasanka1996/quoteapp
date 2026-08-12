@@ -25,6 +25,81 @@ const A4_W = 595.28;
 const A4_H = 841.89;
 const MARGIN = 24;
 
+/**
+ * Elements a page break may safely land after.
+ *
+ * Item rows first — they are the repeated content, so they are what a break
+ * realistically lands on — plus the totals rows, so a break cannot separate
+ * "Grand Total" from its figure.
+ */
+const BREAK_AFTER = ".cv-table tr, .cv-total-row";
+
+/**
+ * How tall each page of the rasterised document should be.
+ *
+ * Returns slice heights in canvas pixels, always summing to `totalHeight` so
+ * nothing can be dropped between pages.
+ *
+ * `breakpoints` are offsets from the top of the canvas where a cut is tidy —
+ * the bottom edge of each item row. The slicer takes the last one that still
+ * fits on the page rather than filling the page to the millimetre, because a
+ * break that lands mid-row cuts the text through the middle of the glyphs: the
+ * item name on one page, the rest of that same row on the next. That was
+ * measured on a real generated PDF (`scripts/pdf-check.ts`, 2026-08-12) before
+ * this existed.
+ *
+ * With no breakpoints it fills each page exactly as it always did, so a
+ * document with no table is unaffected.
+ */
+export function pageSlices(
+  totalHeight: number,
+  maxSliceHeight: number,
+  breakpoints: number[] = []
+): number[] {
+  if (totalHeight <= 0) return [];
+  // A non-positive page height has no sane answer and would loop forever.
+  // One tall page beats a hung share button.
+  if (maxSliceHeight <= 0) return [totalHeight];
+
+  const slices: number[] = [];
+  let y = 0;
+  while (y < totalHeight) {
+    const remaining = totalHeight - y;
+    if (remaining <= maxSliceHeight) {
+      slices.push(remaining);
+      break;
+    }
+    const limit = y + maxSliceHeight;
+    let cut = 0;
+    for (const b of breakpoints) {
+      if (b > y && b <= limit && b > cut) cut = b;
+    }
+    // No usable boundary means a single row taller than a page. Cut it.
+    const h = cut > y ? cut - y : maxSliceHeight;
+    slices.push(h);
+    y += h;
+  }
+  return slices;
+}
+
+/**
+ * The bottom edge of every breakable element, in CSS pixels from the top of the
+ * captured node.
+ *
+ * Never throws: a document that cannot be measured still shares, it just falls
+ * back to even bands.
+ */
+function breakOffsets(node: HTMLElement): number[] {
+  try {
+    const top = node.getBoundingClientRect().top;
+    return Array.from(node.querySelectorAll(BREAK_AFTER)).map(
+      (el) => el.getBoundingClientRect().bottom - top
+    );
+  } catch {
+    return [];
+  }
+}
+
 export async function shareQuotePdf(
   node: HTMLElement,
   { filename, title, text }: ShareOpts
@@ -56,12 +131,21 @@ async function buildAndShare(
     import("jspdf"),
   ]);
 
+  // Measured before rasterising, while the element is still laid out.
+  const cssBreaks = breakOffsets(node);
+
   const canvas = await html2canvas(node, {
     scale: 2,
     backgroundColor: "#ffffff",
     useCORS: true,
     logging: false,
   });
+
+  // html2canvas renders at `scale`, but derive the ratio from what it actually
+  // produced rather than assuming 2 — the offsets above are in CSS pixels and
+  // the slicer works in canvas pixels.
+  const pxRatio = node.offsetWidth > 0 ? canvas.width / node.offsetWidth : 1;
+  const canvasBreaks = cssBreaks.map((b) => Math.round(b * pxRatio));
 
   const pdf = new jsPDF({ unit: "pt", format: "a4" });
   const imgW = A4_W - MARGIN * 2;
@@ -80,12 +164,11 @@ async function buildAndShare(
       fullH
     );
   } else {
-    // Taller than one page — slice the canvas into page-sized bands
+    // Taller than one page — slice the canvas, preferring row boundaries
     const sliceH = Math.floor(usableH / scale);
     let y = 0;
     let page = 0;
-    while (y < canvas.height) {
-      const h = Math.min(sliceH, canvas.height - y);
+    for (const h of pageSlices(canvas.height, sliceH, canvasBreaks)) {
       const slice = document.createElement("canvas");
       slice.width = canvas.width;
       slice.height = h;
