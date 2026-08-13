@@ -430,6 +430,20 @@ Discount fields are plain numbers (e.g. `"64.7"`, `"2"`). The engine builds `"64
 - Cost/profit can never reach the customer view. This is enforced by the type
   system, not CSS: `CustomerView` takes `CustomerLine[]`, which has no cost
   field at all. Keep it that way.
+- **Voice recording is tap-on / tap-off, and `continuous` stays `true`.**
+  Siva's call, 2026-08-13, after using it. With `continuous = false` the speech
+  service's own endpointer decides when you have finished: it finalises at the
+  first pause it judges long enough, and that judgement moves with background
+  noise and how complete the sentence sounds. **The Web Speech API exposes no
+  threshold to tune** — there is no `speechTimeout` in the standard — so the
+  only alternatives were Google deciding or Dad deciding. Dad decides. He can
+  pause to find the next line on the slip without losing the recording, and end
+  it the instant he is done. A silence no longer counts as a failure either:
+  `no-speech` while still listening restarts the microphone (capped at 5)
+  instead of throwing the session away. **Do not "simplify" this back to
+  single-utterance mode** — it cut lines off mid-sentence, which is precisely
+  the complaint that led here. The rejected middle option was a fixed silence
+  timer of our own; it was turned down because it makes every short line wait.
 
 ---
 
@@ -555,6 +569,24 @@ costs a little storage and nothing else; delete it there when convenient.
       contract itself was sound: model id, `response_format` dialect, image part
       shape and base64 encoding were all correct first time. What was broken was
       subtler and worse. See the table below.
+- [x] **Voice input actually works at a microphone — 2026-08-13.** The first
+      time anyone spoke into it, short phrases vanished and long rambling ones
+      worked, which looked random. It was not: `recognition.start()` returns
+      instantly but `audiostart` did not fire for **3785ms**, and nothing is
+      recorded until it does. The panel said "Listening… Speak now" during that
+      whole dead window, so an order line — about two seconds — was over before
+      Chrome began recording. Three separate theories (network, permission,
+      `te-IN` support) were all wrong and were killed by a console trace of the
+      raw Web Speech events; **the fix came from instrumenting, not reasoning.**
+      Now: the mic is warmed with `getUserMedia` when the panel opens, a
+      `starting` stage refuses to invite speech until `audiostart` fires,
+      interim results show the words live, and a session that ends without a
+      final result salvages what was already recognised. `continuous` is **on**,
+      with the listening panel itself as the stop control — see the note under
+      KEY DECISIONS. `src/VoiceReader.tsx` had no logging at all before this
+      (PI-5 instrumented every path except the only one a machine cannot test);
+      it now records warmed / opened / sound / speech / transcript / ended with
+      timings, which is what `?debug=1` was built for.
 - [x] Full visual redesign — design tokens, all four screens, mobile-first
 - [x] Quote status (draft/sent/accepted/declined) — badges, filter, home stat tiles
 - [x] Business / Customer view toggle in the quote editor

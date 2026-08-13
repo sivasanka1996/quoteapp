@@ -114,6 +114,16 @@ export function VoiceReaderPanel({ onAdd, onClose }: Props) {
   const [interim, setInterim] = useState("");
   const warmStreamRef = useRef<MediaStream | null>(null);
 
+  /** The running session, so the Stop button can end it. */
+  const recognitionRef = useRef<ISpeechRecognition | null>(null);
+  /** True once Dad has tapped Stop — suppresses the keep-listening restart. */
+  const stoppingRef = useRef(false);
+  /** Everything finalised so far, across pauses and restarts. */
+  const finalTextRef = useRef("");
+  /** How many separate utterances make up `finalTextRef`. */
+  const segmentsRef = useRef(0);
+  const restartsRef = useRef(0);
+
   /**
    * Open the microphone as soon as the panel appears, before it is needed.
    *
@@ -160,6 +170,16 @@ export function VoiceReaderPanel({ onAdd, onClose }: Props) {
       cancelled = true;
       warmStreamRef.current?.getTracks().forEach((t) => t.stop());
       warmStreamRef.current = null;
+      // Closing the panel must release the microphone. Without this, a
+      // continuous session keeps the recording indicator lit after the sheet
+      // has gone, and the restart loop above would keep reopening it.
+      stoppingRef.current = true;
+      try {
+        recognitionRef.current?.stop();
+      } catch {
+        /* already stopped */
+      }
+      recognitionRef.current = null;
     };
   }, []);
 
@@ -185,10 +205,21 @@ export function VoiceReaderPanel({ onAdd, onClose }: Props) {
     }
 
     const recognition = new SR();
+    recognitionRef.current = recognition;
     // One model only — the Web Speech API has no mixed-language mode. en-IN
     // handles Indian-accented English and returns Latin script + ASCII digits.
     recognition.lang = lang;
-    recognition.continuous = false;
+    // ON, so the microphone belongs to Dad rather than to Google's endpointer.
+    //
+    // With this false, the speech service decides when you have finished — it
+    // finalises at the first pause it judges long enough, and that judgement
+    // shifts with background noise and how confident it is that the sentence is
+    // complete. The API exposes no threshold to tune. In practice a line got
+    // cut off the moment Dad drew breath, which is exactly when someone reading
+    // an order slip aloud pauses to find the next line.
+    //
+    // Continuous means it keeps listening across pauses and stops when told.
+    recognition.continuous = true;
     // On, so the words appear as they are spoken. Two reasons, both learned the
     // hard way: it is the only feedback that the mic is genuinely live, and a
     // session that ends without a FINAL result still leaves something to
@@ -203,6 +234,10 @@ export function VoiceReaderPanel({ onAdd, onClose }: Props) {
     heardSoundRef.current = false;
     gotSpeechRef.current = false;
     salvageRef.current = [];
+    stoppingRef.current = false;
+    finalTextRef.current = "";
+    segmentsRef.current = 0;
+    restartsRef.current = 0;
     const startedAt = Date.now();
     log.info("voice", "listening started", { lang });
 
@@ -225,27 +260,45 @@ export function VoiceReaderPanel({ onAdd, onClose }: Props) {
     };
 
     recognition.onresult = (e) => {
-      // With interim results on, the last entry is the newest state of the
-      // utterance — earlier ones are superseded drafts of the same words.
-      const result = e.results[e.results.length - 1] ?? e.results[0];
-      if (!result) return;
+      // In continuous mode `results` accumulates across the whole session, and
+      // `resultIndex` marks what is new since the last event. Anything before
+      // it is already banked in finalTextRef.
+      let pending = "";
+      let lastAlternatives: string[] = [];
 
-      const heard: string[] = [];
-      for (let i = 0; i < result.length; i++) {
-        const alt = result[i]?.transcript?.trim();
-        if (alt && !heard.includes(alt)) heard.push(alt);
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const result = e.results[i];
+        if (!result) continue;
+        const text = result[0]?.transcript?.trim() ?? "";
+        if (!text) continue;
+
+        if (result.isFinal) {
+          finalTextRef.current = `${finalTextRef.current} ${text}`.trim();
+          segmentsRef.current += 1;
+          const alts: string[] = [];
+          for (let j = 0; j < result.length; j++) {
+            const alt = result[j]?.transcript?.trim();
+            if (alt && !alts.includes(alt)) alts.push(alt);
+          }
+          lastAlternatives = alts;
+        } else {
+          pending = `${pending} ${text}`.trim();
+        }
       }
-      if (heard.length === 0) return;
 
-      // Kept whether final or not, so `onend` has something to fall back on.
-      salvageRef.current = heard;
-
-      if (!result.isFinal) {
-        setInterim(heard[0]);
-        return;
+      // Everything heard so far, banked plus in-flight, shown live.
+      const sofar = `${finalTextRef.current} ${pending}`.trim();
+      if (sofar) {
+        setInterim(sofar);
+        // Alternatives are only meaningful while the whole utterance is one
+        // segment. Once Dad has paused, they describe a fragment, so the
+        // combined text is the only honest single option.
+        salvageRef.current =
+          segmentsRef.current <= 1 && lastAlternatives.length > 0
+            ? lastAlternatives
+            : [sofar];
       }
-
-      finish(heard, "final result");
+      // Deliberately does NOT finish here. Dad decides when he is done.
     };
 
     /** Commit a transcript and move to the confirm screen. */
@@ -264,6 +317,13 @@ export function VoiceReaderPanel({ onAdd, onClose }: Props) {
     }
 
     recognition.onerror = (e) => {
+      // A silent stretch is not a failure any more — it is Dad thinking, or
+      // finding the next line on the slip. `onend` follows and puts the
+      // microphone straight back. Anything else is a real error.
+      if (e.error === "no-speech" && !stoppingRef.current) {
+        log.debug("voice", "no speech yet, still listening", { lang });
+        return;
+      }
       setError(messageForError(e.error, lang));
       setStage("error");
       log.warn("voice", "recognition error", {
@@ -278,27 +338,55 @@ export function VoiceReaderPanel({ onAdd, onClose }: Props) {
       log.info("voice", "recognition ended", {
         lang,
         stage: stageRef.current,
+        stopped: stoppingRef.current,
         heardSound: heardSoundRef.current,
         gotSpeech: gotSpeechRef.current,
+        chars: finalTextRef.current.length,
         ms: Date.now() - startedAt,
       });
 
-      // Still mid-session here means recognition stopped without a FINAL
-      // result and without an error — Chrome does this. Anything already
-      // recognised is used rather than thrown away; only a genuinely empty
-      // session becomes a message, and it names which half failed.
-      if (stageRef.current === "starting" || stageRef.current === "listening") {
+      if (stageRef.current !== "starting" && stageRef.current !== "listening") {
+        return;
+      }
+
+      // Dad tapped Stop, or Chrome ended by itself with words already banked.
+      if (stoppingRef.current || salvageRef.current.length > 0) {
         if (salvageRef.current.length > 0) {
-          finish(salvageRef.current, "salvaged on end, no final result");
+          finish(salvageRef.current, stoppingRef.current ? "stopped by user" : "ended with words banked");
           return;
         }
         setError(
           heardSoundRef.current
-            ? "Heard something but could not make out any words. Wait for “Listening” before you start speaking, then try again."
+            ? "Heard something but could not make out any words. Try again."
             : "The microphone did not pick up any sound. Check it is not muted or in use by another app, then try again."
         );
         setStage("error");
+        return;
       }
+
+      // Nothing said yet and Dad has not tapped Stop, so he is not finished.
+      // Chrome gives up on silence; put the microphone straight back rather
+      // than making him tap again. Capped, so a dead mic cannot spin forever.
+      if (restartsRef.current < 5) {
+        restartsRef.current += 1;
+        log.info("voice", "still waiting, restarting the microphone", {
+          lang,
+          restart: restartsRef.current,
+        });
+        try {
+          recognition.start();
+          return;
+        } catch (err) {
+          log.warn("voice", "could not restart", { reason: String(err) });
+        }
+      }
+
+      setError(
+        heardSoundRef.current
+          ? "Heard something but could not make out any words. Try again."
+          : "Did not hear anything. Tap the microphone and speak when it says Listening."
+      );
+      setStage("error");
     };
 
     try {
@@ -308,6 +396,23 @@ export function VoiceReaderPanel({ onAdd, onClose }: Props) {
       setError("Voice input is already running — wait a moment and try again.");
       setStage("error");
       log.error("voice", "could not start recognition", e, { lang });
+    }
+  }
+
+  /**
+   * Dad says when he is finished.
+   *
+   * `stop()` rather than `abort()`: stop finalises the audio already captured
+   * and delivers it, abort throws it away. The last word spoken before the tap
+   * must survive the tap.
+   */
+  function stopListening() {
+    stoppingRef.current = true;
+    log.info("voice", "stop tapped", { lang, chars: finalTextRef.current.length });
+    try {
+      recognitionRef.current?.stop();
+    } catch (e) {
+      log.warn("voice", "could not stop cleanly", { reason: String(e) });
     }
   }
 
@@ -362,15 +467,19 @@ export function VoiceReaderPanel({ onAdd, onClose }: Props) {
         )}
 
         {stage === "listening" && (
-          <div className="vr-listening">
+          <button
+            type="button"
+            className="vr-listening vr-stop-btn"
+            onClick={stopListening}
+          >
             <div className="vr-pulse">🎤</div>
-            <span>Listening…</span>
+            <span>Listening… tap to finish</span>
             {interim ? (
               <small className="vr-interim">“{interim}”</small>
             ) : (
-              <small>Speak now</small>
+              <small>Speak now — pause as long as you like</small>
             )}
-          </div>
+          </button>
         )}
 
         {stage === "confirming" && (

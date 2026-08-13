@@ -161,6 +161,25 @@
   color: #6b7280;
 }
 
+/*
+ * The listening state IS the stop control — Dad ends the recording by tapping
+ * the thing that is telling him it is recording. A separate Stop button would
+ * mean two targets on a phone where the whole panel is one thought.
+ */
+.vr-stop-btn {
+  width: 100%;
+  border: 2px solid #bfdbfe;
+  border-radius: 14px;
+  background: #eff6ff;
+  cursor: pointer;
+  font: inherit;
+  min-height: var(--tap, 48px);
+}
+
+.vr-stop-btn:active {
+  background: #dbeafe;
+}
+
 /* Live words as they are recognised — the only proof the mic is really on. */
 .vr-interim {
   color: #1d4ed8 !important;
