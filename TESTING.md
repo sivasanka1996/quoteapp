@@ -239,9 +239,11 @@ together if a tidy-up is wanted.
 3. ~~**Photos**~~ — **DONE 2026-08-12**, and they caught a defect the mocks missed (§2)
 4. **Voice script** — Siva, ~15 minutes at a mic, the only truly unautomatable one
 
-**Both agent items are closed. §2 and §3 are the whole remaining queue and both
-are Siva's** — about half an hour in total, and nothing else in the plan is
-waiting on them.
+**Only §3 is left, and it is fifteen minutes at a microphone.** Everything else
+in this file is closed. The voice *path* was fixed on 2026-08-13 (the panel
+invited speech 3.8s before the mic opened — see CLAUDE.md); what remains is
+running the phrase list through `parseTranscript` with a real voice, which no
+machine here can do.
 
-Everything else in the plan is done. Production and auth are the colleague's,
-at handover.
+Production and auth are the colleague's, at handover — see
+[`HUMAN-TASKS.md`](HUMAN-TASKS.md).

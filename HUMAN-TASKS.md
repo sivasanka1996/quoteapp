@@ -162,6 +162,18 @@ actually sends. Invented handwriting samples would show the model a pattern it
 will never see again — measurably worse than including no example at all. That
 is the entire reason this is blocked on a human instead of already done.
 
+**Partly served 2026-08-12, but NOT closed.** Siva supplied five handwritten
+slips and they did real work — read through the live pipeline they caught a
+defect the font-rendered mocks had missed, where the model divided the rate by
+the quantity (₹1650 became ₹165) and reported `confidence: "full"` while doing
+it. Handwriting, Telugu names and a three-page order all read correctly after
+the fix. See "Round two" in `CLAUDE.md`.
+
+What that does **not** close is this item, for the reason below: they were
+AI-generated images of handwriting, and they were Siva's slips, not Dad's.
+Few-shot examples must be Dad's own hand or they teach the model a pattern it
+will never see again.
+
 > **The same photos unblock the PI-7 provider comparison** (§4a below). Getting
 > them is now the single highest-value human task in this file: it is the only
 > thing standing between us and knowing which model reads Telugu best.
@@ -203,10 +215,18 @@ before adding the key, either add it or set `AI_PROVIDER = "gemini"`.
 Cloudflare dashboard and the very next request uses the old path. Same for
 `OPENROUTER_MODEL` — trying a different model needs no build.
 
-**A correction worth carrying:** the spec named `qwen/qwen3.7-flash`. **That
-model does not exist.** The catalogue was re-fetched on 2026-08-10 and it is not
-among the 207 models with vision *and* structured output — it would have failed
-on the first real read. Verify any model id before setting it:
+**~~A correction worth carrying: `qwen/qwen3.7-flash` does not exist.~~ THAT
+CORRECTION WAS ITSELF WRONG — disproved 2026-08-12 by a live call.** The
+catalogue was re-fetched (406 entries) and that id **is** there, takes images,
+costs **half** the model configured below, and read the mock slips correctly.
+The 2026-08-10 check recorded here did not establish what it claimed. It has
+**not** been switched to, on purpose: the model decision is locked to Dad's real
+handwriting, and it advertises `response_format` but not `structured_outputs`,
+so schema conformance may be advisory there rather than enforced.
+
+The advice below stands and is exactly why the error was catchable — verify any
+model id against the live catalogue before setting one, **and before writing a
+note saying one is missing**:
 
 ```bash
 curl -s https://openrouter.ai/api/v1/models | grep -o '"id":"[^"]*"'
@@ -236,10 +256,14 @@ None of this can be faked in a browser on a laptop.
       *This is the one PI-1 claim no automated check could reach* — it needs the
       service worker active, and the service worker never reaches `active` under
       Playwright. That is a known harness limitation, not a suspected bug.
-- [ ] **Share a real PDF from a phone and open the file.** Turn all five columns
-      on. Bug #8 was that the Amount column got clipped out of the *generated
-      file* while the DOM looked perfect — every PI-2 check read the DOM, not the
-      PDF. Only opening the actual file closes this.
+- [ ] **Tap Share on the phone and confirm WhatsApp receives the file.** The
+      *file itself* is no longer in doubt — `scripts/pdf-check.ts` generated a
+      real PDF at phone width with all five columns on and opened it: bug #8
+      does not reproduce, and a separate page-break defect was found and fixed
+      (2026-08-12, 20 checks). What a machine cannot reach is the **share
+      sheet**: headless Chrome resolves `navigator.share` silently, with no
+      sheet and no file, so that arm is untested. This is now about Android's
+      share flow, not about the PDF.
 - [ ] **Confirm the customer PDF hides cost and profit** before he sends one to a
       real customer.
 - [ ] Walk him through the one-time camera and microphone permission prompts.
