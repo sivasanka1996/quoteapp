@@ -152,6 +152,23 @@
   color: #6b7280;
 }
 
+/*
+ * Waiting for the microphone, which took 3785ms in Chrome when measured.
+ * Deliberately calmer than the listening state: this is a "not yet", and it
+ * must not look like an invitation to start talking.
+ */
+.vr-starting {
+  color: #6b7280;
+}
+
+/* Live words as they are recognised — the only proof the mic is really on. */
+.vr-interim {
+  color: #1d4ed8 !important;
+  font-style: italic;
+  max-width: 30ch;
+  text-align: center;
+}
+
 /* --- Confirming --- */
 
 .vr-confirm {

@@ -16,7 +16,19 @@ interface Props {
   onClose: () => void;
 }
 
-type Stage = "idle" | "listening" | "confirming" | "error";
+/**
+ * `starting` exists because the microphone is not instant.
+ *
+ * Measured in Chrome on 2026-08-12: `start()` returned immediately but
+ * `audiostart` did not fire for **3785ms**. The panel used to jump straight to
+ * "Listening… Speak now", so a short phrase — which is what an order line is —
+ * was finished and gone before Chrome was recording anything. The mic then
+ * opened, caught the tail of the room, and reported that it heard a sound but
+ * no words. Long rambling sentences worked, which is what made it look random.
+ *
+ * Nothing may invite Dad to speak until `audiostart` has actually fired.
+ */
+type Stage = "idle" | "starting" | "listening" | "confirming" | "error";
 
 // Declare browser SpeechRecognition types
 interface ISpeechRecognition extends EventTarget {
@@ -96,6 +108,10 @@ export function VoiceReaderPanel({ onAdd, onClose }: Props) {
   // dropping silently to idle.
   const heardSoundRef = useRef(false);
   const gotSpeechRef = useRef(false);
+  /** The best transcript so far, final or not — see `onend`. */
+  const salvageRef = useRef<string[]>([]);
+  /** Live words while speaking, so the mic is visibly working. */
+  const [interim, setInterim] = useState("");
 
   function pickLang(next: VoiceLang) {
     setLang(next);
@@ -123,14 +139,20 @@ export function VoiceReaderPanel({ onAdd, onClose }: Props) {
     // handles Indian-accented English and returns Latin script + ASCII digits.
     recognition.lang = lang;
     recognition.continuous = false;
-    recognition.interimResults = false;
+    // On, so the words appear as they are spoken. Two reasons, both learned the
+    // hard way: it is the only feedback that the mic is genuinely live, and a
+    // session that ends without a FINAL result still leaves something to
+    // salvage rather than throwing away words Chrome had already recognised.
+    recognition.interimResults = true;
     recognition.maxAlternatives = 3;
 
-    setStage("listening");
+    setStage("starting");
     setError("");
     setAlternatives([]);
+    setInterim("");
     heardSoundRef.current = false;
     gotSpeechRef.current = false;
+    salvageRef.current = [];
     const startedAt = Date.now();
     log.info("voice", "listening started", { lang });
 
@@ -138,7 +160,11 @@ export function VoiceReaderPanel({ onAdd, onClose }: Props) {
     // in this repo can reach — it needs a human at a microphone — so when it
     // fails for Dad in a shop, these three lines are the only evidence there
     // will ever be about which half broke.
-    recognition.onaudiostart = () => log.debug("voice", "microphone opened", { lang });
+    // THE moment that matters: not before this is anything being recorded.
+    recognition.onaudiostart = () => {
+      setStage("listening");
+      log.info("voice", "microphone opened", { lang, ms: Date.now() - startedAt });
+    };
     recognition.onsoundstart = () => {
       heardSoundRef.current = true;
       log.debug("voice", "sound detected", { lang });
@@ -149,22 +175,43 @@ export function VoiceReaderPanel({ onAdd, onClose }: Props) {
     };
 
     recognition.onresult = (e) => {
-      const result = e.results[0];
+      // With interim results on, the last entry is the newest state of the
+      // utterance — earlier ones are superseded drafts of the same words.
+      const result = e.results[e.results.length - 1] ?? e.results[0];
+      if (!result) return;
+
       const heard: string[] = [];
       for (let i = 0; i < result.length; i++) {
         const alt = result[i]?.transcript?.trim();
         if (alt && !heard.includes(alt)) heard.push(alt);
       }
+      if (heard.length === 0) return;
+
+      // Kept whether final or not, so `onend` has something to fall back on.
+      salvageRef.current = heard;
+
+      if (!result.isFinal) {
+        setInterim(heard[0]);
+        return;
+      }
+
+      finish(heard, "final result");
+    };
+
+    /** Commit a transcript and move to the confirm screen. */
+    function finish(heard: string[], why: string) {
       applyTranscript(heard[0] ?? "");
       setAlternatives(heard);
+      setInterim("");
       setStage("confirming");
       log.info("voice", "transcript received", {
         lang,
+        why,
         alternatives: heard.length,
         transcript: heard[0] ?? "",
         ms: Date.now() - startedAt,
       });
-    };
+    }
 
     recognition.onerror = (e) => {
       setError(messageForError(e.error, lang));
@@ -186,15 +233,18 @@ export function VoiceReaderPanel({ onAdd, onClose }: Props) {
         ms: Date.now() - startedAt,
       });
 
-      // Still listening here means recognition stopped without a result AND
-      // without an error — Chrome does this, and the panel used to drop
-      // silently back to the mic button, which reads as "it just gave up".
-      // Say which half failed instead: no sound at all is a microphone
-      // problem, sound without words is a recognition problem.
-      if (stageRef.current === "listening") {
+      // Still mid-session here means recognition stopped without a FINAL
+      // result and without an error — Chrome does this. Anything already
+      // recognised is used rather than thrown away; only a genuinely empty
+      // session becomes a message, and it names which half failed.
+      if (stageRef.current === "starting" || stageRef.current === "listening") {
+        if (salvageRef.current.length > 0) {
+          finish(salvageRef.current, "salvaged on end, no final result");
+          return;
+        }
         setError(
           heardSoundRef.current
-            ? "Heard something but could not make out any words. Try again, speaking a little closer to the microphone."
+            ? "Heard something but could not make out any words. Wait for “Listening” before you start speaking, then try again."
             : "The microphone did not pick up any sound. Check it is not muted or in use by another app, then try again."
         );
         setStage("error");
@@ -251,11 +301,25 @@ export function VoiceReaderPanel({ onAdd, onClose }: Props) {
           </div>
         )}
 
+        {/* Deliberately does NOT say "speak" — the mic is not open yet, and
+            anything said now is not being recorded. */}
+        {stage === "starting" && (
+          <div className="vr-listening vr-starting">
+            <div className="vr-pulse">⏳</div>
+            <span>Starting microphone…</span>
+            <small>Wait for “Listening”</small>
+          </div>
+        )}
+
         {stage === "listening" && (
           <div className="vr-listening">
             <div className="vr-pulse">🎤</div>
             <span>Listening…</span>
-            <small>Speak now</small>
+            {interim ? (
+              <small className="vr-interim">“{interim}”</small>
+            ) : (
+              <small>Speak now</small>
+            )}
           </div>
         )}
 
