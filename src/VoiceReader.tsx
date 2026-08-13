@@ -112,6 +112,56 @@ export function VoiceReaderPanel({ onAdd, onClose }: Props) {
   const salvageRef = useRef<string[]>([]);
   /** Live words while speaking, so the mic is visibly working. */
   const [interim, setInterim] = useState("");
+  const warmStreamRef = useRef<MediaStream | null>(null);
+
+  /**
+   * Open the microphone as soon as the panel appears, before it is needed.
+   *
+   * THE MEASUREMENT THIS EXISTS FOR: `recognition.start()` returned instantly
+   * but `audiostart` did not fire for **3785ms**, and nothing is recorded until
+   * it does. Most of that is the operating system bringing up a cold audio
+   * device — a cost paid once, not per recognition.
+   *
+   * So it is paid here instead, during the second or two Dad spends looking at
+   * the panel and deciding what to say, rather than after he has tapped and
+   * started talking. The stream is held (not stopped immediately) so the device
+   * stays up for a retry, and released the moment the panel closes.
+   *
+   * It also moves the permission prompt to panel-open, which is the better
+   * place for it: being asked before speaking beats being asked after.
+   *
+   * Best effort by design. If this fails the panel still works exactly as it
+   * did — `startListening` makes no assumption that it succeeded.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    const startedAt = Date.now();
+
+    navigator.mediaDevices
+      ?.getUserMedia({ audio: true })
+      .then((stream) => {
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        warmStreamRef.current = stream;
+        log.info("voice", "microphone warmed", { ms: Date.now() - startedAt });
+      })
+      .catch((e: unknown) => {
+        // Not fatal: recognition will ask for the mic itself and report its own
+        // error. Worth a line, because a denial here explains a later failure.
+        log.warn("voice", "could not warm the microphone", {
+          reason: e instanceof Error ? e.name : String(e),
+          ms: Date.now() - startedAt,
+        });
+      });
+
+    return () => {
+      cancelled = true;
+      warmStreamRef.current?.getTracks().forEach((t) => t.stop());
+      warmStreamRef.current = null;
+    };
+  }, []);
 
   function pickLang(next: VoiceLang) {
     setLang(next);
