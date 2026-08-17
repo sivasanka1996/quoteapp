@@ -1460,6 +1460,7 @@ Android share sheet. That stays on the handover list, where it needs a phone.
 ### PI-9 → PI-12 — planned 2026-08-17, NOT STARTED
 
 **Spec:** [`docs/superpowers/specs/2026-08-17-pi-9-to-12-design.md`](docs/superpowers/specs/2026-08-17-pi-9-to-12-design.md)
+**Plan:** [`docs/superpowers/plans/2026-08-17-pi-9-to-12-implementation.md`](docs/superpowers/plans/2026-08-17-pi-9-to-12-implementation.md)
 
 Four independent groups, in value-to-Dad order, chosen because **none of them
 needs a console login, a deploy, or a photograph** — everything that does is in
@@ -1497,6 +1498,16 @@ not by adding cleverness. See spec §1.
 **Deliberately excluded:** PDF upload for slips (Dad photographs paper; `pdf.js`
 is a real dependency for a speculative input), customer delete (still nothing
 asking for it — see KNOWN GAPS), and bug #9 (self-healing).
+
+**One deviation from the spec, needing Siva's word.** The spec's PI-9 sheet
+carries a customer picker, so a basket can be copied to a *different* customer.
+The plan ships the sheet **without it**: `CustomerScreen` has no customer list in
+scope, and reaching one means either a second `useCustomers` subscription on a
+screen that does not need it, or threading the list down from `AppRouter`.
+`duplicateQuote` already takes `customerId`/`customerName` as arguments, so the
+picker is purely additive later. As planned, **copy works within one customer
+only** — which is the smaller half of the value, and worth confirming rather
+than guessing at.
 
 ### Deferred until Dad actually asks
 
