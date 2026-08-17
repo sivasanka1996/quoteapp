@@ -1457,6 +1457,47 @@ does not exist. The check therefore forces the download branch, which receives
 the identical blob — so this proves the *file*, and says nothing about the
 Android share sheet. That stays on the handover list, where it needs a phone.
 
+### PI-9 → PI-12 — planned 2026-08-17, NOT STARTED
+
+**Spec:** [`docs/superpowers/specs/2026-08-17-pi-9-to-12-design.md`](docs/superpowers/specs/2026-08-17-pi-9-to-12-design.md)
+
+Four independent groups, in value-to-Dad order, chosen because **none of them
+needs a console login, a deploy, or a photograph** — everything that does is in
+[`HUMAN-TASKS.md`](HUMAN-TASKS.md) and stays there. Each task is sized to one
+session: one coherent change, its tests, one commit.
+
+| PI | What | Tasks | Status |
+|---|---|---|---|
+| **PI-9 Duplicate a quote** | Copy a quote to a new one, same or different customer. Lines copied with fresh ids, status forced to `draft`, new `createdAt` | 2 | **NOT STARTED** |
+| **PI-10 Voice undo + edit** | One-step undo after a voice/image import; `ADD` / `SET` intent so voice can change an existing line, not only append | 3 | **NOT STARTED** |
+| **PI-11 Finish the image path** | Reorder pages with ▲▼ before reading; confirm before a 6+ page sequential read | 2 | **NOT STARTED** |
+| **PI-12 Browser checks into the repo** | jsdom project alongside the node one; component tests for ImageReader, VoiceReader, QuoteEditor, CustomerScreen | 4 | **NOT STARTED** |
+
+**PI-12 is the one to not skip, and here is why.** `CLAUDE.md` records 88
+browser checks across PI-8 (18), ImageReader (23), VoiceReader (26) and customer
+editing (21). **Not one of those harnesses was committed** — every table says
+"the harness is not in the repo". So the checks are real history and completely
+unrepeatable, and `ImageReader.tsx` — multi-page state, sequential reads,
+partial failure, retry preserving hand edits — has **zero automated coverage**.
+All 241 existing tests are pure functions, because `vite.config.ts` sets
+`environment: 'node'` globally. PI-12 adds a second Vitest *project* rather than
+switching the suite; acceptance is that all 241 still pass unchanged.
+
+**Recommended order:** 12.1 → 9.1 → 9.2 → 11.1 → 11.2 → 10.1 → 10.2 → 10.3 →
+12.2 → 12.3 → 12.4. Only one dependency is real — 12.1 (the jsdom project)
+should land before the new UI work so it can be tested as written.
+
+**Duplicating a quote does not breach "no price memory".** That rule forbids the
+*app inferring* prices — a catalog, an index, suggestions. Duplication is Dad
+picking a specific document and copying it; the app learns nothing and stores no
+price history. The genuine hazard is stale prices carried forward silently, and
+the design answers it by making the copy visibly a draft named after its source,
+not by adding cleverness. See spec §1.
+
+**Deliberately excluded:** PDF upload for slips (Dad photographs paper; `pdf.js`
+is a real dependency for a speculative input), customer delete (still nothing
+asking for it — see KNOWN GAPS), and bug #9 (self-healing).
+
 ### Deferred until Dad actually asks
 
 - Natural-language questions over quote history. If it happens the answer is
