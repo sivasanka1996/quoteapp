@@ -105,6 +105,15 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
   const [showVoiceReader, setShowVoiceReader] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  /**
+   * The lines as they were immediately before the last voice or image import.
+   *
+   * Deliberately ONE step, not a stack. The failure being solved is "that
+   * import was wrong, take it back", which happens at once and once. A stack
+   * means deciding what else belongs in it — blanket discounts? line edits?
+   * deletes? — which is a far larger design for a smaller benefit.
+   */
+  const [lastImport, setLastImport] = useState<{ lines: UILine[]; label: string } | null>(null);
 
   const { settings: company } = useCompanySettings();
   const { saveQuote } = useQuotes(customer.id);
@@ -162,6 +171,7 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
       hasRate: voiceItem.rate != null,
       nameLength: voiceItem.name.length,
     });
+    setLastImport({ lines, label: "1 item from voice" });
     setLines((prev) => [...prev, {
       ...blankLine(),
       name: voiceItem.name,
@@ -184,7 +194,19 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
       sellMode: "direct" as const,
       sellRate: it.rate != null ? String(it.rate) : "",
     }));
+    setLastImport({
+      lines,
+      label: `${readItems.length} item${readItems.length !== 1 ? "s" : ""} from image`,
+    });
     setLines((prev) => [...prev, ...newLines]);
+    markDirty();
+  }
+
+  function undoLastImport() {
+    if (!lastImport) return;
+    log.info("ui", "import undone", { label: lastImport.label });
+    setLines(lastImport.lines);
+    setLastImport(null);
     markDirty();
   }
 
@@ -206,6 +228,7 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
       setQueued(res.queued);
       setDirty(false);
       setSavedAt(Date.now());
+      setLastImport(null);
       return true;
     } catch (err) {
       // Without this the button sat on "Saving…" forever and the quote was lost.
@@ -330,6 +353,13 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
               {selected.size > 0 && ` · ${selected.size} selected`}
             </span>
           </div>
+
+          {lastImport && (
+            <div className="qe-undo">
+              <span>Added {lastImport.label}.</span>
+              <button className="qe-undo-btn" onClick={undoLastImport}>Undo</button>
+            </div>
+          )}
 
           {lines.length === 0 ? (
             <div className="qe-empty">

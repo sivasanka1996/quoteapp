@@ -1068,3 +1068,30 @@
     display: none;
   }
 }
+
+.qe-undo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  margin-bottom: var(--s-3);
+  background: var(--green-50);
+  border: 1px solid var(--green-100);
+  border-radius: var(--r-md);
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+}
+.qe-undo-btn {
+  min-height: var(--tap);
+  padding: 0 var(--s-4);
+  flex: 0 0 auto;
+  background: transparent;
+  border: 1px solid var(--green-600);
+  border-radius: var(--r-md);
+  color: var(--green-700);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.qe-undo-btn:focus-visible { outline: 2px solid var(--green-600); outline-offset: 2px; }
