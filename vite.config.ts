@@ -37,7 +37,30 @@ export default defineConfig({
     }),
   ],
   test: {
-    globals: true,
-    environment: 'node',
+    // Two projects, not one environment switched over. The node suite is 241
+    // tests of pure functions plus a Cloudflare Worker that is a
+    // `fetch(Request) => Response` handler — jsdom would buy those nothing and
+    // risks changing what they exercise. The separate `.dom.test.tsx` glob
+    // keeps the boundary explicit, so nobody later writes a "pure" test that
+    // silently depends on a DOM being present.
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'unit',
+          environment: 'node',
+          include: ['**/*.test.{js,ts}'],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'dom',
+          environment: 'jsdom',
+          include: ['src/**/*.dom.test.tsx'],
+          setupFiles: ['./src/test-setup.ts'],
+        },
+      },
+    ],
   },
 })
