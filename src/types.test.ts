@@ -5,6 +5,7 @@ import {
   hasNoCost,
   parseQty,
   customerPatch,
+  duplicateQuote,
   type Customer,
   type QuoteDoc,
   type UILine,
@@ -174,5 +175,87 @@ describe("customerPatch", () => {
     expect(customerPatch(legacy, dad.name, "9000011111", dad.address)).toEqual({
       phone: "9000011111",
     });
+  });
+});
+
+describe("duplicateQuote", () => {
+  function line(id: number, name: string): UILine {
+    return {
+      id, name, qty: "2",
+      costMode: "discount", costList: "1000", costDisc1: "10", costDisc2: "", costRate: "",
+      sellMode: "direct", sellList: "", sellDisc1: "", sellDisc2: "", sellRate: "950",
+      gstPct: "18",
+    };
+  }
+
+  function source(over: Partial<QuoteDoc> = {}): QuoteDoc {
+    return {
+      id: "q1",
+      customerId: "c1",
+      customerName: "Ravi Electricals",
+      name: "Shop order",
+      lines: [line(4, "Wire 2.5sq"), line(9, "MCB 32A")],
+      totalSale: 3800,
+      status: "accepted",
+      createdAt: 1_700_000_000_000,
+      updatedAt: 1_700_000_100_000,
+      ...over,
+    };
+  }
+
+  const opts = { customerId: "c1", customerName: "Ravi Electricals", now: 1_800_000_000_000 };
+
+  it("copies every line", () => {
+    const d = duplicateQuote(source(), opts);
+    expect(d.lines).toHaveLength(2);
+    expect(d.lines.map((l) => l.name)).toEqual(["Wire 2.5sq", "MCB 32A"]);
+  });
+
+  it("re-mints line ids from 1 so they cannot collide with the source", () => {
+    const d = duplicateQuote(source(), opts);
+    expect(d.lines.map((l) => l.id)).toEqual([1, 2]);
+  });
+
+  it("deep-copies, so editing the copy never touches the original", () => {
+    const src = source();
+    const d = duplicateQuote(src, opts);
+    d.lines[0].sellRate = "1";
+    expect(src.lines[0].sellRate).toBe("950");
+  });
+
+  it("forces the copy to draft, whatever the source was", () => {
+    expect(duplicateQuote(source({ status: "accepted" }), opts).status).toBe("draft");
+    expect(duplicateQuote(source({ status: "sent" }), opts).status).toBe("draft");
+  });
+
+  it("marks the name as a copy", () => {
+    expect(duplicateQuote(source({ name: "Shop order" }), opts).name).toBe("Shop order (copy)");
+  });
+
+  it("names an unnamed quote's copy without leaving a stray bracket", () => {
+    expect(duplicateQuote(source({ name: "" }), opts).name).toBe("Copy of Untitled");
+    expect(duplicateQuote(source({ name: "   " }), opts).name).toBe("Copy of Untitled");
+  });
+
+  it("treats the legacy 'Untitled' placeholder as no name", () => {
+    // Pre-PI-2 quotes carry the literal word; it is not something Dad typed.
+    expect(duplicateQuote(source({ name: "Untitled" }), opts).name).toBe("Copy of Untitled");
+  });
+
+  it("is a new document, not a revision", () => {
+    const d = duplicateQuote(source(), opts);
+    expect(d.createdAt).toBe(1_800_000_000_000);
+  });
+
+  it("can be aimed at a different customer", () => {
+    const d = duplicateQuote(source(), {
+      customerId: "c2", customerName: "Kumar Traders", now: 1_800_000_000_000,
+    });
+    expect(d.customerId).toBe("c2");
+    expect(d.customerName).toBe("Kumar Traders");
+  });
+
+  it("survives a quote with no lines", () => {
+    expect(duplicateQuote(source({ lines: [] }), opts).lines).toEqual([]);
   });
 });

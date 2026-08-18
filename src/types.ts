@@ -137,3 +137,63 @@ export function customerPatch(
   }
   return Object.keys(patch).length > 0 ? patch : null;
 }
+
+/** Where a duplicate is going, and when it was made. */
+export interface DuplicateOpts {
+  customerId: string;
+  customerName: string;
+  /** Injected rather than read from the clock, so the result is testable. */
+  now: number;
+}
+
+/** Everything `saveQuote` needs for the new quote. */
+export interface DuplicateResult {
+  customerId: string;
+  customerName: string;
+  name: string;
+  lines: UILine[];
+  status: QuoteStatus;
+  createdAt: number;
+}
+
+/**
+ * A quote copied to a new one, for the same customer or a different one.
+ *
+ * This does NOT breach the locked "no price memory" rule. That rule forbids the
+ * *app inferring* prices — a catalog, an index, suggestions. This copies a
+ * document Dad picked. The app learns nothing and stores no price history.
+ *
+ * The real hazard is stale prices carried forward silently, and it is answered
+ * by making the copy obvious rather than by adding cleverness: the name says it
+ * is a copy, and the status is forced back to draft so a copied *accepted*
+ * quote can never read as a second accepted quote.
+ *
+ * Returns arguments rather than writing anything. The Firestore write stays on
+ * `saveQuote`, which already races the server ack — a second write site would
+ * be a second chance to hang Dad's button offline (see firestoreAck.ts).
+ *
+ * `totalSale` is deliberately absent: it is denormalized, the stored value can
+ * be stale on pre-PI-2 quotes with fractional quantities (bug #9), and copying
+ * it forward would carry that staleness into a brand new document. The caller
+ * recomputes it from `lines`.
+ */
+export function duplicateQuote(
+  source: QuoteDoc,
+  opts: DuplicateOpts
+): DuplicateResult {
+  const base = source.name?.trim() ?? "";
+  // "Untitled" was an internal storage placeholder before PI-2 promoted the
+  // quote name to a Subject line — see QuoteEditor. It is not a real name.
+  const real = base === "Untitled" ? "" : base;
+
+  return {
+    customerId: opts.customerId,
+    customerName: opts.customerName,
+    name: real ? `${real} (copy)` : "Copy of Untitled",
+    // Fresh ids from 1, and a fresh object per line so editing the copy cannot
+    // reach back into the quote it came from.
+    lines: (source.lines ?? []).map((l, i) => ({ ...l, id: i + 1 })),
+    status: "draft",
+    createdAt: opts.now,
+  };
+}

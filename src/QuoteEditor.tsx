@@ -1,11 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  calcQuote,
-  discountsFromPercents,
-  type LineInput,
-  type LineResult,
-  type PriceMode,
-} from "./calc/engine";
+import { calcQuote, type LineResult } from "./calc/engine";
+import { toLineInput } from "./calc/lineInput";
 import { formatINR, formatPct } from "./format";
 import { CustomerView, type CustomerLine } from "./CustomerView";
 import { useCompanySettings } from "./useCompanySettings";
@@ -30,30 +25,6 @@ function blankLine(): UILine {
     costMode: "discount", costList: "", costDisc1: "", costDisc2: "", costRate: "",
     sellMode: "direct", sellList: "", sellDisc1: "", sellDisc2: "", sellRate: "",
     gstPct: "18",
-  };
-}
-
-function toPriceMode(
-  mode: "discount" | "direct", list: string,
-  disc1: string, disc2: string, rate: string
-): PriceMode {
-  if (mode === "direct") return { kind: "direct", rate: parseFloat(rate) || 0 };
-  // Numbers straight through. This used to format the two fields into
-  // "64.7% + 2%" so the engine could split them apart again — see the
-  // PriceMode doc comment in calc/engine.ts.
-  return {
-    kind: "discount",
-    listPrice: parseFloat(list) || 0,
-    discounts: discountsFromPercents(disc1, disc2),
-  };
-}
-
-function toLineInput(l: UILine): LineInput {
-  return {
-    name: l.name, qty: parseQty(l.qty),
-    cost: toPriceMode(l.costMode, l.costList, l.costDisc1, l.costDisc2, l.costRate),
-    sell: toPriceMode(l.sellMode, l.sellList, l.sellDisc1, l.sellDisc2, l.sellRate),
-    gstPct: parseFloat(l.gstPct) || 0,
   };
 }
 
