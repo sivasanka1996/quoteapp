@@ -510,3 +510,27 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* Copy control on a quote row. `.cs-row-main` fills the row, so this sits
+   after it as a fixed-width sibling. */
+.cs-row-copy {
+  min-width: var(--tap);
+  min-height: var(--tap);
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  font-size: var(--fs-lg);
+  color: var(--ink-3);
+  background: transparent;
+  border: none;
+  border-radius: var(--r-md);
+  cursor: pointer;
+}
+.cs-row-copy:hover { background: var(--surface-2); color: var(--ink); }
+.cs-row-copy:focus-visible { outline: 2px solid var(--green-600); outline-offset: -2px; }
+
+.cs-copy-error {
+  margin: var(--s-2) 0 0;
+  font-size: var(--fs-sm);
+  color: var(--loss);
+}

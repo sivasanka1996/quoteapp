@@ -7,6 +7,7 @@ import {
   STATUS_LABEL,
   quoteStatus,
   customerPatch,
+  duplicateQuote,
 } from "./types";
 import { updateCustomerDoc } from "./useCustomers";
 import { db } from "./firebase";
@@ -17,6 +18,8 @@ import { ImageReaderPanel } from "./ImageReader";
 import { VoiceReaderPanel } from "./VoiceReader";
 import { type ReadItem } from "./readImage";
 import { log } from "./log/logger";
+import { calcQuote } from "./calc/engine";
+import { toLineInput } from "./calc/lineInput";
 import "./CustomerScreen.css";
 
 interface Props {
@@ -45,7 +48,7 @@ export function CustomerScreen({
   onOpenQuote,
   onCustomerChange,
 }: Props) {
-  const { quotes, loading, deleteQuote } = useQuotes(customer.id);
+  const { quotes, loading, deleteQuote, saveQuote } = useQuotes(customer.id);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [showImageReader, setShowImageReader] = useState(false);
   const [showVoiceReader, setShowVoiceReader] = useState(false);
@@ -100,6 +103,69 @@ export function CustomerScreen({
       onCustomerChange(before);
       setEditError(err instanceof Error ? err.message : String(err));
     });
+  }
+
+  // The quote being copied, or null when the sheet is shut.
+  const [copying, setCopying] = useState<QuoteDoc | null>(null);
+  const [copyName, setCopyName] = useState("");
+  const [copyBusy, setCopyBusy] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
+
+  function openCopy(q: QuoteDoc) {
+    // Prefill from the pure helper so the sheet shows exactly the name that
+    // will be saved if Dad changes nothing.
+    setCopyName(duplicateQuote(q, {
+      customerId: customer.id, customerName: customer.name, now: Date.now(),
+    }).name);
+    setCopyError(null);
+    setCopying(q);
+  }
+
+  async function confirmCopy() {
+    if (!copying) return;
+    setCopyBusy(true);
+    setCopyError(null);
+    try {
+      const d = duplicateQuote(copying, {
+        customerId: customer.id,
+        customerName: customer.name,
+        now: Date.now(),
+      });
+      // Recomputed, never copied — the stored totalSale can be stale on
+      // pre-PI-2 quotes with fractional quantities (bug #9).
+      const { totals } = calcQuote(d.lines.map(toLineInput));
+      const res = await saveQuote(
+        d.customerName,
+        copyName.trim() || d.name,
+        d.lines,
+        totals.totalSale,
+        d.status,
+        undefined,
+        d.createdAt
+      );
+      log.info("ui", "quote duplicated", {
+        from: copying.id, to: res.id, queued: res.queued, lineCount: d.lines.length,
+      });
+      setCopying(null);
+      // Land him in the editor, ready to change prices — which is the whole
+      // reason he copied it.
+      onOpenQuote({
+        id: res.id,
+        customerId: d.customerId,
+        customerName: d.customerName,
+        name: copyName.trim() || d.name,
+        lines: d.lines,
+        totalSale: totals.totalSale,
+        status: d.status,
+        createdAt: d.createdAt,
+        updatedAt: d.createdAt,
+      });
+    } catch (e) {
+      log.error("ui", "quote duplicate failed", e, { from: copying.id });
+      setCopyError("Could not copy this quote. Please try again.");
+    } finally {
+      setCopyBusy(false);
+    }
   }
 
   const totalValue = useMemo(
@@ -227,6 +293,14 @@ export function CustomerScreen({
                 </span>
               </button>
 
+              <button
+                className="cs-row-copy"
+                aria-label={`Copy quote ${q.name?.trim() || "Untitled"}`}
+                onClick={() => openCopy(q)}
+              >
+                ⧉
+              </button>
+
               {deleteConfirm === q.id ? (
                 <div className="cs-confirm">
                   <span>Delete this quote?</span>
@@ -341,6 +415,63 @@ export function CustomerScreen({
                 disabled={!editName.trim()}
               >
                 Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {copying && (
+        <div
+          className="cs-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !copyBusy) setCopying(null);
+          }}
+        >
+          <div className="cs-sheet">
+            <div className="cs-sheet-header">
+              <h2>Copy Quote</h2>
+              <button
+                className="cs-sheet-close"
+                onClick={() => setCopying(null)}
+                aria-label="Close"
+                disabled={copyBusy}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="cs-sheet-body">
+              <label>
+                <span>Name *</span>
+                <input
+                  value={copyName}
+                  placeholder="Quote name"
+                  onChange={(e) => setCopyName(e.target.value)}
+                  autoFocus
+                />
+              </label>
+              <p className="cs-sheet-note">
+                {copying.lines?.length ?? 0} item
+                {(copying.lines?.length ?? 0) !== 1 ? "s" : ""} will be copied as a
+                new draft. Check the prices — they are as they were when this
+                quote was made.
+              </p>
+              {copyError && <p className="cs-copy-error">{copyError}</p>}
+            </div>
+            <div className="cs-sheet-footer">
+              <button
+                className="cs-btn-cancel"
+                onClick={() => setCopying(null)}
+                disabled={copyBusy}
+              >
+                Cancel
+              </button>
+              <button
+                className="cs-btn-save"
+                onClick={confirmCopy}
+                disabled={copyBusy || !copyName.trim()}
+              >
+                {copyBusy ? "Copying…" : "Copy Quote"}
               </button>
             </div>
           </div>
