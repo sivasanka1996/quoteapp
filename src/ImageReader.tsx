@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { readImageItems, type ReadItem } from "./readImage";
 import { mergePages, type PageResult } from "./parse/mergePages";
+import { movePage } from "./parse/movePage";
 import { parseQty } from "./types";
 import { log } from "./log/logger";
 import "./ImageReader.css";
@@ -145,6 +146,22 @@ export function ImageReaderPanel({ onAdd, onClose }: Props) {
       return prev.filter((p) => p.id !== id);
     });
     resetRead();
+  }
+
+  /**
+   * Reordering is offered only before the read starts. Reordering *results* is
+   * a different and much larger problem, and merged rows already carry the page
+   * they came from.
+   */
+  function reorderPage(from: number, to: number) {
+    setPages((prev) => {
+      const next = movePage(prev, from, to);
+      if (next !== prev) {
+        log.debug("image", "pages reordered", { from, to, count: prev.length });
+        resetRead();
+      }
+      return next;
+    });
   }
 
   /** One page. Never throws — a failure is a `PageResult` the merge understands. */
@@ -330,6 +347,26 @@ export function ImageReaderPanel({ onAdd, onClose }: Props) {
                 <div className="ir-page" key={p.id}>
                   <img className="ir-page-img" src={p.url} alt={`Page ${i + 1}`} />
                   {multi && <span className="ir-page-num">p{i + 1}</span>}
+                  {multi && stage === "idle" && (
+                    <div className="ir-page-move">
+                      <button
+                        className="ir-page-up"
+                        aria-label={`Move page ${i + 1} earlier`}
+                        disabled={i === 0}
+                        onClick={() => reorderPage(i, i - 1)}
+                      >
+                        ▲
+                      </button>
+                      <button
+                        className="ir-page-down"
+                        aria-label={`Move page ${i + 1} later`}
+                        disabled={i === pages.length - 1}
+                        onClick={() => reorderPage(i, i + 1)}
+                      >
+                        ▼
+                      </button>
+                    </div>
+                  )}
                   <button
                     className="ir-page-remove"
                     aria-label={`Remove page ${i + 1}`}

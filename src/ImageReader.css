@@ -493,3 +493,28 @@
   font-weight: 600;
   cursor: pointer;
 }
+
+/* ▲▼ rather than drag: dragging on a phone competes with page scroll, needs a
+   long-press to disambiguate, and is hard to hit at 48px. */
+.ir-page-move {
+  position: absolute;
+  left: var(--s-1);
+  bottom: var(--s-1);
+  display: flex;
+  gap: var(--s-1);
+}
+.ir-page-move button {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  font-size: var(--fs-xs);
+  line-height: 1;
+  color: var(--surface);
+  background: rgba(22, 32, 28, .62);
+  border: none;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.ir-page-move button:disabled { opacity: .3; cursor: default; }
+.ir-page-move button:focus-visible { outline: 2px solid var(--surface); outline-offset: 1px; }
