@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseTranscript } from "./voiceParse";
+import { parseIntent, parseTranscript } from "./voiceParse";
 
 describe("parseTranscript — English (en-IN)", () => {
   it("pulls leading qty and trailing rate keyword", () => {
@@ -127,5 +127,73 @@ describe("parseTranscript — Telugu (te-IN)", () => {
       qty: 1,
       rate: null,
     });
+  });
+});
+
+describe("parseIntent", () => {
+  it("treats an ordinary line as an add", () => {
+    const r = parseIntent("6 wire 1.5sq rate 1650");
+    expect(r.kind).toBe("add");
+    if (r.kind !== "add") throw new Error("unreachable");
+    expect(r.item).toEqual({ name: "wire 1.5sq", qty: 6, rate: 1650 });
+  });
+
+  it("reads a rate change", () => {
+    const r = parseIntent("change wire rate to 1800");
+    expect(r).toEqual({ kind: "set", target: "wire", field: "rate", value: 1800 });
+  });
+
+  it("reads a quantity change", () => {
+    const r = parseIntent("change wire quantity to 5");
+    expect(r).toEqual({ kind: "set", target: "wire", field: "qty", value: 5 });
+  });
+
+  it("accepts the other change words", () => {
+    expect(parseIntent("set MCB rate to 450").kind).toBe("set");
+    expect(parseIntent("update socket rate 120").kind).toBe("set");
+  });
+
+  it("keeps a multi-word target intact", () => {
+    const r = parseIntent("change copper wire 2.5sq rate to 1800");
+    expect(r).toEqual({ kind: "set", target: "copper wire 2.5sq", field: "rate", value: 1800 });
+  });
+
+  it("reads a Telugu change word", () => {
+    const r = parseIntent("మార్చు wire రేటు 1800");
+    expect(r.kind).toBe("set");
+    if (r.kind !== "set") throw new Error("unreachable");
+    expect(r.field).toBe("rate");
+    expect(r.value).toBe(1800);
+  });
+
+  // --- The gate. Anything uncertain must fall back to ADD -----------------
+  //
+  // A wrongly-detected edit silently changes a price Dad already checked. A
+  // wrongly-detected add leaves a visible extra row he can delete. The costs
+  // are not symmetric, so the default is always ADD.
+
+  it("falls back to add when the change word is not at the front", () => {
+    expect(parseIntent("wire change rate 1800").kind).toBe("add");
+  });
+
+  it("falls back to add when there is no field keyword", () => {
+    expect(parseIntent("change wire to 1800").kind).toBe("add");
+  });
+
+  it("falls back to add when there is no number", () => {
+    expect(parseIntent("change wire rate").kind).toBe("add");
+  });
+
+  it("falls back to add when nothing names a target", () => {
+    expect(parseIntent("change rate to 1800").kind).toBe("add");
+  });
+
+  it("never treats an item code as a value to set", () => {
+    expect(parseIntent("change wire code to 4402").kind).toBe("add");
+  });
+
+  it("survives empty input", () => {
+    expect(parseIntent("").kind).toBe("add");
+    expect(parseIntent("   ").kind).toBe("add");
   });
 });

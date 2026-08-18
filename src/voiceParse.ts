@@ -52,6 +52,23 @@ const CODE_WORDS = new Set([
   "part", "ref", "reference", "sku", "కోడ్",
 ]);
 
+// Words that mean "I am changing a line that already exists", not "add one".
+// Must be the FIRST word — see parseIntent.
+const CHANGE_WORDS = new Set([
+  "change", "set", "update", "make", "correct", "edit",
+  "మార్చు", "మార్చండి",
+]);
+
+// Words naming the quantity field, for a SET. RATE_WORDS already names the
+// other one.
+const QTY_WORDS = new Set([
+  "quantity", "qty", "count", "nos", "number",
+  "సంఖ్య", "పరిమాణం",
+]);
+
+// Filler between the field and its value: "rate to 1800".
+const SET_FILLER = new Set(["to", "as", "into", "=", "కు"]);
+
 type TokenKind = "NUM" | "NUM_WORD" | "UNIT" | "RATE_KW" | "CODE_KW" | "WORD";
 
 interface Token {
@@ -240,4 +257,82 @@ function findRate(tokens: Token[], used: boolean[]): RateHit | null {
   }
 
   return null;
+}
+
+/**
+ * What Dad meant by what he said.
+ *
+ * `add` is today's behaviour and the default. `set` changes a line already in
+ * the quote, and is only returned when ALL THREE of these hold:
+ *
+ *   1. a change word is the FIRST word,
+ *   2. a field keyword (rate or quantity) appears after it,
+ *   3. a bare number follows that field keyword.
+ *
+ * Anything less is an add. That asymmetry is deliberate: a wrongly-detected
+ * edit silently rewrites a price Dad has already checked, while a
+ * wrongly-detected add leaves a visible extra row he can delete. Only one of
+ * those two mistakes is recoverable by looking at the screen.
+ *
+ * The target is returned as raw text. Matching it to a line needs the quote,
+ * which this module does not have and should not — see matchLines in
+ * parse/matchLines.ts.
+ */
+export type VoiceIntent =
+  | { kind: "add"; item: VoiceItem }
+  | { kind: "set"; target: string; field: "rate" | "qty"; value: number };
+
+export function parseIntent(text: string): VoiceIntent {
+  try {
+    const set = tryParseSet(text);
+    if (set) return set;
+  } catch (e) {
+    // Never let intent detection cost Dad the line. Falling through to `add`
+    // reproduces exactly the behaviour that shipped before this existed.
+    log.error("voice", "intent could not be classified", e, { length: text?.length });
+  }
+  return { kind: "add", item: parseTranscript(text) };
+}
+
+function tryParseSet(text: string): VoiceIntent | null {
+  const raws = normalizeDigits((text ?? "").trim()).split(/\s+/).filter(Boolean);
+  if (raws.length < 3) return null;
+
+  const strip = (s: string) => s.toLowerCase().replace(/[.,!?;:]+$/g, "");
+
+  // 1. A change word, at the front only. "wire change rate 1800" is an item
+  //    called "wire change", not an instruction.
+  if (!CHANGE_WORDS.has(strip(raws[0]))) return null;
+
+  // 2. A field keyword after it.
+  let fieldAt = -1;
+  let field: "rate" | "qty" | null = null;
+  for (let i = 1; i < raws.length; i++) {
+    const w = strip(raws[i]);
+    if (RATE_WORDS.has(w)) { fieldAt = i; field = "rate"; break; }
+    if (QTY_WORDS.has(w)) { fieldAt = i; field = "qty"; break; }
+  }
+  if (fieldAt < 0 || !field) return null;
+
+  // 3. A bare number after the field keyword, skipping filler. A code word
+  //    anywhere between refuses the whole thing — "change wire code to 4402"
+  //    is not a price, and pricing a line at an item code is the exact defect
+  //    PI-6 closed.
+  let value: number | null = null;
+  for (let i = fieldAt + 1; i < raws.length; i++) {
+    const w = strip(raws[i]);
+    if (SET_FILLER.has(w)) continue;
+    if (CODE_WORDS.has(w)) return null;
+    const m = NUMERIC.exec(raws[i]);
+    if (m) { value = parseFloat(raws[i].replace(/,/g, "")); break; }
+    return null;
+  }
+  if (value === null || !Number.isFinite(value)) return null;
+
+  // The target is everything between the change word and the field keyword.
+  const target = raws.slice(1, fieldAt).join(" ").trim();
+  if (!target) return null;
+
+  log.debug("voice", "set intent parsed", { field, value, targetLength: target.length });
+  return { kind: "set", target, field, value };
 }
