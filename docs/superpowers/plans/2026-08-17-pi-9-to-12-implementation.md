@@ -375,17 +375,13 @@ In `src/QuoteEditor.tsx`:
 import { toLineInput } from "./calc/lineInput";
 ```
 
-3. Trim the `./calc/engine` import to what is still used directly — `discountsFromPercents` and `PriceMode` move out with the helpers, so it becomes:
+3. Trim the `./calc/engine` import. **Verified against source before writing this:** `discountsFromPercents` is called only at the old line 47, inside `toPriceMode`, which is moving out. `applyBlanket` (lines 71–77) sets discount *strings* on the UILine and never touches the engine. `LineInput` and `PriceMode` are likewise used only by the two moved helpers. So all three go, and the import becomes exactly:
 
 ```ts
-import {
-  calcQuote,
-  discountsFromPercents,
-  type LineResult,
-} from "./calc/engine";
+import { calcQuote, type LineResult } from "./calc/engine";
 ```
 
-> `discountsFromPercents` stays because `applyBlanket` still calls it. If `npm run build` reports it unused, remove it — `noUnusedLocals` is on and will name the exact symbol.
+> `noUnusedLocals` is on in `tsconfig.app.json`, so leaving any of the three in fails `npm run build` naming the exact symbol.
 
 - [ ] **Step 7: Verify the extraction changed no behaviour**
 
@@ -533,37 +529,62 @@ Add a sibling button immediately after that button's closing tag, inside the sam
 
 - [ ] **Step 5: Add the sheet markup**
 
-Add before the component's closing fragment, next to the existing edit sheet:
+**Use the existing edit sheet's structure exactly.** It was read from source before this was written: `.cs-overlay` › `.cs-sheet` › `.cs-sheet-header` (an `<h2>` plus `.cs-sheet-close`) › `.cs-sheet-body` (bare `<label><span>…</span><input/></label>`, no wrapper class) › `.cs-sheet-note` › `.cs-sheet-footer` (`.cs-btn-cancel`, `.cs-btn-save`). Every one of those classes already exists and is already styled. Do not invent a parallel vocabulary — the two sheets must be visually identical, and reusing the markup is what guarantees it.
+
+Add after the existing edit-sheet block, before the component's closing `</div>`:
 
 ```tsx
       {copying && (
-        <div className="cs-sheet-back" onClick={() => !copyBusy && setCopying(null)}>
-          <div className="cs-sheet" onClick={(e) => e.stopPropagation()}>
-            <h3 className="cs-sheet-title">Copy this quote</h3>
-            <p className="cs-sheet-note">
-              {copying.lines?.length ?? 0} item
-              {(copying.lines?.length ?? 0) !== 1 ? "s" : ""} will be copied.
-              Check the prices — they are as they were when this quote was made.
-            </p>
-            <label className="cs-field">
-              <span>Name</span>
-              <input
-                value={copyName}
-                onChange={(e) => setCopyName(e.target.value)}
-                autoFocus
-              />
-            </label>
-            {copyError && <p className="cs-sheet-error">{copyError}</p>}
-            <div className="cs-sheet-actions">
-              <button onClick={() => setCopying(null)} disabled={copyBusy}>
+        <div
+          className="cs-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !copyBusy) setCopying(null);
+          }}
+        >
+          <div className="cs-sheet">
+            <div className="cs-sheet-header">
+              <h2>Copy Quote</h2>
+              <button
+                className="cs-sheet-close"
+                onClick={() => setCopying(null)}
+                aria-label="Close"
+                disabled={copyBusy}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="cs-sheet-body">
+              <label>
+                <span>Name *</span>
+                <input
+                  value={copyName}
+                  placeholder="Quote name"
+                  onChange={(e) => setCopyName(e.target.value)}
+                  autoFocus
+                />
+              </label>
+              <p className="cs-sheet-note">
+                {copying.lines?.length ?? 0} item
+                {(copying.lines?.length ?? 0) !== 1 ? "s" : ""} will be copied as a
+                new draft. Check the prices — they are as they were when this
+                quote was made.
+              </p>
+              {copyError && <p className="cs-copy-error">{copyError}</p>}
+            </div>
+            <div className="cs-sheet-footer">
+              <button
+                className="cs-btn-cancel"
+                onClick={() => setCopying(null)}
+                disabled={copyBusy}
+              >
                 Cancel
               </button>
               <button
-                className="cs-sheet-go"
+                className="cs-btn-save"
                 onClick={confirmCopy}
                 disabled={copyBusy || !copyName.trim()}
               >
-                {copyBusy ? "Copying…" : "Copy"}
+                {copyBusy ? "Copying…" : "Copy Quote"}
               </button>
             </div>
           </div>
@@ -571,13 +592,13 @@ Add before the component's closing fragment, next to the existing edit sheet:
       )}
 ```
 
-- [ ] **Step 6: Style it from the tokens**
+- [ ] **Step 6: Style only what is genuinely new**
 
-Append to `src/CustomerScreen.css`:
+`.cs-overlay`, `.cs-sheet`, `.cs-sheet-header`, `.cs-sheet-close`, `.cs-sheet-body`, `.cs-sheet-note`, `.cs-sheet-footer`, `.cs-btn-cancel` and `.cs-btn-save` are **already styled** — adding rules for any of them would collide with the cascade. Only two classes are new. Append to `src/CustomerScreen.css`:
 
 ```css
-/* Copy control on a quote row. Sits beside the row's main button, so the row
-   needs to lay them out rather than the main button filling it. */
+/* Copy control on a quote row. `.cs-row-main` fills the row, so this sits
+   after it as a fixed-width sibling. */
 .cs-row-copy {
   min-width: var(--tap);
   min-height: var(--tap);
@@ -594,19 +615,14 @@ Append to `src/CustomerScreen.css`:
 .cs-row-copy:hover { background: var(--surface-2); color: var(--ink); }
 .cs-row-copy:focus-visible { outline: 2px solid var(--green-600); outline-offset: -2px; }
 
-.cs-sheet-note {
-  margin: 0 0 var(--s-4);
-  font-size: var(--fs-sm);
-  color: var(--ink-3);
-}
-.cs-sheet-error {
+.cs-copy-error {
   margin: var(--s-2) 0 0;
   font-size: var(--fs-sm);
   color: var(--loss);
 }
 ```
 
-> If `.cs-sheet-back`, `.cs-sheet`, `.cs-sheet-title`, `.cs-field`, `.cs-sheet-actions` or `.cs-sheet-go` are not already in this file from the customer-edit sheet, copy their rules from that sheet rather than inventing new ones — the two sheets must look identical.
+> Check `.cs-row` is a flex container before assuming the button sits beside `.cs-row-main` rather than below it. If it is not, make it one — do not position the button absolutely.
 
 - [ ] **Step 7: Verify**
 
@@ -2164,10 +2180,13 @@ Covers the two features from Tasks 3 and 6, which shipped without automated test
 
 **Files:**
 - Create: `src/QuoteEditor.dom.test.tsx`
+- Create: `src/CustomerScreen.dom.test.tsx`
 
 **Interfaces:**
-- Consumes: `QuoteEditor`, the undo bar from Task 6, `duplicateQuote` from Task 2.
+- Consumes: `QuoteEditor`, the undo bar from Task 6; `CustomerScreen` and the copy sheet from Task 3; `duplicateQuote` from Task 2.
 - Produces: nothing.
+
+> **Why CustomerScreen is here.** The copy sheet is the one new user-facing feature in this whole plan verified by hand only. Leaving it untested contradicts the argument for PI-12 itself.
 
 - [ ] **Step 1: Write the test file**
 
@@ -2256,26 +2275,180 @@ describe("QuoteEditor — the engine reaches the screen", () => {
 
 > **This file is deliberately shorter and partly sketched.** Driving `QuoteEditor` needs the voice mock from Task 10 and knowledge of its field labels that only comes from running it. Finish it against the real component: keep the first test, complete the undo test using whichever import path is easiest to drive, and complete the discount test with the real field selectors. **Do not delete a test to make the file pass** — if something cannot be tested, leave it out with a comment saying why.
 
-- [ ] **Step 2: Complete the file against the real component**
+- [ ] **Step 2: Write the CustomerScreen tests**
 
-Run: `npm test -- QuoteEditor` repeatedly, filling in the selectors until every test either passes or is removed with a written reason.
+Create `src/CustomerScreen.dom.test.tsx`:
 
-Minimum bar for this task: **the no-cost warning test and one undo test pass.**
+```tsx
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { CustomerScreen } from "./CustomerScreen";
+import type { Customer, QuoteDoc } from "./types";
 
-- [ ] **Step 3: Run the whole suite**
+const saveQuote = vi.fn().mockResolvedValue({ id: "q-new", queued: false });
+
+const existing: QuoteDoc = {
+  id: "q1",
+  customerId: "c1",
+  customerName: "Ravi Electricals",
+  name: "Shop order",
+  lines: [{
+    id: 4, name: "Wire 2.5sq", qty: "2",
+    costMode: "direct", costList: "", costDisc1: "", costDisc2: "", costRate: "800",
+    sellMode: "direct", sellList: "", sellDisc1: "", sellDisc2: "", sellRate: "950",
+    gstPct: "18",
+  }],
+  totalSale: 1900,
+  status: "accepted",
+  createdAt: 1_700_000_000_000,
+  updatedAt: 1_700_000_100_000,
+};
+
+vi.mock("./useQuotes", () => ({
+  useQuotes: () => ({
+    quotes: [existing], loading: false,
+    saveQuote, setStatus: vi.fn(), deleteQuote: vi.fn(),
+  }),
+  useAllQuotes: () => ({ quotes: [existing], loading: false }),
+}));
+vi.mock("./useCustomers", () => ({ updateCustomerDoc: vi.fn() }));
+vi.mock("./firebase", () => ({ db: {} }));
+
+const customer: Customer = {
+  id: "c1", name: "Ravi Electricals", phone: "9999999999",
+  address: "Miyapur", createdAt: 1_700_000_000_000,
+};
+
+beforeEach(() => {
+  saveQuote.mockClear();
+  globalThis.URL.createObjectURL = vi.fn(() => "blob:mock");
+  globalThis.URL.revokeObjectURL = vi.fn();
+});
+afterEach(() => vi.restoreAllMocks());
+
+function screenUnderTest(onOpenQuote = vi.fn()) {
+  return (
+    <CustomerScreen
+      customer={customer}
+      onBack={vi.fn()}
+      onNewQuote={vi.fn()}
+      onOpenQuote={onOpenQuote}
+      onCustomerChange={vi.fn()}
+    />
+  );
+}
+
+describe("CustomerScreen — copying a quote", () => {
+  it("prefills the sheet with a name marked as a copy", async () => {
+    render(screenUnderTest());
+    await userEvent.click(screen.getByRole("button", { name: /Copy quote Shop order/ }));
+    expect(screen.getByDisplayValue("Shop order (copy)")).toBeInTheDocument();
+  });
+
+  it("says how many items travel with the copy", async () => {
+    render(screenUnderTest());
+    await userEvent.click(screen.getByRole("button", { name: /Copy quote Shop order/ }));
+    expect(screen.getByText(/1 item will be copied as a new draft/)).toBeInTheDocument();
+  });
+
+  it("writes a draft, never a second accepted quote", async () => {
+    render(screenUnderTest());
+    await userEvent.click(screen.getByRole("button", { name: /Copy quote Shop order/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Copy Quote" }));
+
+    await waitFor(() => expect(saveQuote).toHaveBeenCalledTimes(1));
+    // saveQuote(customerName, name, lines, totalSale, status, existingId, createdAt)
+    const call = saveQuote.mock.calls[0];
+    expect(call[1]).toBe("Shop order (copy)");
+    expect(call[4]).toBe("draft");
+    expect(call[5]).toBeUndefined();   // a new document, not an update
+  });
+
+  it("recomputes the total instead of copying the stored one", async () => {
+    render(screenUnderTest());
+    await userEvent.click(screen.getByRole("button", { name: /Copy quote Shop order/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Copy Quote" }));
+
+    await waitFor(() => expect(saveQuote).toHaveBeenCalledTimes(1));
+    // 2 × 950 = 1900, computed by the real engine from the copied lines —
+    // not read off the stored totalSale, which can be stale (bug #9).
+    expect(saveQuote.mock.calls[0][3]).toBe(1900);
+  });
+
+  it("re-mints the line ids so the copy cannot collide with the source", async () => {
+    render(screenUnderTest());
+    await userEvent.click(screen.getByRole("button", { name: /Copy quote Shop order/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Copy Quote" }));
+
+    await waitFor(() => expect(saveQuote).toHaveBeenCalledTimes(1));
+    expect(saveQuote.mock.calls[0][2][0].id).toBe(1);
+    expect(existing.lines[0].id).toBe(4);   // source untouched
+  });
+
+  it("respects a name the user typed over the default", async () => {
+    render(screenUnderTest());
+    await userEvent.click(screen.getByRole("button", { name: /Copy quote Shop order/ }));
+    const field = screen.getByDisplayValue("Shop order (copy)");
+    await userEvent.clear(field);
+    await userEvent.type(field, "Kumar site");
+    await userEvent.click(screen.getByRole("button", { name: "Copy Quote" }));
+
+    await waitFor(() => expect(saveQuote).toHaveBeenCalledTimes(1));
+    expect(saveQuote.mock.calls[0][1]).toBe("Kumar site");
+  });
+
+  it("refuses to copy with a blank name", async () => {
+    render(screenUnderTest());
+    await userEvent.click(screen.getByRole("button", { name: /Copy quote Shop order/ }));
+    await userEvent.clear(screen.getByDisplayValue("Shop order (copy)"));
+    expect(screen.getByRole("button", { name: "Copy Quote" })).toBeDisabled();
+  });
+
+  it("writes nothing when cancelled", async () => {
+    render(screenUnderTest());
+    await userEvent.click(screen.getByRole("button", { name: /Copy quote Shop order/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(saveQuote).not.toHaveBeenCalled();
+    expect(screen.queryByDisplayValue("Shop order (copy)")).not.toBeInTheDocument();
+  });
+
+  it("opens the new quote so Dad lands where he can change prices", async () => {
+    const onOpenQuote = vi.fn();
+    render(screenUnderTest(onOpenQuote));
+    await userEvent.click(screen.getByRole("button", { name: /Copy quote Shop order/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Copy Quote" }));
+
+    await waitFor(() => expect(onOpenQuote).toHaveBeenCalledTimes(1));
+    expect(onOpenQuote.mock.calls[0][0].id).toBe("q-new");
+    expect(onOpenQuote.mock.calls[0][0].status).toBe("draft");
+  });
+});
+```
+
+- [ ] **Step 3: Complete both files against the real components**
+
+Run `npm test -- QuoteEditor` and `npm test -- CustomerScreen` repeatedly, filling in selectors until every test either passes or is removed with a written reason.
+
+`CustomerScreen`'s `Props` must be checked against the real interface — it is `customer`, `onBack`, `onNewQuote`, `onOpenQuote`, `onCustomerChange` at the time of writing, but read it rather than trusting this.
+
+Minimum bar for this task: **the no-cost warning test, one undo test, and all nine CustomerScreen copy tests pass.**
+
+- [ ] **Step 4: Run the whole suite**
 
 Run: `npm test && npm run lint && npm run build`
 Expected: all pass.
 
-- [ ] **Step 4: Update CLAUDE.md**
+- [ ] **Step 5: Update CLAUDE.md**
 
-Move PI-9 → PI-12 from **WHAT TO BUILD NEXT** into **WHAT IS DONE**, with a table per PI recording what was verified how — matching the format of the existing PI sections. State plainly which claims rest on jsdom rather than a real browser, and that layout, real network and the service worker remain unverified.
+Move PI-9 → PI-12 from **WHAT TO BUILD NEXT** into **WHAT IS DONE**, with a table per PI recording what was verified how — matching the format of the existing PI sections. State plainly which claims rest on jsdom rather than a real browser, and that layout at 390px, real network behaviour and the service worker remain unverified.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add src/QuoteEditor.dom.test.tsx CLAUDE.md
-git commit -m "Cover the quote editor, and write down what PI-9 to PI-12 proved"
+git add src/QuoteEditor.dom.test.tsx src/CustomerScreen.dom.test.tsx CLAUDE.md
+git commit -m "Cover the quote editor and the copy sheet, and write down what PI-9 to PI-12 proved"
 ```
 
 ---
