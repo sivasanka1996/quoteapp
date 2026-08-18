@@ -171,7 +171,7 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
       hasRate: voiceItem.rate != null,
       nameLength: voiceItem.name.length,
     });
-    setLastImport({ lines, label: "1 item from voice" });
+    setLastImport({ lines, label: "Added 1 item from voice" });
     setLines((prev) => [...prev, {
       ...blankLine(),
       name: voiceItem.name,
@@ -196,7 +196,7 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
     }));
     setLastImport({
       lines,
-      label: `${readItems.length} item${readItems.length !== 1 ? "s" : ""} from image`,
+      label: `Added ${readItems.length} item${readItems.length !== 1 ? "s" : ""} from image`,
     });
     setLines((prev) => [...prev, ...newLines]);
     markDirty();
@@ -207,7 +207,7 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
    *  step back via `lastImport`, not a stack. */
   function handleSetFromVoice(id: number, field: "rate" | "qty", value: number) {
     log.info("voice", "line changed by voice", { field, value });
-    setLastImport({ lines, label: "1 change from voice" });
+    setLastImport({ lines, label: "Changed 1 line by voice" });
     setLines((prev) =>
       prev.map((l) =>
         l.id === id
@@ -377,7 +377,7 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
 
           {lastImport && (
             <div className="qe-undo">
-              <span>Added {lastImport.label}.</span>
+              <span>{lastImport.label}.</span>
               <button className="qe-undo-btn" onClick={undoLastImport}>Undo</button>
             </div>
           )}

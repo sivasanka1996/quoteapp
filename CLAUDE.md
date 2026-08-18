@@ -103,12 +103,16 @@ npm install        # REQUIRED FIRST — node_modules is not committed and is
 npm run dev        # http://localhost:5173 — talks to the REAL Firestore
 npm run dev:local  # http://localhost:5173 — talks to the LOCAL emulator instead
 npm run emulators  # start the emulator suite first, in another terminal
-npm test           # 241 unit tests (Vitest) — 38 image-reader worker, 31 engine,
-                   # 24 types, 22 logger, 19 openrouter, 17 numberWords,
+npm test           # 323 tests (Vitest, two projects — see below) — 39
+                   # image-reader worker, 34 types, 31 engine, 30 voiceParse,
+                   # 22 logger, 19 openrouter, 17 numberWords, 15 format,
+                   # 14 readImage, 13 matchLines, 12 log export,
+                   # 12 ImageReader.dom, 11 VoiceReader.dom, 10 sharePdf
+                   # (page-break maths, filename), 9 mergePages,
+                   # 9 CustomerScreen.dom, 8 movePage,
                    # 7 schema prompt (the rate rule, pinned by its defect),
-                   # 10 sharePdf (page-break maths, filename),
-                   # 16 voiceParse, 15 format, 14 readImage, 12 log export,
-                   # 9 mergePages, 6 firestoreAck
+                   # 6 firestoreAck, 4 QuoteEditor.dom, 1 smoke (dom project
+                   # wiring)
 npm run lint       # eslint — clean, keep it that way (now enforced in CI)
 npm run build      # production build — AND the only real typecheck, see below
 ```
@@ -161,13 +165,25 @@ exits 0 having typechecked zero files. It reported clean on a file that
 which has no Node types, so `process` in a test needs reaching through
 `globalThis`.
 
-Tests are `environment: 'node'` (see `vite.config.ts`), so only pure functions
-are covered. There are no component or hook tests — adding any requires
-switching to jsdom first.
+**`vite.config.ts` defines two Vitest *projects*, not one environment — do not
+switch the suite's environment wholesale.** `unit` (`environment: 'node'`,
+glob `**/*.test.{js,ts}`) covers pure functions and the Cloudflare Worker.
+`dom` (`environment: 'jsdom'`, glob `src/**/*.dom.test.tsx`, setup
+`src/test-setup.ts`) covers React components — `ImageReader.dom.test.tsx`,
+`VoiceReader.dom.test.tsx`, `CustomerScreen.dom.test.tsx`,
+`QuoteEditor.dom.test.tsx`, plus the one-test `smoke.dom.test.tsx` that proves
+the project itself is wired up. A new component test goes in a
+`*.dom.test.tsx` file under `src/` — that alone is enough to pick it up, no
+config change needed. **Flipping `environment` on the `unit` project to
+`jsdom`** — the old fix for "no component tests" — **would take the Cloudflare
+Worker tests with it**: `cf-worker/image-reader.js` is a plain
+`fetch(Request) → Response` handler, and jsdom would not serve that any better
+than node does while quietly changing what those 39 tests exercise. The
+two-project split exists specifically so the next agent does not have to make
+that trade-off by hand.
 
-The one exception is the Cloudflare Worker: `cf-worker/image-reader.js` is a
-plain `fetch(Request) → Response` handler, so it runs in the node environment
-with `globalThis.fetch` stubbed, and its tests never touch the real Gemini API.
+The Worker's tests run with `globalThis.fetch` stubbed and never touch the
+real Gemini API.
 
 **This is a Node/TypeScript project.** `package.json` is the only manifest.
 There is no Python code and no `requirements.txt` is needed. If a `.quoteapp/`
@@ -240,8 +256,21 @@ src/
   ErrorBoundary.tsx/css  — app-wide render-throw catcher (wraps App in main.tsx)
   AppHeader.tsx/css      — persistent app bar (logo, title, settings gear)
   HomeScreen.tsx/css     — stat tiles, APK banner, search, customer rows
-  CustomerScreen.tsx/css — quote history per customer, status badges, status filter
-  QuoteEditor.tsx/css    — collapsed item rows + edit sheet + blanket/summary sidebar
+  CustomerScreen.tsx/css — quote history per customer, status badges, status
+                           filter, PI-9's copy-a-quote sheet (⧉ per row,
+                           prefilled "<name> (copy)", writes a draft only)
+  CustomerScreen.dom.test.tsx — 9 jsdom tests pinning the copy sheet: prefill,
+                           item count, cancel writes nothing, total
+                           recomputed (not copied stale), line ids re-minted,
+                           blank-name guard, opens the new quote after saving
+  QuoteEditor.tsx/css    — collapsed item rows + edit sheet + blanket/summary
+                           sidebar, PI-9/10's undo bar for the last voice or
+                           image import (one step back via a `lastImport`
+                           snapshot, not a stack)
+  QuoteEditor.dom.test.tsx — 4 jsdom tests: the no-cost warning renders; no
+                           undo bar before an import (negative control); an
+                           image import offers Undo and restores the previous
+                           lines; two discounts compound rather than add
   CustomerView.tsx/css   — customer-facing document, column toggles, print, share
   StatusBadge.tsx/css    — quote status badge + status picker
   CompanySettings.tsx    — company name/address/phone/GSTIN/logo (localStorage)
@@ -250,9 +279,12 @@ src/
   firebase.ts            — Firebase init + Firestore db export
   types.ts               — shared types (UILine, Customer, QuoteDoc, QuoteStatus)
                            + pure helpers: quoteStatus, seedNextId, hasNoCost,
-                           parseQty, customerPatch
-  types.test.ts          — 24 tests (quoteStatus, seedNextId, hasNoCost, parseQty,
-                           customerPatch)
+                           parseQty, customerPatch, duplicateQuote (PI-9: name
+                           marked "(copy)", fresh line ids, status forced back
+                           to draft, totalSale deliberately omitted so the
+                           caller recomputes it — see the doc comment)
+  types.test.ts          — 34 tests (quoteStatus, seedNextId, hasNoCost, parseQty,
+                           customerPatch, + 10 duplicateQuote tests from PI-9)
   useCustomers.ts        — Firestore CRUD for customers collection
                            + deleteCustomerAndQuotes(db, id): one writeBatch so
                            a customer and their quotes go together (bug #6).
@@ -283,15 +315,45 @@ src/
   ImageReader.tsx/css    — camera/gallery UI, MULTI-PAGE as of PI-8: pick or
                            photograph several pages, read one call each
                            SEQUENTIALLY, merged confirm list with page badges
-                           and a per-page retry for a photo that failed
+                           and a per-page retry for a photo that failed.
+                           PI-11 added ▲▼ page reorder (disabled at the ends)
+                           and a confirm gate before a 6-or-more-page read
+                           ("about N seconds, keep the app open")
+  ImageReader.dom.test.tsx — 12 jsdom tests against the real panel,
+                           `mergePages` and `movePage`; only `readImageItems`
+                           faked: sequential-not-parallel reads (measured with
+                           an in-flight counter, not just asserted), partial
+                           page failure keeps the good pages, retry re-reads
+                           only the failed page and keeps a hand edit on a
+                           surviving row, page reorder changes the merged
+                           order, boundary buttons disabled at the ends, the
+                           long-read confirm gate, incomplete-row count
+                           (singular/plural), decimal entry, checked-rows-only
   parse/mergePages.ts    — pure page merge: order, 1-based page badge, and the
                            failed-page list. A bad page never loses the others
   parse/mergePages.test.ts — 9 tests
+  parse/movePage.ts      — one item moved to a new index, pure, never throws;
+                           an out-of-range move (what a disabled ▲▼ button
+                           would trigger) returns the list untouched rather
+                           than losing one of Dad's photos
+  parse/movePage.test.ts — 8 tests (TDD red then green)
   voiceParse.ts          — voice transcript parser, a TOKENIZER as of PI-6:
                            tokenize → classify (NUM / NUM_WORD / UNIT / RATE_KW
                            / CODE_KW / WORD) → assemble. Quantities are whole
-                           numbers only, deliberately — see spec §3.4.
-  voiceParse.test.ts     — 16 parser tests
+                           numbers only, deliberately — see spec §3.4. PI-10
+                           added `parseIntent`, which classifies a transcript
+                           as `add` vs `set` (a change word at the front, then
+                           a field keyword, then a number) before it ever
+                           reaches `parseTranscript`
+  voiceParse.test.ts     — 30 parser tests (16 original + 14 from PI-10's
+                           parseIntent add-vs-set classification)
+  parse/matchLines.ts    — spoken target text → which line in the quote Dad
+                           meant, by plain token-overlap scoring — not
+                           Fuse.js, not embeddings, matching a couple of
+                           dozen strings in one quote. `isAmbiguous` forces
+                           the app to ask rather than guess when the top two
+                           scores are within 0.15
+  parse/matchLines.test.ts — 13 tests
   parse/numberWords.ts   — English + Telugu number words 1–100, plus
                            phraseToNumber for "twenty five". Both tables are
                            always consulted; the recogniser does not respect
@@ -305,11 +367,37 @@ src/
   log/export.ts          — buffer → timestamped .log download
   log/logger.test.ts     — 22 tests
   log/export.test.ts     — 12 tests
-  VoiceReader.tsx/css    — mic UI, language toggle, alternatives
+  VoiceReader.tsx/css    — mic UI, language toggle, alternatives. PI-10 added
+                           the "change an existing line" flow: `parseIntent`
+                           classifies a `set`, `matchLines` finds the target
+                           line, and the panel asks which line when the top
+                           two matches are ambiguous rather than guessing
+  VoiceReader.dom.test.tsx — 11 jsdom tests against the real panel; only
+                           `SpeechRecognition` faked (a constructible mock).
+                           Language toggle + persistence across a remount;
+                           add / alternatives / decimal entry / Add-gating;
+                           the PI-10 change-a-line flow (matches and reports
+                           via `onSet`, asks on a tie, falls through to an
+                           ordinary add when nothing matches); mic-refused;
+                           a stale `onend` after an error is a no-op
   calc/engine.ts         — PURE calc functions (no UI, no network)
-  calc/engine.test.ts    — 23 tests verifying fixture numbers
+  calc/engine.test.ts    — 31 tests verifying fixture numbers (23 original +
+                           8 from PI-6's discounts: number[] rewrite)
+  calc/lineInput.ts      — UILine (what the editor holds, all strings) →
+                           LineInput (what the engine takes, all numbers).
+                           Lifted out of QuoteEditor so a second caller —
+                           CustomerScreen's copy-a-quote — can total a quote
+                           without importing a component
   format.ts              — Indian number formatting (lakh/crore), short form, dates
   format.test.ts         — 15 formatting tests
+  test-setup.ts          — runs before every `dom` project test file: imports
+                           `@testing-library/jest-dom/vitest` matchers and
+                           calls `cleanup()` after each test, since Testing
+                           Library does not unmount on its own with globals
+                           off — a left-over tree makes the next test's
+                           queries match two elements
+  smoke.dom.test.tsx     — 1 test: renders a button and finds it, proving the
+                           `dom` project itself is wired up correctly
 
 cf-worker/               — Deployed separately, BY HAND. See Deploy.
   image-reader.js        — the ROUTER only: origin allowlist, CORS, request
@@ -323,7 +411,7 @@ cf-worker/               — Deployed separately, BY HAND. See Deploy.
                            confidenceOf. Shared so swapping provider cannot
                            quietly change what is asked for
   log.js                 — wlog / newRequestId. LOG_LEVEL=silent turns it off
-  image-reader.test.js   — 38 tests (structured output, escalation, confidence,
+  image-reader.test.js   — 39 tests (structured output, escalation, confidence,
                            origin allowlist, logging, AI_PROVIDER routing)
   providers/openrouter.test.js — 17 tests
 
@@ -747,6 +835,9 @@ behaviour, not something PI-1 touched.
 Tests are `environment: 'node'`, so anything touching the DOM needs a jsdom
 switch in `vite.config.ts` first. Do not add a half-configured test setup just to
 claim coverage — a manual check honestly reported is better than a fake test.
+**Superseded by PI-12** (below): a second `dom` project now exists for exactly
+this, so the switch this paragraph describes is no longer what a component
+test needs — this is history, not current instruction.
 
 **How to re-run these checks.** They are not in the repo (they need Playwright,
 a Chromium download and a live Firestore). Recipe: `npm run build && npm run
@@ -1613,7 +1704,7 @@ names without scoping to the row first.
 | A page-badge/▲▼-button visual collision, found by the implementer reading the CSS by hand (not seen in a browser) | Fixed before review: `.ir-page-move` moved from the bottom-left corner (where it overlapped `.ir-page-num`'s `p1`/`p2` badge) to the free bottom-right corner | **FIXED, unverified visually** |
 | A side effect (`resetRead()`) called from inside the `setPages` state updater — a React purity rule `StrictMode` exists to catch | Fixed before review: the move is now computed outside the updater, `setPages` and `resetRead()` fired as separate statements | **FIXED** |
 | 6-page-or-more confirmation ("N pages… about M seconds, keep the app open") before a long sequential read; below 6, reads immediately | `appConfig.image.longReadPages = 6`, `secondsPerPage = 3` (`config/app.config.ts`, citing the 2026-08-12 live measurements of 2.9s/3.9s/2.4s per page). 2 of `ImageReader.dom.test.tsx`'s 12 tests: at 6 pages, clicking Read shows the confirmation copy and makes **zero** network calls until confirmed; below 6, reading starts immediately with no prompt | **PASS (jsdom)** |
-| The confirmation's arithmetic | `Math.round((6 × 3) / 5) × 5 = 20` seconds, checked by hand against the brief's own worked example and against the live test | **PASS** |
+| The confirmation's arithmetic | `Math.round((6 × 3) / 5) × 5 = 20` seconds, checked by hand against the brief's own worked example. **Not asserted by a test** — the two long-read tests in `ImageReader.dom.test.tsx` check `/read one at a time/` and the call count only, never the seconds figure | **PASS (by hand)** |
 | 390px layout: does the confirmation look right, do the ▲▼ buttons register as taps, does the corner fix actually clear the badge on screen | **Not performed — no browser** in either the implementing task or the testing task | **UNVERIFIED** |
 
 ### PI-12 — Browser checks into the repo — DONE 2026-08-18
@@ -1660,9 +1751,13 @@ first `npm test` run after a cold checkout can drop the *entire* `dom`
 project with a `[vitest-pool-runner]: Timeout waiting for worker to respond`
 error — it fails **loudly** (non-zero exit, an explicit error, a whole
 project missing) rather than silently under-reporting a green suite, so it
-cannot be mistaken for a quiet pass. It reproduces on an untouched baseline
-(confirmed independently in three separate tasks by stashing changes and
-re-running), self-resolves on a second run, and is believed to be this
+cannot be mistaken for a quiet pass. It was **sighted in three separate
+tasks** (Tasks 1, 2 and 5) — hit along the way while those tasks were doing
+something else — but **deliberately reproduced against an untouched baseline
+by stashing changes and re-running only once**, in Task 3. That one
+stash-and-rerun is the baseline confirmation; the three sightings corroborate
+that the flake is real but are not repeated repro attempts in their own right.
+It self-resolves on a second run, and is believed to be this
 machine's OneDrive-synced path plus jsdom's many small files tripping a pool
 startup timeout on first touch — not a config defect. Re-run once before
 trusting a red `dom` project.
@@ -1673,8 +1768,6 @@ trusting a red `dom` project.
   **not** RAG — a year of quotes fits in a single prompt. Send the whole list.
 - Telugu → English item-name transliteration. Better as a lookup table Dad
   builds by using the app than as a model call.
-- Undo for the last voice action; voice editing of existing lines (voice only
-  ADDS today).
 
 ### Before handover to Dad
 

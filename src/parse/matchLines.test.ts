@@ -21,9 +21,15 @@ describe("matchLines", () => {
   });
 
   it("scores a fuller overlap higher", () => {
-    const r = matchLines("copper wire", lines);
+    // Both candidates genuinely score (neither is filtered to zero), so the
+    // comparison below tests the coverage weighting rather than just
+    // restating the `.filter(m => m.score > 0)` guarantee.
+    const r = matchLines("copper wire", [
+      { id: 1, name: "Copper Wire 2.5sq" },
+      { id: 4, name: "Wire" },
+    ]);
     expect(r[0].id).toBe(1);
-    expect(r[0].score).toBeGreaterThan(r[1]?.score ?? 0);
+    expect(r[0].score).toBeGreaterThan(r[1].score);
   });
 
   it("returns nothing when no word matches", () => {

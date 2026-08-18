@@ -487,7 +487,7 @@ export function VoiceReaderPanel({ onAdd, lines, onSet, onClose }: Props) {
     <div className="vr-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="vr-panel">
         <div className="vr-header">
-          <span className="vr-title">Add by voice</span>
+          <span className="vr-title">{pendingSet ? "Change by voice" : "Add by voice"}</span>
           <button className="vr-close" onClick={onClose}>✕</button>
         </div>
 

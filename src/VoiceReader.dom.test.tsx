@@ -103,7 +103,13 @@ function finishSpeaking(alternatives: string[]) {
 describe("VoiceReaderPanel — language", () => {
   it("starts in English and switches to Telugu", async () => {
     render(panel());
+    const en = screen.getByRole("button", { name: "English" });
     const te = screen.getByRole("button", { name: "తెలుగు" });
+    // The default before anything is picked — without this the test would
+    // still pass if the panel booted straight into Telugu.
+    expect(en).toHaveAttribute("aria-pressed", "true");
+    expect(te).toHaveAttribute("aria-pressed", "false");
+
     await userEvent.click(te);
     expect(te).toHaveAttribute("aria-pressed", "true");
     expect(localStorage.getItem(VOICE_LANG_KEY)).toBe("te-IN");
