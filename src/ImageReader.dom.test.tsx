@@ -83,10 +83,16 @@ describe("ImageReaderPanel — multi-page", () => {
     );
     // "p1"/"p2" also badge the page strip above, so scope to the confirm
     // list's own item rows rather than screen.getByText, which would find
-    // both and fail on ambiguity.
+    // both and fail on ambiguity. And bind each name to ITS OWN row's badge
+    // — asserting "p1" and "p2" both merely *appear* would not catch a
+    // swapped badge (Wire tagged p2, MCB tagged p1).
     const itemsList = container.querySelector(".ir-items") as HTMLElement;
-    expect(within(itemsList).getByText("p1")).toBeInTheDocument();
-    expect(within(itemsList).getByText("p2")).toBeInTheDocument();
+    const itemRows = Array.from(itemsList.querySelectorAll(".ir-item"));
+    expect(itemRows).toHaveLength(2);
+    const wireRow = itemRows.find((r) => within(r as HTMLElement).queryByDisplayValue("Wire"));
+    const mcbRow = itemRows.find((r) => within(r as HTMLElement).queryByDisplayValue("MCB"));
+    expect(within(wireRow as HTMLElement).getByText("p1")).toBeInTheDocument();
+    expect(within(mcbRow as HTMLElement).getByText("p2")).toBeInTheDocument();
   });
 
   it("keeps the good pages when one fails", async () => {
@@ -197,14 +203,32 @@ describe("ImageReaderPanel — the confirm list", () => {
 });
 
 describe("ImageReaderPanel — page order and long reads", () => {
-  it("moves a page earlier", async () => {
-    render(<ImageReaderPanel onAdd={vi.fn()} onClose={vi.fn()} />);
-    await pick(["first.jpg", "second.jpg"]);
+  it("moves a page earlier, and the merged order follows", async () => {
+    // Keyed by WHICH FILE is read, not by call order. A call-order mock
+    // (mockResolvedValueOnce/mockResolvedValueOnce) would pass even with a
+    // no-op reorderPage: reads always walk the pages array front-to-back, so
+    // whatever sits at index 0 gets the first queued reply regardless of
+    // whether a swap actually happened — see the fix report for the reasoning
+    // and the red-then-green proof.
+    mockRead.mockImplementation(async (input: File) => {
+      if (input.name === "a.jpg") return reply([{ name: "FROM-A", qty: 1, rate: 10 }]);
+      if (input.name === "b.jpg") return reply([{ name: "FROM-B", qty: 1, rate: 20 }]);
+      throw new Error(`unexpected file ${input.name}`);
+    });
+
+    const { container } = render(<ImageReaderPanel onAdd={vi.fn()} onClose={vi.fn()} />);
+    await pick(["a.jpg", "b.jpg"]);
 
     await userEvent.click(screen.getByRole("button", { name: "Move page 2 earlier" }));
-    // The strip is re-badged, so page 1's move-earlier button is now disabled
-    // and page 2's is not — the order really changed.
-    expect(screen.getByRole("button", { name: "Move page 1 earlier" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Read 2 pages" }));
+
+    await waitFor(() => expect(screen.getByDisplayValue("FROM-B")).toBeInTheDocument());
+    const names = Array.from(
+      container.querySelectorAll<HTMLInputElement>(".ir-items .ir-item-name")
+    ).map((i) => i.value);
+    // b.jpg was moved to page 1, a.jpg to page 2 — the merged order must
+    // follow the swap, not the pick order.
+    expect(names).toEqual(["FROM-B", "FROM-A"]);
   });
 
   it("cannot move the first page earlier or the last page later", async () => {
