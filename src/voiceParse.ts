@@ -322,6 +322,13 @@ function tryParseSet(text: string): VoiceIntent | null {
   for (let i = fieldAt + 1; i < raws.length; i++) {
     const w = strip(raws[i]);
     if (SET_FILLER.has(w)) continue;
+    // Redundant against the strict fallthrough below, which already refuses
+    // any non-filler, non-numeric token — no input distinguishes the two, and
+    // a red-then-green check confirmed it. Kept deliberately: if that
+    // fallthrough is ever loosened to `continue` (skip unknown words and keep
+    // scanning for a number — a natural-looking improvement), this line
+    // becomes the only thing refusing an item code, and pricing a line at a
+    // code is a defect this app has already shipped once.
     if (CODE_WORDS.has(w)) return null;
     const m = NUMERIC.exec(raws[i]);
     if (m) { value = parseFloat(raws[i].replace(/,/g, "")); break; }
