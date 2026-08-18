@@ -498,7 +498,7 @@
    long-press to disambiguate, and is hard to hit at 48px. */
 .ir-page-move {
   position: absolute;
-  left: var(--s-1);
+  right: var(--s-1);
   bottom: var(--s-1);
   display: flex;
   gap: var(--s-1);

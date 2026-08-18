@@ -154,14 +154,11 @@ export function ImageReaderPanel({ onAdd, onClose }: Props) {
    * they came from.
    */
   function reorderPage(from: number, to: number) {
-    setPages((prev) => {
-      const next = movePage(prev, from, to);
-      if (next !== prev) {
-        log.debug("image", "pages reordered", { from, to, count: prev.length });
-        resetRead();
-      }
-      return next;
-    });
+    const next = movePage(pages, from, to);
+    if (next === pages) return;
+    log.debug("image", "pages reordered", { from, to, count: pages.length });
+    setPages(next);
+    resetRead();
   }
 
   /** One page. Never throws — a failure is a `PageResult` the merge understands. */
