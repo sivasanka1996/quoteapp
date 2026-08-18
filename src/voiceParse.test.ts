@@ -192,6 +192,20 @@ describe("parseIntent", () => {
     expect(parseIntent("change wire code to 4402").kind).toBe("add");
   });
 
+  it("refuses an item code even when a field keyword is present", () => {
+    // Reaches the value-scanning loop with fieldAt set, so this is what
+    // actually exercises the CODE_WORDS guard. The existing
+    // "change wire code to 4402" case short-circuits earlier, at the
+    // no-field-keyword branch, and never reaches it.
+    expect(parseIntent("change wire rate code 4402").kind).toBe("add");
+  });
+
+  it("accepts every change word, so a typo in one is caught", () => {
+    expect(parseIntent("make wire rate 1800").kind).toBe("set");
+    expect(parseIntent("correct wire rate 1800").kind).toBe("set");
+    expect(parseIntent("edit wire rate 1800").kind).toBe("set");
+  });
+
   it("survives empty input", () => {
     expect(parseIntent("").kind).toBe("add");
     expect(parseIntent("   ").kind).toBe("add");
