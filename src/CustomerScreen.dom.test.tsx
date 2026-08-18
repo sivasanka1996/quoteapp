@@ -12,11 +12,16 @@ const existing: QuoteDoc = {
   customerName: "Ravi Electricals",
   name: "Shop order",
   lines: [{
-    id: 4, name: "Wire 2.5sq", qty: "2",
+    id: 4, name: "Wire 2.5sq", qty: "3",
     costMode: "direct", costList: "", costDisc1: "", costDisc2: "", costRate: "800",
     sellMode: "direct", sellList: "", sellDisc1: "", sellDisc2: "", sellRate: "950",
     gstPct: "18",
   }],
+  // Deliberately stale, like a real pre-fix quote (bug #9): 3 × 950 = 2850,
+  // not 1900. If confirmCopy ever regressed to passing this stored value
+  // straight through instead of recomputing, the "recomputes the total"
+  // test below would still see a plausible-looking number and must not be
+  // able to mistake it for the right one.
   totalSale: 1900,
   status: "accepted",
   createdAt: 1_700_000_000_000,
@@ -94,9 +99,10 @@ describe("CustomerScreen — copying a quote", () => {
     await userEvent.click(screen.getByRole("button", { name: "Copy Quote" }));
 
     await waitFor(() => expect(saveQuote).toHaveBeenCalledTimes(1));
-    // 2 × 950 = 1900, computed by the real engine from the copied lines —
-    // not read off the stored totalSale, which can be stale (bug #9).
-    expect(saveQuote.mock.calls[0][3]).toBe(1900);
+    // 3 × 950 = 2850, computed by the real engine from the copied lines —
+    // NOT the stored totalSale (1900), which is deliberately stale here so
+    // this test cannot be fooled by a coincidental match (bug #9).
+    expect(saveQuote.mock.calls[0][3]).toBe(2850);
   });
 
   it("re-mints the line ids so the copy cannot collide with the source", async () => {

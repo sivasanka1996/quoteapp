@@ -1562,10 +1562,15 @@ new as of PI-12 — component tests in `environment: 'jsdom'`), `npm run lint`,
 and `npm run build`. jsdom is not a browser: it has no real layout engine, no
 paint, no service worker, and — confirmed the hard way in Task 10 — no
 `window.SpeechRecognition` at all, so every voice test fakes the recognizer
-and only proves the *panel's* logic once a transcript arrives. Layout at
-390px, the Android share sheet, `beforeunload`/offline behaviour, and
-**anyone actually speaking into a microphone against this code**, remain
-unverified by this plan and stay on the handover list.
+and only proves the *panel's* logic once a transcript arrives. **Every
+component test also fakes the network** — `readImageItems`, `saveQuote`,
+`updateCustomerDoc` and `db` are all mocked, so nothing here has proven
+`ImageReaderPanel` against the real Worker, `CustomerScreen`'s copy sheet
+against real Firestore latency, or a save racing a real `ACK_TIMEOUT_MS`.
+Layout at 390px, the Android share sheet, `beforeunload`/offline behaviour,
+real network behaviour, and **anyone actually speaking into a microphone
+against this code**, remain unverified by this plan and stay on the handover
+list.
 
 ### PI-9 — Duplicate a quote — DONE and VERIFIED 2026-08-18
 
@@ -1573,7 +1578,7 @@ unverified by this plan and stay on the handover list.
 |---|---|---|
 | `duplicateQuote` (`src/types.ts`) — fresh line ids from 1, status forced to `draft`, name gets " (copy)" (or "Copy of Untitled" for a blank/legacy-"Untitled" source), `totalSale` deliberately absent | 10 unit tests: TDD red (`duplicateQuote is not a function`) then green; a deep-copy test confirms mutating a copied line cannot reach the source array | **PASS** |
 | Copy sheet on `CustomerScreen` — ⧉ button per row, prefilled `"<name> (copy)"`, item count, Cancel writes nothing | 9 jsdom component tests in `CustomerScreen.dom.test.tsx` (written in the same task as this write-up — PI-12 §12.4): prefill, item count, cancel-writes-nothing all pass against the real component | **PASS (jsdom)** |
-| Recomputes the total rather than trusting stale `totalSale` (bug #9 guard) | Component test: source quote has fractional-quantity-safe lines totalling 1900; `saveQuote`'s 4th argument is asserted to be the recomputed 1900, not a stale stored value. Mutation-tested — changing the expected value to 1901 makes the test fail | **PASS (jsdom), mutation-tested** |
+| Recomputes the total rather than trusting stale `totalSale` (bug #9 guard) | Component test: the fixture's stored `totalSale` (1900) is deliberately stale against its own line (3 × ₹950 = 2850), so a passing assertion of 2850 cannot be a coincidental match on the stored value. Mutation-tested against the real discriminator: `CustomerScreen.tsx`'s `confirmCopy` was temporarily changed to pass `copying.totalSale` (the stale stored value) instead of `totals.totalSale` — the test went red (`expected 1900 to be 2850`), then the source was restored and re-verified clean. (An earlier version of this fixture had the stored and recomputed totals coincidentally equal, which review caught — see the fix report in the task's report file for how that was found and closed.) | **PASS (jsdom), mutation-tested against the real regression** |
 | Always writes a new `draft` document, never overwrites or re-accepts the source | Component test asserts `status === "draft"` and `existingId === undefined` even though the source quote's `status` is `"accepted"` | **PASS (jsdom)** |
 | Re-mints every line id so a copy cannot collide with its source | Component test asserts the copy's first line has `id === 1` while the source's untouched line keeps `id === 4`. Mutation-tested — asserting `id === 4` on the copy fails | **PASS (jsdom), mutation-tested** |
 | Lands Dad in the new quote, ready to change prices | Component test: `onOpenQuote` is called once with the new id and `status: "draft"` | **PASS (jsdom)** |
@@ -1628,8 +1633,8 @@ none either.
 | A second Vitest *project*, `dom` (jsdom), alongside the existing `unit` (node) — `src/**/*.dom.test.tsx` only, so nothing already pure silently starts depending on a DOM | `vite.config.ts` `test.projects`; a one-test smoke check (`src/smoke.dom.test.tsx`) renders a button and asserts it; the 241 pre-existing node tests kept passing unedited | **PASS** |
 | `ImageReader.dom.test.tsx` — 12 tests against the real `ImageReaderPanel`, `mergePages`, `movePage`; only `readImageItems` faked | Sequential-not-parallel measured with an in-flight counter (`maxInFlight === 1` across 3 pages, not just asserted by comment); partial-page-failure keeps the good pages; retry re-reads only the failed page **and** keeps a hand edit made to a surviving row; page reorder changes the merged order; the 6-page confirm gate | **PASS (jsdom)** |
 | `VoiceReader.dom.test.tsx` — 11 tests against the real `VoiceReaderPanel`; only `SpeechRecognition` faked (a constructible mock — the brief's first draft used a non-constructible arrow function and threw) | Language toggle + persistence; add/alternatives/decimal-entry/Add-gating; all 3 of the new change-a-line flow (Task 8); mic-refused; a stale `onend` after an error is a no-op. 3 branches mutation-tested directly in `VoiceReader.tsx` (guard removed, set-intent disabled, set-intent widened), each reverted after confirming the right tests and only those went red | **PASS (jsdom), mutation-tested** |
-| `CustomerScreen.dom.test.tsx` — 9 tests, written this task, pinning PI-9's copy sheet | See the PI-9 table above | **PASS (jsdom), mutation-tested** |
-| `QuoteEditor.dom.test.tsx` — 4 tests, written this task | See below | **PASS (jsdom), mutation-tested** |
+| `CustomerScreen.dom.test.tsx` — 9 tests, written this task, pinning PI-9's copy sheet | See the PI-9 table above. 2 of the 9 (recomputed total, re-minted line id) were mutation-tested against the real component; the other 7 are single-assertion checks with no branching logic to misfire | **PASS (jsdom); 2/9 mutation-tested** |
+| `QuoteEditor.dom.test.tsx` — 4 tests, written this task | See below. 3 of the 4 (no-cost warning, undo restores lines, discount compounding) were mutation-tested; the 4th ("no undo bar before anything is imported") is the negative control the other undo test needs to mean anything | **PASS (jsdom); 3/4 mutation-tested** |
 | Genuine defect found: a test that could not fail | `ImageReader.dom.test.tsx`'s original "moves a page earlier" asserted only that the page-1 "move earlier" button stays disabled — true unconditionally, before and after the click, on a completely no-op `reorderPage`. Fixed to assert the merged item order instead, keyed by **which file** was read rather than call order (a mock keyed by call order was tried first and shown, empirically, to also pass against a neutered `reorderPage`) | **FOUND AND FIXED** |
 | Genuine defect found: a test factually wrong about the component | `VoiceReader.dom.test.tsx`'s draft asserted that recognition ending while still listening (nothing said, not stopped) returns the panel to idle. Traced by hand and confirmed by running it: the real component **restarts the mic** (capped at 5 restarts) and stays on "Listening…". Replaced with a test of what the `stageRef` guard is actually for — a stale `onend` after the stage has moved on (e.g. to an error) must be a no-op | **FOUND AND FIXED** |
 
