@@ -151,6 +151,27 @@ export const appConfig = {
      */
     maxEdge: 1600,
     jpegQuality: 0.85,
+
+    /**
+     * Page count at which reading is confirmed first.
+     *
+     * Pages read sequentially, one model call each (spec §5.2), and that stays
+     * — a long list already sits against a single 8192-token ceiling, and
+     * batching would make the known risk worse to save a few cents. So ten
+     * pages is ten round trips.
+     *
+     * This is a WARNING, not a cap. A genuine ten-page order must still be
+     * readable; what is being prevented is the surprise, not the long read.
+     */
+    longReadPages: 6,
+
+    /**
+     * Rough seconds per page, for the estimate in that confirmation. Measured
+     * on the live runs of 2026-08-12: 2.9s, 3.9s and 2.4s for a three-page
+     * order. Deliberately approximate — it sets an expectation, it is not a
+     * promise.
+     */
+    secondsPerPage: 3,
   },
 
   // --------------------------------------------------------------------------

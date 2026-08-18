@@ -4,6 +4,7 @@ import { mergePages, type PageResult } from "./parse/mergePages";
 import { movePage } from "./parse/movePage";
 import { parseQty } from "./types";
 import { log } from "./log/logger";
+import { appConfig } from "../config/app.config";
 import "./ImageReader.css";
 
 interface Props {
@@ -59,6 +60,7 @@ export function ImageReaderPanel({ onAdd, onClose }: Props) {
   const [notes, setNotes] = useState("");
   const [failedPages, setFailedPages] = useState<number[]>([]);
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
+  const [confirmLong, setConfirmLong] = useState(false);
 
   // Reading a photo is the one thing in this app that genuinely needs a
   // connection. Say so before Dad takes the photo, not after he has waited.
@@ -85,6 +87,7 @@ export function ImageReaderPanel({ onAdd, onClose }: Props) {
     setFailedPages([]);
     setPageResults([]);
     setStage("idle");
+    setConfirmLong(false);
   }
 
   async function openCamera() {
@@ -385,10 +388,36 @@ export function ImageReaderPanel({ onAdd, onClose }: Props) {
           </div>
         )}
 
-        {pages.length > 0 && stage === "idle" && (
-          <button className="ir-read-btn" onClick={handleRead}>
+        {pages.length > 0 && stage === "idle" && !confirmLong && (
+          <button
+            className="ir-read-btn"
+            onClick={() =>
+              pages.length >= appConfig.image.longReadPages
+                ? setConfirmLong(true)
+                : handleRead()
+            }
+          >
             {multi ? `Read ${pages.length} pages` : "Read items from image"}
           </button>
+        )}
+
+        {confirmLong && stage === "idle" && (
+          <div className="ir-longread">
+            <p>
+              {pages.length} pages are read one at a time, so this takes about{" "}
+              <b>{Math.round((pages.length * appConfig.image.secondsPerPage) / 5) * 5} seconds</b>.
+              Keep the app open while it works.
+            </p>
+            <div className="ir-longread-actions">
+              <button onClick={() => setConfirmLong(false)}>Back</button>
+              <button
+                className="ir-longread-go"
+                onClick={() => { setConfirmLong(false); handleRead(); }}
+              >
+                Read {pages.length} pages
+              </button>
+            </div>
+          </div>
         )}
 
         {stage === "reading" && (

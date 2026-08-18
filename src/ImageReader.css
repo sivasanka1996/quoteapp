@@ -518,3 +518,31 @@
 }
 .ir-page-move button:disabled { opacity: .3; cursor: default; }
 .ir-page-move button:focus-visible { outline: 2px solid var(--surface); outline-offset: 1px; }
+
+.ir-longread {
+  padding: var(--s-4);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.ir-longread p { margin: 0; font-size: var(--fs-sm); color: var(--ink-2); }
+.ir-longread-actions { display: flex; gap: var(--s-2); }
+.ir-longread-actions button {
+  flex: 1;
+  min-height: var(--tap);
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--fs-base);
+  cursor: pointer;
+}
+.ir-longread-actions .ir-longread-go {
+  background: var(--green-700);
+  border-color: var(--green-700);
+  color: #fff;
+  font-weight: 600;
+}
