@@ -351,6 +351,11 @@ export function CustomerScreen({
             setShowVoiceReader(false);
             onNewQuoteFromItems([item]);
           }}
+          // This starts a brand-new quote from one spoken item — there is no
+          // quote yet for a spoken "change" to target, so there is nothing to
+          // match against and nothing for onSet to ever be called with.
+          lines={[]}
+          onSet={() => {}}
           onClose={() => setShowVoiceReader(false)}
         />
       )}

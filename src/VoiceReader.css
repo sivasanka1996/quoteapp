@@ -334,3 +334,44 @@
   cursor: pointer;
   color: #374151;
 }
+
+/* --- Set / disambiguation --- */
+
+.vr-set { display: flex; flex-direction: column; gap: var(--s-2); }
+.vr-set-hd {
+  font-size: var(--fs-base);
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: var(--s-1);
+}
+.vr-set-choice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  min-height: var(--tap);
+  padding: var(--s-2) var(--s-3);
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  cursor: pointer;
+}
+.vr-set-choice:hover { border-color: var(--green-600); background: var(--green-50); }
+.vr-set-choice:focus-visible { outline: 2px solid var(--green-600); outline-offset: 2px; }
+.vr-set-name { font-size: var(--fs-base); color: var(--ink); }
+.vr-set-change {
+  flex: 0 0 auto;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--green-700);
+  font-variant-numeric: tabular-nums;
+}
+.vr-set-cancel {
+  min-height: var(--tap);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  color: var(--ink-2);
+  cursor: pointer;
+}

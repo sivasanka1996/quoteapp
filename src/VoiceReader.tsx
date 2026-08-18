@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import {
   parseTranscript,
+  parseIntent,
   VOICE_LANG_KEY,
   type VoiceItem,
   type VoiceLang,
 } from "./voiceParse";
+import { matchLines, isAmbiguous, type LineMatch } from "./parse/matchLines";
 import { parseQty } from "./types";
 import { log } from "./log/logger";
 import "./VoiceReader.css";
@@ -13,6 +15,9 @@ export type { VoiceItem } from "./voiceParse";
 
 interface Props {
   onAdd: (item: VoiceItem) => void;
+  /** The quote's current lines, so a spoken change can find its target. */
+  lines: { id: number; name: string }[];
+  onSet: (id: number, field: "rate" | "qty", value: number) => void;
   onClose: () => void;
 }
 
@@ -80,11 +85,17 @@ declare global {
   }
 }
 
-export function VoiceReaderPanel({ onAdd, onClose }: Props) {
+export function VoiceReaderPanel({ onAdd, lines, onSet, onClose }: Props) {
   const [stage, setStage] = useState<Stage>("idle");
   const [transcript, setTranscript] = useState("");
   const [alternatives, setAlternatives] = useState<string[]>([]);
   const [item, setItem] = useState<VoiceItem>({ name: "", qty: 1, rate: null });
+  // A spoken "change X to Y" waiting on Dad to confirm which line, or that he
+  // meant to change one at all — nothing reaches the quote without this step,
+  // same as every other voice path in this panel.
+  const [pendingSet, setPendingSet] = useState<
+    { field: "rate" | "qty"; value: number; choices: LineMatch[] } | null
+  >(null);
   // Qty/rate held as the text being typed, parsed only at commit (handleAdd).
   // A number re-parsed on every keystroke gets its DOM value stomped by React
   // mid-edit — "2." becomes "2" before the "5" is ever typed, silently turning
@@ -188,12 +199,22 @@ export function VoiceReaderPanel({ onAdd, onClose }: Props) {
     localStorage.setItem(VOICE_LANG_KEY, next);
   }
 
-  function applyTranscript(text: string) {
+  /** Puts a parsed item on screen — shared by the first transcript and by
+   *  picking an alternative off the confirm screen. */
+  function applyItem(text: string, parsed: VoiceItem) {
     setTranscript(text);
-    const parsed = parseTranscript(text);
     setItem(parsed);
     setQtyRaw(String(parsed.qty));
     setRateRaw(parsed.rate != null ? String(parsed.rate) : "");
+  }
+
+  // Used by the alternatives chips on the confirm screen. Deliberately still
+  // goes straight to parseTranscript, not parseIntent: by the time a chip is
+  // tappable, intent has already been decided as "add" (a "set" never reaches
+  // the confirm screen — see `finish` below), so re-parsing here only ever
+  // needs to redo the item/qty/rate split.
+  function applyTranscript(text: string) {
+    applyItem(text, parseTranscript(text));
   }
 
   function startListening() {
@@ -231,6 +252,7 @@ export function VoiceReaderPanel({ onAdd, onClose }: Props) {
     setError("");
     setAlternatives([]);
     setInterim("");
+    setPendingSet(null);
     heardSoundRef.current = false;
     gotSpeechRef.current = false;
     salvageRef.current = [];
@@ -301,9 +323,43 @@ export function VoiceReaderPanel({ onAdd, onClose }: Props) {
       // Deliberately does NOT finish here. Dad decides when he is done.
     };
 
-    /** Commit a transcript and move to the confirm screen. */
+    /**
+     * Commit a transcript.
+     *
+     * A spoken change ("change wire rate to 1800") that matches a line in the
+     * quote goes to the disambiguation/confirm step below instead of the
+     * normal add screen. Everything else — including a change that matched
+     * nothing — takes the add path exactly as before.
+     */
     function finish(heard: string[], why: string) {
-      applyTranscript(heard[0] ?? "");
+      const finalText = heard[0] ?? "";
+      const intent = parseIntent(finalText);
+
+      if (intent.kind === "set") {
+        const matches = matchLines(intent.target, lines);
+        if (matches.length > 0) {
+          // One clear winner still goes to the confirm step — nothing reaches
+          // the quote without Dad seeing it first, which is how this panel
+          // has always worked.
+          setTranscript(finalText);
+          setInterim("");
+          setStage("idle");
+          setPendingSet({ field: intent.field, value: intent.value, choices: matches.slice(0, 4) });
+          log.info("voice", "set intent matched", {
+            lang,
+            why,
+            field: intent.field,
+            value: intent.value,
+            choices: matches.length,
+            ms: Date.now() - startedAt,
+          });
+          return;
+        }
+        // Nothing matched, so this was probably an item name after all. Fall
+        // through and treat it as an add rather than telling him it failed.
+      }
+
+      applyItem(finalText, intent.kind === "add" ? intent.item : parseTranscript(finalText));
       setAlternatives(heard);
       setInterim("");
       setStage("confirming");
@@ -311,7 +367,7 @@ export function VoiceReaderPanel({ onAdd, onClose }: Props) {
         lang,
         why,
         alternatives: heard.length,
-        transcript: heard[0] ?? "",
+        transcript: finalText,
         ms: Date.now() - startedAt,
       });
     }
@@ -435,7 +491,7 @@ export function VoiceReaderPanel({ onAdd, onClose }: Props) {
           <button className="vr-close" onClick={onClose}>✕</button>
         </div>
 
-        {(stage === "idle" || stage === "error") && (
+        {(stage === "idle" || stage === "error") && !pendingSet && (
           <div className="vr-prompt">
             <LangToggle lang={lang} onPick={pickLang} />
             <button className="vr-mic-btn" onClick={startListening}>
@@ -547,6 +603,35 @@ export function VoiceReaderPanel({ onAdd, onClose }: Props) {
             <LangToggle lang={lang} onPick={pickLang} />
             <button className="vr-retry-btn" onClick={startListening}>
               🎤 Try again
+            </button>
+          </div>
+        )}
+
+        {pendingSet && (
+          <div className="vr-set">
+            <div className="vr-set-hd">
+              {isAmbiguous(pendingSet.choices)
+                ? "Which item did you mean?"
+                : "Change this item?"}
+            </div>
+            {pendingSet.choices.map((c) => (
+              <button
+                key={c.id}
+                className="vr-set-choice"
+                onClick={() => {
+                  onSet(c.id, pendingSet.field, pendingSet.value);
+                  setPendingSet(null);
+                  onClose();
+                }}
+              >
+                <span className="vr-set-name">{c.name || "(unnamed item)"}</span>
+                <span className="vr-set-change">
+                  {pendingSet.field === "rate" ? "rate" : "qty"} → {pendingSet.value}
+                </span>
+              </button>
+            ))}
+            <button className="vr-set-cancel" onClick={() => setPendingSet(null)}>
+              Cancel
             </button>
           </div>
         )}

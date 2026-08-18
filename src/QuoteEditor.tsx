@@ -202,6 +202,27 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
     markDirty();
   }
 
+  /** A spoken "change wire rate to 1800", already matched to a line and
+   *  confirmed by Dad in the voice panel. Same undo story as an import: one
+   *  step back via `lastImport`, not a stack. */
+  function handleSetFromVoice(id: number, field: "rate" | "qty", value: number) {
+    log.info("voice", "line changed by voice", { field, value });
+    setLastImport({ lines, label: "1 change from voice" });
+    setLines((prev) =>
+      prev.map((l) =>
+        l.id === id
+          ? field === "rate"
+            // A line priced by discount has no single "rate" to change —
+            // writing sellRate while the line still resolves from sellList
+            // would show a number that does not drive the total.
+            ? { ...l, sellMode: "direct" as const, sellRate: String(value) }
+            : { ...l, qty: String(value) }
+          : l
+      )
+    );
+    markDirty();
+  }
+
   function undoLastImport() {
     if (!lastImport) return;
     log.info("ui", "import undone", { label: lastImport.label });
@@ -564,7 +585,12 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
         <ImageReaderPanel onAdd={handleAddFromImage} onClose={() => setShowImageReader(false)} />
       )}
       {showVoiceReader && (
-        <VoiceReaderPanel onAdd={handleAddFromVoice} onClose={() => setShowVoiceReader(false)} />
+        <VoiceReaderPanel
+          onAdd={handleAddFromVoice}
+          lines={lines.map((l) => ({ id: l.id, name: l.name }))}
+          onSet={handleSetFromVoice}
+          onClose={() => setShowVoiceReader(false)}
+        />
       )}
     </div>
   );
