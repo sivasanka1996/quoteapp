@@ -31,26 +31,24 @@ adds a service to run.
 
 ## Current working state — check this before assuming
 
-*Last updated 2026-08-10. Re-check with `git status` and `git log -1`; if this
+*Last updated 2026-08-19. Re-check with `git status` and `git log -1`; if this
 section disagrees with git, git is right and this section is stale.*
 
 - **Branch:** `feature/Vision_Draft`, not `main`. Branched off `a159e6a`.
 - **Deploys only happen from `main`** (`deploy.yml` triggers on push to main).
   Nothing on this branch is live. PI work has to reach `main` to ship.
-- **Push is Siva's job — commit locally and stop.** Retried once on 2026-08-10
-  after Siva said access was granted: **still 403.** The error names the
-  account — *"Permission to sivasanka1996/quoteapp.git denied to RevanParimi"* —
-  so authentication **succeeds** and authorization fails. That narrows it to a
-  pending collaborator invitation (check
-  `https://github.com/sivasanka1996/quoteapp/invitations`) or a cached
-  fine-grained PAT in Git Credential Manager lacking **Contents: write**. Both
-  need a human. Do not retry beyond that one attempt, and do not list it as a
-  blocker in status reports. `gh` is **not installed** on this machine, so
-  permissions cannot be checked from here.
-- **When the push does land, send it to `feature/Vision_Draft`, not `main`** —
-  Siva's instruction on 2026-08-10. Verified safe: `deploy.yml` triggers only on
+- **~~Push is blocked by a 403.~~ FIXED — push works, first proved 2026-08-19.**
+  `git push origin feature/Vision_Draft` succeeded (`7ae2fc4..ad18ece`), so the
+  authorization gap this section described from 2026-08-10 is closed; someone
+  accepted the invitation or fixed the token. **Push when asked** — do not
+  re-report the 403, and do not tell Siva to push by hand.
+- **Push to `feature/Vision_Draft`, never to `main`** — Siva's instruction on
+  2026-08-10, and it now actually matters because pushing works. Verified safe
+  and re-confirmed 2026-08-19: `deploy.yml` triggers only on
   `push: branches: [main]` and `build-apk.yml` is `workflow_dispatch`, so
-  pushing the feature branch runs no workflow and deploys nothing.
+  pushing this branch runs no workflow and deploys nothing. `origin/main` is
+  still at `a159e6a`. **A push to `main` deploys to Dad immediately** — that is
+  a release decision and needs Siva to say so.
 - **Commit author must be `revan.datta132@gmail.com`.** With no `user.email`
   configured, git derives `revan.parimi@ibm.com` from the machine hostname,
   which is wrong. Global config is now set; verify with
