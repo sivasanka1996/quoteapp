@@ -37,8 +37,14 @@ export default defineConfig([
     },
   },
   {
-    // Config files at the root run in Node, under `type: module`.
-    files: ['*.js'],
+    // Config files at the root, and the Node-side helper scripts, run under
+    // `type: module`. `*.js` alone matched only the root, so a file added at
+    // `scripts/*.mjs` was walked by `eslint .` with NO rules at all — an
+    // unused variable planted there passed clean. That is the same silent
+    // skip PI-4.7 fixed for `cf-worker/` and PI-7 re-checked for the provider
+    // files; this is the third instance, so the pattern is now explicit
+    // rather than incidental.
+    files: ['*.js', 'scripts/**/*.{js,mjs}'],
     extends: [js.configs.recommended],
     languageOptions: {
       globals: globals.node,

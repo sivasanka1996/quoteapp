@@ -1,0 +1,50 @@
+{
+  // The helper scripts in `scripts/`. Before this file existed they were
+  // typechecked by NOTHING: `tsconfig.app.json` includes only `src` and
+  // `tsconfig.node.json` only `vite.config.ts`, so a real type error planted
+  // in `cascade-check.ts` passed `npm run build` clean (checked 2026-08-19).
+  // That script deletes documents from the REAL Firestore, which is the last
+  // place to want an unchecked `undefined`.
+  //
+  // Needs both worlds: `node` for `process` and `node:fs`, `DOM` +
+  // `vite/client` because these scripts import from `src/`, which uses
+  // `import.meta.env` and browser types.
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.scripts.tsbuildinfo",
+    "target": "es2023",
+    "lib": ["ES2023", "DOM"],
+    "module": "esnext",
+    "types": ["node", "vite/client"],
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "allowJs": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    /* Linting */
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["scripts"],
+
+  // `pdf-check.ts` imports `playwright-core`, which is deliberately NOT a
+  // dependency — it is installed on demand with
+  // `npm install --no-save playwright-core` and drives the Chrome already on
+  // the machine rather than downloading one. With the package absent every
+  // `page.evaluate` callback also loses its parameter types, so the single
+  // missing module produces six errors. Adding the dependency to silence them
+  // would put a browser driver in every `npm ci`, including CI and the deploy,
+  // to typecheck one script that CI never runs.
+  //
+  // The exclusion is deliberate and stays visible: `npm run sanity` still
+  // reports this file as untypechecked. To check it by hand, install the
+  // package first, then drop this `exclude` for the run.
+  "exclude": ["scripts/pdf-check.ts"]
+}

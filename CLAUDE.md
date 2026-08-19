@@ -103,19 +103,25 @@ npm install        # REQUIRED FIRST — node_modules is not committed and is
 npm run dev        # http://localhost:5173 — talks to the REAL Firestore
 npm run dev:local  # http://localhost:5173 — talks to the LOCAL emulator instead
 npm run emulators  # start the emulator suite first, in another terminal
-npm test           # 323 tests (Vitest, two projects — see below) — 39
+npm test           # 327 tests (Vitest, two projects — see below) — 39
                    # image-reader worker, 34 types, 31 engine, 30 voiceParse,
                    # 22 logger, 19 openrouter, 17 numberWords, 15 format,
-                   # 14 readImage, 13 matchLines, 12 log export,
-                   # 12 ImageReader.dom, 11 VoiceReader.dom, 10 sharePdf
-                   # (page-break maths, filename), 9 mergePages,
-                   # 9 CustomerScreen.dom, 8 movePage,
+                   # 14 readImage, 13 CustomerScreen.dom, 13 matchLines,
+                   # 12 ImageReader.dom, 12 log export, 11 VoiceReader.dom,
+                   # 10 sharePdf (page-break maths, filename), 9 mergePages,
+                   # 8 movePage,
                    # 7 schema prompt (the rate rule, pinned by its defect),
                    # 6 firestoreAck, 4 QuoteEditor.dom, 1 smoke (dom project
                    # wiring)
 npm run lint       # eslint — clean, keep it that way (now enforced in CI)
-npm run build      # production build — AND the only real typecheck, see below
+npm run build      # production build — AND the typecheck for src/ AND scripts/
+npm run sanity     # repo hygiene — strays, dead code, doc drift. Read-only.
 ```
+
+**These counts drift, so do not hand-maintain them.** `npm run sanity` compares
+the number claimed here against the suite and says so when they disagree; it
+caught this block still reading 323 after `CustomerScreen.dom` went 9 → 13 with
+the cross-customer copy picker.
 
 ### `npm run dev` uses the real Firestore; `dev:local` uses an emulator
 
@@ -160,10 +166,20 @@ else about feature testing the agent can do alone.
 `tsconfig.json` is a solution file holding only `references`, so that command
 exits 0 having typechecked zero files. It reported clean on a file that
 `npm run build` then rejected (2026-08-10). **`npm run build` is the typecheck**
-— it runs `tsc -b`, which follows the references to `tsconfig.app.json` and
-`tsconfig.node.json`. Corollary: test files are compiled with the *app* config,
-which has no Node types, so `process` in a test needs reaching through
-`globalThis`.
+— it runs `tsc -b`, which follows the references to `tsconfig.app.json`,
+`tsconfig.node.json` and `tsconfig.scripts.json`. Corollary: test files are
+compiled with the *app* config, which has no Node types, so `process` in a test
+needs reaching through `globalThis`.
+
+**`tsconfig.scripts.json` was added 2026-08-19, because `scripts/` had been
+typechecked by nothing at all.** The app config includes only `src` and the node
+config only `vite.config.ts`, so a deliberate type error planted in
+`cascade-check.ts` passed `npm run build` clean — a script that **deletes
+documents from the real Firestore**. Proved red-then-green: the same planted
+error now fails the build, and the build is clean once reverted. One file is
+excluded on purpose — `scripts/pdf-check.ts` imports `playwright-core`, which is
+deliberately not a dependency; the reason is written in the tsconfig, and
+`npm run sanity` keeps reporting the exclusion so it cannot quietly spread.
 
 **`vite.config.ts` defines two Vitest *projects*, not one environment — do not
 switch the suite's environment wholesale.** `unit` (`environment: 'node'`,
@@ -218,11 +234,17 @@ Manual APK build: Actions → **Build Android APK** → Run workflow → downloa
 > design, deploy topology, test coverage gaps, a swept inventory of leftover
 > design, and the runbook with launch and connectivity commands.
 >
-> Division of labour between the three docs: **this file** is the plan, the
-> decisions and their history, and what was verified how. **`DESIGN.md`** is the
-> shape of the system as it stands. **`HUMAN-TASKS.md`** is what only a person can
-> clear. When a design decision changes, change it in `DESIGN.md` in the same
-> commit as the code.
+> Division of labour between the docs: **this file** is the plan, the decisions,
+> and the current state. **`DESIGN.md`** is the shape of the system as it stands.
+> **`HUMAN-TASKS.md`** is what only a person can clear. **`docs/history/`** is the
+> evidence behind every "DONE" claim here — the verification tables, moved out on
+> 2026-08-19 so this file stays cheap to load every session. When a design
+> decision changes, change it in `DESIGN.md` in the same commit as the code.
+>
+> **The rule for the split: a *rule* lives here, a *receipt* lives in
+> `docs/history/`.** If a sentence tells the next agent what to do or not do, it
+> belongs in this file even if it came out of a verification run. If it records
+> what was checked and what the result was, it belongs in history.
 >
 > One thing `DESIGN.md` says loudly because it keeps being assumed otherwise:
 > **there is no application server, no FastAPI and no uvicorn.** Firestore is
@@ -425,6 +447,29 @@ scripts/
                            throwaway customers, deletes one, checks the other
                            survives, cleans up after itself.
                            npx vite-node scripts/cascade-check.ts
+  openrouter-live-check.ts — drives the REAL worker against the REAL model API.
+                           SPENDS MONEY. Not a *.test.ts, so CI never runs it.
+  pdf-check.ts           — builds a real PDF in real Chrome and inspects the
+                           FILE, not the DOM. Needs
+                           `npm install --no-save playwright-core` first, which
+                           is why it is the one file excluded from the typecheck.
+  make-mock-slips.ps1    — generates synthetic order slips for the live check
+  prepare-slips.ps1      — mimics prepareImage (1600px / q85) on real photos
+  repo-sanity.mjs        — `npm run sanity`. Repo hygiene, NOT app correctness:
+                           stray directories, unreferenced assets that still
+                           ship, module reachability from main.tsx, unused
+                           deps, config nothing reads, secret hygiene, doc
+                           drift (incl. the test count), typecheck coverage.
+                           Zero dependencies, read-only, no network. Exits 1 on
+                           ERROR only — `--strict` to fail on warnings too.
+                           Deliberately not a *.test.ts: a housekeeping warning
+                           must never block a deploy that ships correct maths.
+
+docs/
+  superpowers/specs|plans — the design and implementation docs per PI group
+  history/               — the verification tables behind every "DONE" claim in
+                           this file, moved out 2026-08-19. Nothing was deleted;
+                           see "Keeping this file current".
 ```
 
 (The pre-Firestore `QuoteDrawer.tsx/css` and `useQuoteStorage.ts` were deleted
@@ -806,346 +851,28 @@ trustworthy, and nothing else matters until it is done.
 > **PI-4.1 (Firebase auth) is now the last task in the plan**, not the first item
 > of PI-4 — see the PI-4 section.
 
-### PI-1 — Trust — DONE and VERIFIED 2026-08-05
+### PI-1 → PI-4, and customer editing — DONE, verified 2026-08-05 → 08
 
-All six items shipped and were verified by driving the **built** app in
-Chromium (Playwright, against the real Firestore project). One item is
-partially verified — see the note under the table.
+All shipped and verified by driving the **built** app in Chromium (Playwright,
+against the real Firestore), plus unit tests. **The evidence tables — every
+check, how it was run, and what it deliberately did *not* cover — are in
+[`docs/history/pi-1-to-4-verification.md`](docs/history/pi-1-to-4-verification.md).**
 
-| Item | How it was verified | Result |
-|---|---|---|
-| Offline persistence — reads | `firestore/[DEFAULT]/quoteapp-3f48e/main` present in IndexedDB. Firestore blocked at the network layer, page reloaded: all 6 customers and all 4 stat tiles still rendered from cache. | **PASS** |
-| Offline persistence — writes | Saved a quote with Firestore blocked, then restored the network. A separate Node client then found the quote on the **server** (2 lines, totalSale ₹2000) — the queued write really did drain. | **PASS** |
-| Save never hangs | With Firestore blocked, Save went to "Saved ✓" in **2560ms** (the `ACK_TIMEOUT_MS` path) and showed the "will sync when you are back online" note. Never stuck on "Saving…". | **PASS** |
-| `nextId` collision | 6 `seedNextId` unit tests, plus end-to-end: reopened a saved quote and tapped Add Item — row count went 1 → 2, no duplicate. | **PASS** |
-| Unsaved-changes guard | Back straight after saving → no prompt. Edit the quote name, then Back → prompt appears. | **PASS** |
-| Error boundary | Put a `throw` in `HomeScreen`'s render and rebuilt: got the recovery card ("Something went wrong" + Back/Reload), root HTML 498 bytes, not a blank page. Throw removed and rebuilt clean. | **PASS** |
-| No-cost warning | 5 `hasNoCost` unit tests, plus end-to-end on an item with a sell rate and no cost: cost-side ₹0 warning, `no cost` row chip, and the profit panel reading "1 item has no cost entered… this profit is overstated". | **PASS** |
+Read that file before re-verifying any of this or assuming a gap is still open.
+It carries the harness recipes (none of the harnesses are in the repo), the two
+defects the whole-branch review caught that no single task's review could see,
+and the reasoning behind the save path's ack race.
 
-**Scope of "offline" above: the data layer only.** Each check aborted requests
-to the app's single off-localhost endpoint —
-`POST firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel`,
-the WebChannel stream `onSnapshot` runs on. `localhost` stayed reachable, so
-the app shell always loaded from the server. Whether the *service worker*
-serves the shell with the network fully cut is untested: the SW never reaches
-`active` under Playwright (headed or headless), and that is the harness, not
-the build — `sw.js` is served as `text/javascript` and all 25 precache URLs
-return 200. Deferred to the pre-handover list; it is pre-existing PWA
-behaviour, not something PI-1 touched.
+Three things from it that are still live constraints, not history:
 
-Tests are `environment: 'node'`, so anything touching the DOM needs a jsdom
-switch in `vite.config.ts` first. Do not add a half-configured test setup just to
-claim coverage — a manual check honestly reported is better than a fake test.
-**Superseded by PI-12** (below): a second `dom` project now exists for exactly
-this, so the switch this paragraph describes is no longer what a component
-test needs — this is history, not current instruction.
-
-**How to re-run these checks.** They are not in the repo (they need Playwright,
-a Chromium download and a live Firestore). Recipe: `npm run build && npm run
-preview`, drive `localhost:4173` with Playwright, abort `**://*.googleapis.com/**`
-to simulate no signal, and use an obviously-named throwaway customer. Delete the
-customer **and its quotes** afterwards — bug #6 means deleting the customer
-alone leaves the quotes behind.
-
-**Design note on the save path.** Firestore resolves a write promise only on
-*server* ack. Offline that promise never settles, so simply awaiting it would
-still hang the button even with persistence on — the original bug wearing a new
-hat. `useQuotes.saveQuote` therefore races the write against a 2.5s
-`ACK_TIMEOUT_MS` and returns `{ id, queued }`: `queued: true` means the
-persistent cache has the data and the server has not confirmed yet, which the
-editor reports as saved plus a "will sync" note. New quotes use a client-minted
-`doc()` id rather than `addDoc`, so a quote created with no signal still gets a
-stable id. Real failures (permission denied) still reject and surface as the
-retry banner.
-
-### PI-2 — The document — DONE and VERIFIED 2026-08-06
-
-All five items shipped. Verified by driving the **built** app in Chromium
-(Playwright, against the real Firestore project) with two obviously-named
-throwaway customers, both deleted afterwards along with their quotes. 33 checks,
-all passing.
-
-| Item | How it was verified | Result |
-|---|---|---|
-| Customer name, address, phone | Seeded a customer with all three; the To block rendered each one. A second customer with no address or phone rendered no empty `.cv-billto-line` at all. | **PASS** |
-| Date + quote number | Seeded `createdAt` = 06 Aug 2026 14:23; the document read `Q-260806-1423` and `06 Aug 2026`. | **PASS** |
-| Number matches before and after the first save | New quote → Customer view **without saving** → `Q-260806-1234`. Back, Save, Customer view again → identical. Closed and reopened from the customer's history → still identical. | **PASS** |
-| Validity + terms | Set in company settings with a multi-line terms block; both printed under the totals and the terms kept all 3 lines (`white-space: pre-line`). Cleared → the whole block disappeared. | **PASS** |
-| Consistent `₹` | Every money cell and all three totals: `₹120`, `₹2,280`, `₹2,400`, `₹432`, `₹2,832`. | **PASS** |
-| Fractional quantities (bug #5) | 2.5 m at ₹48: business row `2.5 × 48.00`, amount `120` — not `96`. Document showed qty `2.5` and `₹120`. | **PASS** |
-| Nothing renders as `undefined` | Full document and bare document both scanned for `undefined` / `NaN` / `[object` — clean. | **PASS** |
-| Header does not overflow a phone | At 375px the No./Date column wraps below the title (`flex-wrap: wrap`), the row does not overflow (scroll 291 = client 291) and the page does not scroll horizontally. | **PASS** |
-
-**Two defects the whole-branch review caught, both fixed before merge.** Neither
-was visible to a single task's review — each needed two tasks side by side.
-
-1. **`Subject: Untitled` on the customer's document.** `saveQuote` had always
-   stored `name.trim() || "Untitled"` as an internal placeholder, which was
-   harmless while the quote name only fed the PDF *filename*. PI-2 promoted it
-   to a rendered `Subject:` line, so reopening an unnamed quote and sharing it
-   sent the customer a quotation reading "Subject: Untitled". `saveQuote` now
-   stores the name as typed, each display site applies its own fallback, and the
-   editor treats a stored `"Untitled"` as no name so quotes saved before the fix
-   are covered too. The quote *list* still shows "Untitled", which is where that
-   label belongs.
-2. **The image and voice confirm-list qty and rate fields could not take a
-   decimal point.** Both were controlled by a *number* and re-parsed on every
-   keystroke, so React restored the committed value and erased the in-progress
-   `"2."` — typing `2.5` produced **25**, and on the rate field `12.5` produced
-   **125**. They now hold the in-progress text as a string and parse once at
-   commit, matching what the quote editor's own qty field already did. Task 2
-   had given these fields `inputMode="decimal"`, so the keypad was offering a
-   key the field rejected.
-
-Re-verified in the browser after those fixes: a legacy `"Untitled"` quote prints
-no subject line and the word appears nowhere on the document, a named quote
-still prints its subject, and the quote list still labels unnamed quotes.
-
-**The document does not reflow, and that is deliberate** (this closed bug #8).
-`sharePdf` rasterises `.cv-doc` with html2canvas at whatever width it happens to
-be rendered at, so a responsive document meant *the file a customer received
-depended on the screen it was shared from* — on a phone the item table
-overflowed and the Amount column was cut out of the PDF entirely. `.cv-doc` is
-now pinned to `width: 760px` on screen, so the shared file is identical from a
-phone or a desktop; verified at 360, 375, 414, 820 and 1280px, all rendering
-760px with nothing outside the captured node.
-
-The cost is that the preview scrolls sideways on a phone — Dad sees the left of
-the document and swipes for the totals. That is the right trade: a preview that
-fits the screen but misrepresents the output is worse than one he has to nudge,
-and every other PDF on a phone behaves this way. The `flex-wrap` on `.cv-docmeta`
-is now dead weight at a fixed width; it is left as insurance.
-
-Do not make the document responsive again without re-reading this. If the
-preview needs to fit a phone screen, scale it (`transform`) rather than reflow
-it — and check what html2canvas does with the transform before trusting it.
-
-**The business view deliberately has no `₹`.** PI-2 item 4 scoped the symbol to
-the home tiles and the customer-facing document. The editor's own dense number
-columns were left alone.
-
-**Bug #5's closure is precise.** The named mechanism — `parseInt(l.qty)` in five
-places — is gone, replaced by one tested `parseQty` in `types.ts`. The *voice*
-path still reads a leading decimal as part of the item name, and that is
-deliberate: in this domain "1.5 sq" and "2.5 sq" are item names, and the idiom is
-quantity-first-as-a-whole-number — the existing test
-`parseTranscript("6 wire 1.5sq rate 1650")` expects qty 6, name "wire 1.5sq".
-Teaching that regex decimals would parse "2.5 sq wire" as qty 2.5 of "sq wire",
-turning a correct parse into a wrong one. A fractional quantity from a voice
-import is entered by editing the qty field afterwards, which now works.
-
-**What this did not check:** the actual generated PDF. Every check reads the DOM
-that `sharePdf` rasterises, not the file html2canvas produces. That gap is how
-bug #8 above stayed invisible until the table was measured — worth remembering
-before trusting a DOM check to speak for the PDF.
-
-### PI-3 — Sharpen the AI paths — 5 of 7 DONE 2026-08-07, NOT DEPLOYED
-
-**Decision, 2026-08-05, unchanged: do not switch models, and do not add
-embeddings or a vector DB.** Gemini 2.5 Flash is the right tier for this. The
-weak link was the prompt layer, not the model.
-
-| Item | How it was verified | Result |
-|---|---|---|
-| 1. Structured output — `responseMimeType` + `responseSchema` replace the ```json fence hunt | 16 worker unit tests with `globalThis.fetch` stubbed: the request carries `responseMimeType: "application/json"` and a schema with name/qty/rate; a blank name is dropped; a missing rate stays `null` rather than becoming 0. Field names and the uppercase `Type` enum checked against Google's `generateContent` API reference. | **PASS (no live API call)** |
-| 3. Downscale before upload | Real Chromium against the dev server, calling the app's own `prepareImage`. A 4000×3000 photo (6155 KB) uploaded as 646 KB of base64 at exactly 1600×1200; an 800×600 photo was left at 800×600, not enlarged. | **PASS** |
-| 4. Escalate on retry only | Unit tests: Pro is not called when Flash reads the list; Flash returning zero items, HTTP 429, or a thrown request each escalate to `gemini-2.5-pro`; Pro is tried once, never in a loop. | **PASS (no live API call)** |
-| 5. Honest offline message | Real Chromium with `context.setOffline(true)`: `readImageItems` rejects with "No internet connection — reading a photo needs one", not the configuration error and not a bare `TypeError`. | **PASS** |
-| 7. `confidence` made honest | Unit tests: `"full"` only when every row has a qty **and** a rate, `"partial"` when a rate or qty is missing, `"low"` when nothing was read. | **PASS** |
-
-**Item 2 (few-shot examples) is the one thing still open, and it is blocked on
-Siva, not on code.** Tracked in [`HUMAN-TASKS.md`](HUMAN-TASKS.md) §4. It needs
-two or three photos of Dad's *actual* order slips to paste into the prompt. Get
-the photos, then add them as `inline_data` parts ahead of the real image in
-`readWith`.
-
-**No training and no ML are involved, despite how "few-shot" sounds.** The
-request today is *instructions + Dad's photo*; few-shot makes it *instructions +
-example photo + that example's correct answer + Dad's photo*, all in the same
-JSON body. Gemini copies the pattern in-context. No weights change, nothing is
-stored, nothing is fine-tuned — the cost is a few extra tokens per read. The
-examples must be Dad's real slips because they only help if they match what he
-actually sends; invented handwriting shows the model a pattern it will never see
-again, which is worse than no example at all.
-
-**None of the worker half is live** — and PI-4.2's origin allowlist has since
-landed on the same undeployed file, so one `wrangler deploy` now ships both.
-`cf-worker/image-reader.js` is committed but not deployed — deploying needs
-`npx wrangler deploy` from `cf-worker/`, and per the Deploy section that takes
-effect for Dad immediately, independent of this branch. The client half (downscale, offline message) ships normally with
-`main`. The two halves are independent: an old worker handles a downscaled
-image fine, and a new worker handles a full-size one fine, so they can go out
-in either order.
-
-**What this did not check: any of it against the real Gemini API.** Every worker
-test stubs `fetch`, so no request built by this code has ever received a real
-200. The schema is right per Google's published reference, but the first real
-proof will be the first photo read after deploy — read one before assuming it
-works. Two specific things to watch on that first read:
-
-- `maxOutputTokens` is still 8192 and thinking tokens count against it on the
-  2.5 models. It was left alone deliberately: that limit is what the live worker
-  runs today, so it is known to be survivable for Dad's slips, and changing it
-  blind is a worse bet than leaving it. If long lists come back empty, this is
-  the first suspect.
-- The Pro retry doubles the worst-case wait on a bad read. It only fires when
-  Flash already returned nothing, so the average read is unchanged.
-
-The ImageReader panel also grew an offline banner and a "N items still need a
-qty or rate — fill it in here, or the line is added at ₹0" warning on the
-confirm list. That warning closes a real gap: a null rate becomes a blank
-`sellRate`, and PI-1's existing no-cost warning only covers the *cost* side, so
-nothing used to catch a sell-side ₹0.
-
-**Both of those UI pieces are now verified — 2026-08-07, 23 checks, all
-passing.** They were the last "never rendered" claim in the code. Driven in
-Chromium against the built app and the real Firestore, with **only the Gemini
-proxy intercepted at the network layer** — so the component, `readImageItems`,
-and the whole client path are the real ones, and no worker deploy or API key was
-needed. One throwaway customer per run, deleted afterwards; Save was never
-pressed, so no quote document was ever written.
-
-| Item | How it was verified | Result |
-|---|---|---|
-| Offline banner | Absent while online; `context.setOffline(true)` made `.ir-offline` appear reading "No internet connection… the rest of the app keeps working offline"; going back online cleared it. | **PASS** |
-| Incomplete-row warning | A canned 3-item read (one complete, one with `rate: null`, one with `qty: 0`) produced "**2 items still need** a qty or rate — fill **them** in here, or the line is added at ₹0". | **PASS** |
-| Warning counts *and* grammar | Filling the missing rate dropped it to "**1 item still needs** … fill **it** in here" — the singular branch renders correctly. Filling the zero qty removed the warning entirely. | **PASS** |
-| Both conditions counted | A missing rate and a zero qty each count, confirming the `_rateRaw === "" \|\| !(parseQty(_qtyRaw) > 0)` pair. | **PASS** |
-| Decimal entry (PI-2 regression) | Typed `2.5` into qty and `12.5` into rate keystroke-by-keystroke; fields held `"2.5"` and `"12.5"`, not `25` and `125`. | **PASS** |
-| Values reach the quote | The row rendered `2.5 × 12.50` and an amount of `31` — so the fraction really multiplied. Checked on the row's own cell, **not** a page-text search for "2.5", which the item name "Copper Wire 2.5sq" would have satisfied on its own. | **PASS** |
-| Checkbox count | "Add 3 items to quote" → unchecking a row → "Add 2 items to quote". | **PASS** |
-| Clean render | All three names carried into the editor; no `undefined`/`NaN`/`[object`; no uncaught page errors. | **PASS** |
-
-**What this still does not check:** the real Gemini response. The proxy was
-faked, so this proves the *panel* handles a well-formed reply correctly — it says
-nothing about what Gemini actually returns. That gap closes only on the first
-real read after the worker is deployed. The harness is not in the repo (it needs
-Playwright and a live Firestore); recipe is the same as PI-1's, plus
-`page.route(PROXY_URL, …)` to serve the canned items.
-
-6. Keep the browser Web Speech API for voice — free, shipped, good enough. Only
-   revisit (AI4Bharat IndicWhisper is the best fit) if Dad complains about
-   Telugu accuracy. **No work needed; nothing was changed here.**
-
-**The VoiceReader panel is now verified too — 2026-08-07, 26 checks, all
-passing.** It had the same gap ImageReader did: `voiceParse` was unit-tested,
-the panel around it had never been drawn. The Web Speech API does not exist in
-headless Chromium, so `window.SpeechRecognition` was replaced with a mock that
-fires `onresult`/`onerror`/`onend` on command — the component, `parseTranscript`
-and the confirm path are all real, only the recognition engine is faked.
-
-| Item | How it was verified | Result |
-|---|---|---|
-| Language toggle | English active by default with the English example; picking తెలుగు flipped `aria-pressed`, switched the example and hint to Telugu script, and wrote `te-IN` to `quoteapp.voiceLang`. | **PASS** |
-| Language persists | Closed and reopened the panel — still Telugu, since the choice is read from localStorage on mount. | **PASS** |
-| `stageRef` guard, both directions | Recognition ending *while listening* returned the panel to idle rather than leaving it stuck on "Listening…" — the exact regression the ref exists to prevent. Ending *after* a result left the confirm screen intact. | **PASS** |
-| Error branches | `no-speech` → "No speech detected"; `not-allowed` → "Microphone permission denied". Each renders its own message, not the generic one. | **PASS** |
-| Alternatives | Three alternatives came back; the top one showed as "I heard", and exactly the other two rendered as chips. Picking one replaced the transcript **and** re-parsed name/qty/rate from it. | **PASS** |
-| Parse into fields | `"6 wire 1.5sq rate 1650"` filled name `wire 1.5sq`, qty `6`, rate `1650` — the quantity-first idiom bug #5's closure note describes, working in the UI. | **PASS** |
-| Decimal entry | Typed `2.5` and `12.5`; fields held them, and the resulting quote row read `2.5 × 12.50` with an amount of `31`. | **PASS** |
-| Add gating | Disabled with an empty name, re-enabled once one is typed. | **PASS** |
-
-Same harness caveats as the ImageReader run: not in the repo, one throwaway
-customer per run deleted afterwards, Save never pressed. And the same limit —
-this proves the panel handles well-formed recognition results, not that Chrome's
-recogniser hears Dad's Telugu correctly. Only he can tell you that.
-
-### PI-4 — Hygiene — 7 of 8 DONE 2026-08-07
-
-Everything here is done except **PI-4.1**, which needs Firebase console access.
-
-| Item | How it was verified | Result |
-|---|---|---|
-| 2. Worker answers only the app | 9 new worker tests: the app origin and both localhost ports are reflected back by name; an unknown origin gets 403 and Gemini is never called; a request with **no** Origin gets 403 too; a refused origin is never reflected; `/list` is behind the same check; `Vary: Origin` is set. | **PASS (no live API call)** |
-| 3. Dead code deleted | `QuoteDrawer.tsx/css` and `useQuoteStorage.ts` imported by nothing but each other, confirmed by grep across `src/`. Lint and build clean afterwards. | **PASS** |
-| 4. Cascade quote deletion (bug #6) | `scripts/cascade-check.ts` against the **real** Firestore. Against the old code: "2 orphan(s) left behind", 3 of 6 checks failed. Against the fix: all 6 pass — victim's quotes gone, bystander's customer and quote untouched. | **PASS (live Firestore)** |
-| 5. Stale index dropped | `useQuotes` issues one equality filter and sorts client-side, so no composite index applies. | **PASS** |
-| 6. Version drift | Releases API says latest is v1.4 and `APK_URL` already pointed there. Relabelled rather than "fixed" — see the note under Live URLs. | **PASS** |
-| 7. Lint in CI | Ran `npm run lint` clean before wiring it into `deploy.yml`, so it cannot fail the first deploy that hits it. Its reach was widened on 2026-08-07: the only config block matched `**/*.{ts,tsx}`, so the gate walked `cf-worker/image-reader.js`, its test and `eslint.config.js` with no rules at all. Separate blocks now lint them under `globals.serviceworker` and `globals.node`. | **PASS** |
-| 10. Keystore password | Gradle reads `KEYSTORE_PASSWORD` from the environment; a missing value fails with a message naming the setting. | **PASS (not run — workflow_dispatch only)** |
-| 8, 9. README, `.env.example` | Were already done; the list was stale. | — |
-
-**Two things need a human before the next APK build or worker deploy:**
-
-- **Add a `KEYSTORE_PASSWORD` secret** (Settings → Secrets and variables →
-  Actions) with the current value, or the next APK build fails with the
-  message above. `quoteapp123` is in the public git history for good — moving
-  it out stops republishing it, it does not unpublish it. Actually retiring it
-  means a new keystore and therefore a new signing key, which Android will not
-  install over the existing app: Dad would have to uninstall and reinstall.
-  Worth doing when he is around, not silently.
-- **The worker allowlist is not deployed.** `npx wrangler deploy` from
-  `cf-worker/` takes effect for Dad immediately. Read a real photo straight
-  after. If it fails, this is the first suspect and the revert is one line
-  plus a redeploy.
-
-**1. Single shared Google sign-in + `if request.auth != null` — MOVED TO LAST,
-2026-08-07.** Siva's call: "can't we put the firebase at the end of all the
-tasks, we need to finish things before checking these." It is no longer item 1
-of PI-4 — it is **the final task in the whole plan**, after every other PI item
-is genuinely done. Reason to reorder: it was the only console-gated item sitting
-at the top of a list of buildable work, so it kept reading as the next thing up
-and stalling progress reports on a blocker nobody here could clear. It is also
-the item this file has always called a *nuisance* risk, not a breach risk.
-
-Do not raise it as "next" until everything else is finished. Two hard blockers,
-neither of them code:
-
-- Enabling Google as a sign-in provider is a Firebase **console** action. There
-  is no console access here, and half-built auth is worse than none.
-- `deploy.yml` deploys `firestore:rules` automatically on every push to `main`.
+- **PI-3 item 2 (few-shot examples) is open and blocked on Siva**, not on code —
+  it needs photos of Dad's actual order slips. See [`HUMAN-TASKS.md`](HUMAN-TASKS.md) §4.
+- **PI-4.1 (Firebase auth) is the last task in the whole plan**, deliberately.
   Committing `if request.auth != null` before a working sign-in UI exists would
-  **lock Dad out of every quote the moment that deploy lands**. The rules and
-  the client have to go out together, verified together.
-
-When it is done, check what auth does to PI-1's offline story: Firestore serves
-cached reads with a cached token, but token *refresh* needs network, so an
-airplane-mode cold start after a long gap is the case to test. Until then this
-stays what CLAUDE.md has always called it — a nuisance risk, not a breach risk,
-and never a blocker.
-
-### Customer editing — DONE and VERIFIED 2026-08-08
-
-Not a PI item — it came out of the pre-merge whole-branch review, which found
-that `updateCustomer` had never had a call site. Verified by driving the
-**built** app in Chromium (Playwright, real Firestore) at 390px, with one
-`ZZ-edit-check-*` customer deleted afterwards along with its quotes. 21 checks,
-all passing, plus 8 unit tests on `customerPatch`.
-
-| Item | How it was verified | Result |
-|---|---|---|
-| Sheet opens on stored values | Seeded a customer through the UI, tapped the pencil: all three fields prefilled from the record. | **PASS** |
-| Reopening discards a cancelled draft | Typed into phone, hit Cancel, reopened — the stored phone was back, not the abandoned text. | **PASS** |
-| Save gated on a name | Blanked the name → Save disabled; typed one back → enabled. `customerPatch` returns null for a blank name as the guard behind that. | **PASS** |
-| The edit lands on screen | Changed the phone and saved: the header contact line showed the new number and not the old one. | **PASS** |
-| Padded input is trimmed | Entered `"  Miyapur "`; the header rendered `· Miyapur`. These fields print on a customer's PDF, where a stray space shows. | **PASS** |
-| A no-op save just closes | Reopened and saved with nothing changed — sheet closed, no write, values intact. | **PASS** |
-| **The correction reaches a quotation** | Opened a new quote → Customer view: the To block carried the new phone **and** the new address, and neither old value appeared anywhere in the document. | **PASS** |
-| Nothing renders broken | Document scanned for `undefined` / `NaN` / `[object`; no uncaught page errors for the whole run. | **PASS** |
-
-**The write is deliberately not awaited, and that is PI-1's lesson reused.**
-Firestore resolves a write only on *server* ack, so `await updateDoc(...)` would
-have hung the Save button forever with no signal — the same defect `saveQuote`
-needed `ACK_TIMEOUT_MS` to dodge. This path needs no ack race because it makes
-no promise worth racing: nothing tells Dad his data is safe, the sheet just
-closes and the screen shows what he typed. The persistent cache holds the write
-and replays it. A genuine rejection — rules refusing us once PI-4.1 lands —
-reverts the screen to the stored values and shows a banner, so the UI never
-displays a number Firestore rejected.
-
-**Why the change had to travel up to the router.**
-[AppRouter.tsx:17](src/AppRouter.tsx#L17) keeps the selected customer as a
-snapshot in its own state and nothing re-reads it, so writing to Firestore alone
-would have left Dad staring at the number he had just corrected. `CustomerScreen`
-takes an `onCustomerChange` callback and the router replaces the screen's
-customer with it. That is also why the fix is retroactive: `QuoteEditor` reads
-the customer from that same object.
-
-**What this did not check:** the generated PDF, same gap as PI-2 — every check
-reads the DOM that `sharePdf` rasterises. And the harness is not in the repo (it
-needs Playwright and live Firestore); recipe is PI-1's, plus a
-`ZZ-edit-check-*` customer and a cascade delete afterwards, since there is still
-no delete button in the UI.
+  lock Dad out of every quote the moment that deploy lands.
+- **The customer PDF is pinned to 760px and must not be made responsive again**
+  without re-reading the note there — a responsive document meant the file a
+  customer received depended on the screen it was shared from.
 
 ### PI-5 → PI-8 — planned 2026-08-10, NOT STARTED
 
@@ -1201,173 +928,22 @@ three of those measurements overturn assumptions this file used to carry.
 - `format.ts` and `sharePdf.ts` regex **stay**. "No regex" is a rule about
   parsing *human* input, not about deterministic digit grouping.
 
-### PI-5 — Observability — DONE 2026-08-10
+### PI-5, PI-6, PI-7 — DONE 2026-08-10
 
-Shipped first, as planned, because it is the instrument for PI-6/7/8. 41 new
-unit tests (182 total, up from 104). Two items cannot be unit-tested in
-`environment: 'node'` and are recorded honestly as **manual**, not dressed up
-as tests.
+Observability (`src/log/`), the `voiceParse` tokenizer rewrite, and the
+Worker's split into router + interchangeable providers. **Evidence tables in
+[`docs/history/pi-5-to-8-verification.md`](docs/history/pi-5-to-8-verification.md).**
 
-| Item | How it was verified | Result |
-|---|---|---|
-| Levels + debug gating | Unit tests: `debug` dropped with the flag off and kept with it on; `info`/`warn`/`error` always kept; scope, message and `ts` recorded. | **PASS** |
-| The debug flag | `detectDebug` is pure and tested against both inputs: `?debug=1`, `?foo=bar&debug=1`, the stored `quoteapp.debug`, and every "off" case. A **throwing** `localStorage` (private mode) returns off rather than crashing, and the URL still wins when storage throws. | **PASS** |
-| Ring buffer | Pushing 2100 records leaves exactly 2000, oldest evicted, newest last. The ~1 MB byte cap evicts before the record cap is reached. A single oversized record is **kept**, not evicted to nothing. `all()` returns a copy, so a caller cannot corrupt the ring. | **PASS** |
-| The logger cannot crash the app | A sink that throws does not escape `log.info`, and circular data does not either. This is the whole safety argument for logging from inside catch blocks. | **PASS** |
-| Error normalising | An `Error` becomes `{name, message, stack}`; a thrown string still yields a usable record; no `err` key when none was passed. | **PASS** |
-| Export format | Filename shape `quoteapp-error-2026-08-10T14-23-07.log`, no colons (illegal on Windows, where Siva opens them). Fixed columns stay aligned across every level and scope. `error` selects warn+error; `info` selects everything including debug. | **PASS** |
-| `calc/engine.ts` re-throws | All 23 original engine tests pass **unchanged** after wrapping — the wrapping is behaviour-preserving. The catch logs once at the innermost frame (a symbol marker stops `calcQuote → calcLine → resolvePrice` writing the same failure three times) and then re-throws. | **PASS** |
-| Worker logging | 6 new worker tests: one `read complete` line carrying provider, model, itemCount, confidence and ms; every line of one request shares an `rid`; the Flash→Pro escalation is recorded as warn-then-info; a refused origin is noted; `LOG_LEVEL=silent` silences it. | **PASS (no live API call)** |
-| No stack reaches the client | The `/list` branch awaits `fetch` with no guard of its own, so a throw there reaches the top-level handler. Test asserts the response is `{"error":"Image reading failed. Please try again."}` with status 500 and **no** trace of the message or file in the body — while the worker's own log keeps the full detail. | **PASS** |
-| IndexedDB persistence | **Cannot be unit-tested** — `environment: 'node'` has no `indexedDB`, so `idb.ts` short-circuits and the tests never touch it. Checked instead in **Chromium against the built app**: the `quoteapp-logs` database is created alongside Firestore's own, holds records written by the real boot path, and each has the documented `{ts, level, scope, msg}` shape. | **PASS (browser)** |
-| The log survives a reload | Same run: record count went 1 → 2 across a reload, so `restorePersistedLogs` really does bring the previous session back. This is the whole reason for persisting — the log worth reading is the one from *before* the crash. | **PASS (browser)** |
-| The export download | Clicked **Export everything** and opened the file that landed: named `quoteapp-info-2026-08-10T11-06-26.log`, no colon in it, and the first line read `2026-08-10T11:05:49.439Z  INFO   ui         app started  {"url":"/"}` — the documented column layout, from a real download rather than a formatter test. **Export problems** produced `quoteapp-error-…` containing no INFO lines. | **PASS (browser)** |
-| The Diagnostics panel | Renders in settings at 390px, reports a live record count, and the toggle flips `aria-pressed` and writes `quoteapp.debug=1`. | **PASS (browser)** |
-| `?debug=1` end to end | A fresh tab opened at `/?debug=1` with **no stored flag** captured debug records. This is the form Siva talks Dad through on the phone, so it mattered that it works from the URL alone. | **PASS (browser)** |
+What still binds, from those records:
 
-**The logger never throws, and that is load-bearing.** Every public entry point
-is wrapped, each sink is guarded individually, and `data` is put through a JSON
-round-trip on the way in — which both guarantees `structuredClone` will survive
-the IDB write and turns a circular reference into a caught error *at the log
-call* rather than a mysterious rejection later. Failure is silent by design.
-
-**Why IndexedDB and not a folder.** A browser cannot write to a directory —
-spec D1/D2. The File System Access API would come closest and was rejected
-because Android Chrome does not support it, so it could never work for Dad, who
-is the only user who matters here.
-
-**One real defect was found while wiring the ladder, and then fixed properly —
-bug #10, closed 2026-08-10.** [HomeScreen.tsx](src/HomeScreen.tsx) `handleAdd`
-had **no catch at all**, so a rejection left the button on "Saving…" forever and
-lost what Dad had typed — PI-1's exact failure mode, still live in the
-add-customer path a full PI after it was fixed for quotes.
-
-The first pass only made it loud. That was the wrong call and Siva said so:
-the fix was a known pattern already proven in this codebase, so deferring it
-bought nothing. `addCustomer` now mints its id on the device with `doc()`,
-writes with `setDoc`, and races the ack — exactly what `saveQuote` does.
-
-Two things came out of doing it properly:
-
-- **The ack race now lives in [`src/firestoreAck.ts`](src/firestoreAck.ts)**,
-  shared by both call sites instead of copied. It had never had a test of its
-  own despite being the thing standing between Dad and a hung button; it has
-  **6 now**, including one that pins the `write.catch(() => {})` line — it looks
-  like dead code and is not, because without it a write that fails *after* the
-  timeout is an unhandled rejection.
-- **`serverTimestamp()` was also wrong here.** It reads back as `null` from the
-  local cache until the server confirms, while `Customer.createdAt` is declared
-  `number`. Nothing read the field, so nothing noticed. It is `Date.now()` now,
-  matching quotes.
-
-**Proved red-then-green in a real browser, offline.** Against the old code the
-sheet sat on "Saving…" past 8s and never navigated; against the fix it released
-in **2624ms** — the `ACK_TIMEOUT_MS` path — navigated into the new customer,
-survived a reload while still offline, and the queued write drained when the
-connection came back. 7 checks.
-
-> **Harness note worth keeping:** the first version of that check waited for
-> `button:has-text('Add Customer')` to detach and "passed" in 52ms against the
-> *broken* code — the label merely flips to "Saving…", so the selector matched
-> nothing and the wait succeeded instantly. Watch the sheet, not the button. A
-> check that cannot fail is worse than no check, which is why this one was run
-> against the old code first.
-
-### PI-6 — Remove the fragile parsing regex — DONE 2026-08-10
-
-31 new unit tests. **All 9 original `voiceParse` tests and all 23 original
-`engine` tests pass unchanged** — that is the proof the rewrite preserved
-behaviour rather than replacing it.
-
-| Item | How it was verified | Result |
-|---|---|---|
-| `"six wire rate 1650"` → qty **6** | Was qty 1: the old rule required a leading *digit*. Now a classification rule, and tested. | **PASS** |
-| `"wire 6 nos rate 1650"` → qty **6** | Was qty 1: the quantity was not at the front, so nothing looked for it. A number followed by a unit word is now a quantity wherever it sits. | **PASS** |
-| `"2 wire code 4402"` → rate **null** | Was rate 4402 — an item code read as a price, the worst kind of wrong because it looks deliberate. A code keyword before a trailing number refuses the trailing-number rule. | **PASS** |
-| `"twenty five wire rate 1650"` → qty **25** | Multi-token numbers join for the two patterns people say (tens+unit, hundreds), and only those. | **PASS** |
-| `"6 nos wire rate 1650"` → name `wire` | The unit word is consumed with the quantity rather than left in the item name. | **PASS** |
-| **Regression guard (spec §3.4)** | `"6 wire 1.5sq rate 1650"` still gives qty 6, name `wire 1.5sq`, rate 1650. And `"2.5 sq wire"` still parses as qty **1** with the decimal kept in the *name* — because "1.5 sq" and "2.5 sq" are item names in this trade. Teaching the qty rule decimals would turn a correct parse into a wrong one. | **PASS** |
-| Number words, both languages | 17 tests: English units, teens, tens and hundred; Telugu 1–19 (11–19 did not exist before), tens and వంద; case and trailing punctuation ignored; `"twenty-five"` hyphenated; unknown words → `null`. | **PASS** |
-| Both tables always consulted | Deliberate: the recogniser returns English digits and words in `te-IN` mode, so the language setting is not trusted for numbers. Tested in both directions. | **PASS** |
-| `"six six"` does **not** become 12 | Greedy addition would do that; only tens+unit and hundreds patterns join. Two quantities said in a row is far likelier than someone meaning twelve that way. | **PASS** |
-| Money stops round-tripping through text | `PriceMode` now carries `discounts: number[]`. 8 new engine tests, including one that resolves the whole fixture **both ways and asserts the same rupee**. | **PASS** |
-| Data-URL split hardened | 6 tests: a URL with no comma, an empty payload, `null`, and an `ArrayBuffer` each raise a readable error instead of yielding `undefined`. | **PASS** |
-
-**`parseDiscountChain` is still exported and still tested** — it parses
-*typed* input, which is a real job. What changed is that nothing internal
-round-trips through it: the editor passes `discountsFromPercents(d1, d2)`
-straight through, and `"64.7% + 2%"` is built only for display. `PriceMode`
-accepts either, preferring numbers, which is why the 23 original engine tests
-needed no edits.
-
-**What none of this proves: that Chrome hears Dad's Telugu correctly.** Every
-test here feeds `parseTranscript` a string. Recognition quality needs a mic and
-a human voice, and stays Siva's to check — spec §7.
-
-### PI-7 — Pluggable AI provider — DONE 2026-08-10, NOT DEPLOYED
-
-24 new worker tests (55 total). **Gemini remains the default and nothing about
-Dad's experience changes** — this buys the ability to change model without a
-deploy, and nothing else, until there is evidence to change it.
-
-| Item | How it was verified | Result |
-|---|---|---|
-| The Gemini move was pure | All **25 original worker tests pass with zero edits to their assertions**. That was the acceptance condition in the plan: if a test had needed changing, the move would not have been pure. | **PASS** |
-| The contract holds | 17 provider tests: the request carries the model, a base64 image part and a JSON response format; malformed JSON, an empty reply, HTTP 429, a network throw and a valid-but-wrong-shape reply each yield `items: []` with `detail` set and **never** a throw. That "never throws" is what lets the router have no try/catch around the read. | **PASS (no live API call)** |
-| Both providers normalise identically | The blank-name drop, the null-rate rule and fractional quantities are asserted on the OpenRouter path too, against the shared `schema.js`. A model comparison is meaningless if the two paths clean up differently. | **PASS** |
-| `AI_PROVIDER` routes | End to end through `worker.fetch`: unset → Gemini's endpoint; `openrouter` → OpenRouter's; `GEMINI` (wrong case) → Gemini. | **PASS** |
-| A typo cannot break a read | `AI_PROVIDER=gemeni` returns **200** from Gemini and logs `unknown AI_PROVIDER, falling back`. A typo in an env var must never be why Dad cannot read a slip standing in a shop. | **PASS** |
-| The right key is demanded | With `AI_PROVIDER=openrouter` and no key, the error names `OPENROUTER_API_KEY`, not the Gemini one. | **PASS** |
-| The new files are actually linted | `cf-worker/**/*.js` is recursive, but that was **checked rather than assumed** — an unused variable planted in `schema.js` was caught by `npm run lint`, then removed. PI-4.7 fixed exactly this class of silent skip once already. | **PASS** |
-
-**Nothing here is live.** `cf-worker/` deploys by hand with `npx wrangler deploy`
-and has not been deployed — so PI-3, PI-4.2, PI-5's worker logging and all of
-PI-7 are still absent from production, and per spec §0.1 **the deployed worker
-is still the pre-PI-4.2 one that answers anyone.** One deploy ships all of it.
-
-**Switched to OpenRouter 2026-08-10, on Siva's call.** `wrangler.toml` now sets
-`AI_PROVIDER = "openrouter"` with `qwen/qwen3.5-flash-02-23`. Gemini remains the
-*code-level* fallback, so a deleted or misspelled var lands back on it — but as
-configured, the next deploy stops using Gemini.
-
-**~~The model the spec named does not exist.~~ WRONG — corrected 2026-08-12 by
-a live read; see "The real AI read" above.** This paragraph used to say
-`qwen/qwen3.7-flash` was absent from the catalogue and would have 400'd on the
-first real read. It is in the catalogue, it takes images, it is *half* the price
-of the model that replaced it, and pointed at the mock slips it read every
-number correctly. The 2026-08-10 "re-fetch" recorded here did not establish what
-it claimed. The advice below stands and is the reason the error was catchable —
-it was simply not followed at the time. **Verify a model id against the live
-catalogue before setting one, and before writing a note saying one is missing:**
-
-```bash
-curl -s https://openrouter.ai/api/v1/models | grep -o '"id":"[^"]*"'
-```
-
-**Cost still is not what decides this.** Every candidate is cents a month at
-Dad's volume. **Telugu accuracy on his handwriting decides it**, and nothing has
-compared them on real input yet — that needs [`HUMAN-TASKS.md`](HUMAN-TASKS.md)
-§4's photos. Next rung up if Qwen3.5-Flash disappoints: `qwen/qwen3.6-flash`.
-Rolling back to Gemini is `AI_PROVIDER = "gemini"` in the Cloudflare dashboard,
-no deploy.
-
-**Keys live in `.env`, which is gitignored — settings do not.** Siva's split,
-2026-08-11: `.env` is the **reference sheet** of every secret a real environment
-needs, so standing up prod is reading down one file instead of remembering.
-Everything non-secret — model, provider, limits, URL — is in
-`config/app.config.ts`.
-
-**`.gitignore` was fixed first, and checked before a single key was written.**
-`*.local` did **not** match a bare `.env`, so the file would have been
-committed. `.env`, `.env.*` are now ignored with `!.env.example` excepted;
-verified with `git check-ignore` for `.env`, `.env.local` and `.env.production`.
-
-**Nothing reads `.env` at runtime, and it says so at the top.** Vite would
-compile any value into the public bundle, and the Worker never sees it at all.
-The values have to be copied to where each consumer actually reads them —
-`wrangler secret put` for the Worker, `cf-worker/.dev.vars` for local Worker
-dev, GitHub repo secrets for Actions. Each entry in `.env` names its
-destination.
+- **The logger never throws, and that is load-bearing** — it is called from
+  inside catch blocks. Every entry point is wrapped and every sink guarded.
+- **`calc/engine.ts` logs and then re-throws.** Do not "simplify" that into a
+  fallback return; a math failure must surface as the ErrorBoundary card, never
+  as a silently wrong total.
+- **Bug #10's fix is the shared ack race in [`src/firestoreAck.ts`](src/firestoreAck.ts).**
+  Any new write that drives a button must go through it.
+- **None of the PI-7 worker half is deployed.** `cf-worker/` ships by hand.
 
 ### One config file — added 2026-08-11
 
@@ -1439,161 +1015,37 @@ Do not add an inline env object to a worker test. Add a factory.
 
 ### PI-8 — Multi-page slips — DONE and VERIFIED 2026-08-10
 
-9 unit tests on the pure merge, plus 18 checks driving the **built** app in
-Chromium at 390px. Only the image proxy was faked, so the component,
-`readImageItems`, `mergePages` and the whole client path are real. One
-throwaway `ZZ-multipage-check-*` customer per run, both deleted afterwards via
-the tested cascade helper (0 quotes each — Save was never pressed).
+Dad can photograph every page of a long order list. Pages read **sequentially,
+one call each** — never batched, because batching shares one 8192-token budget —
+merged into one confirm list with page badges, and a page that fails never costs
+the others. **Evidence table in
+[`docs/history/pi-5-to-8-verification.md`](docs/history/pi-5-to-8-verification.md)**,
+including the sequential-not-parallel timing measured rather than asserted.
 
-| Item | How it was verified | Result |
-|---|---|---|
-| Multi-select | The gallery input carries `multiple`; three files produced three thumbnails badged p1/p2/p3 and a button reading "Read 3 pages". | **PASS** |
-| **Reads are sequential, not batched** | The fake proxy recorded the start and end of every call. Three calls, and **no call started before the previous one finished** — `3083-3333 3350-3610 3623-3875`. This is spec §5.2's requirement measured rather than asserted: one 8192-token budget per page, never shared. | **PASS** |
-| Progress | "Reading page 2 of 3…" while it worked. | **PASS** |
-| Merge order and badges | Four items across three pages arrived in page order, each row badged p1/p2/p2/p3, header reading "Found 4 items across 3 pages". | **PASS** |
-| **Partial failure keeps the good pages** | Page 2 of 3 forced to fail: pages 1 and 3 still offered with their real page numbers, and an inline "⚠ Page 2 could not be read. Retry page 2". Losing a five-page order to one blurry photo is the failure Dad would actually hit (spec §5.3). | **PASS** |
-| Retry re-reads only that page | Exactly **one** proxy call, and its items slotted back into page order. | **PASS** |
-| **A retry does not cost Dad his typing** | A row on a surviving page was edited to "EDITED BY HAND" before retrying; after the retry it was still there, with page 2's fresh rows inserted around it. Re-reading everything would have thrown that away. | **PASS** |
-| Nothing renders broken | No uncaught page errors across the whole run. | **PASS** |
+### The live API reads, and the generated PDF — 2026-08-12
 
-**A defect the browser check found was in the harness, not the app** — worth
-recording because the first run looked like a real bug. The fake proxy keyed
-its reply by *call ordinal*, so on retry it served page 1's items while the app
-correctly labelled them page 2. The app was right; the fixture was wrong. The
-three fixture images are byte-identical, so the harness has to be told which
-page it is serving — it cannot infer it from the request.
+The three biggest untested things in the repo, all closed on the same day: a
+real model response, real handwriting, and the actual PDF **file**. Four genuine
+defects were found and fixed. **The full records are in
+[`docs/history/live-api-and-pdf-verification.md`](docs/history/live-api-and-pdf-verification.md).**
 
-**What this still does not check:** a real Gemini response to a real multi-page
-slip. The proxy was faked, so this proves the *client* handles pages correctly,
-not that the model reads page 3 of Dad's handwriting. That closes on the first
-real multi-page read after the worker is deployed.
+The two lessons that still govern how this code is changed:
 
-### The real AI read — DONE and VERIFIED 2026-08-12
+- **Never let the prompt calculate.** A rule the model can weigh against its own
+  commercial intuition is not a rule. The first fix forbade dividing only inside
+  one branch, passed every font-rendered mock, and then put **five wrong rupee
+  figures** on screen from real photographs — at `confidence: "full"`, so nothing
+  warned Dad. Only a blanket "NEVER CALCULATE… copied digit for digit" held.
+  Corollary: **font-rendered mocks do not predict real handwriting.**
+- **Thinking tokens share the `max_tokens` budget.** Unbounded reasoning ate a
+  whole reply and returned empty after 70s. `reasoning: { enabled: false }` fixed
+  the OpenRouter path. **`gemini.js` still has the same latent defect** — it sends
+  no `thinkingConfig` — and was deliberately left alone because there is no
+  Gemini key here to verify a change with.
 
-The biggest untested thing in the repo, closed. Every worker test stubs
-`globalThis.fetch`, so the model id, the prompt, the `response_format` dialect
-and the image encoding had never met the live API — and if any one of them were
-wrong, **every read Dad ever attempted would fail**.
-
-`scripts/openrouter-live-check.ts` now proves it end to end. It calls the real
-`cf-worker/image-reader.js` default export with a real `Request`, so the origin
-allowlist, `pickProvider`, the provider, `normalize` and `confidenceOf` are all
-the shipping code. Nothing is stubbed but the transport into the Worker.
-`scripts/make-mock-slips.ps1` generates the images (handwriting font for
-English, Nirmala UI for Telugu, at the 1200×1600 / JPEG-q85 shape
-`prepareImage` produces). Deliberately not a `*.test.ts`, like
-`cascade-check.ts` — it spends money and CI must never run it.
-
-```bash
-powershell -ExecutionPolicy Bypass -File scripts/make-mock-slips.ps1
-npx vite-node scripts/openrouter-live-check.ts
-```
-
-**The API contract was right first time.** Model id, `response_format:
-json_schema` dialect, the `image_url` data-URL part, base64 with no prefix —
-all correct, all confirmed by a 200. The two defects were subtler, and both
-would have hurt Dad.
-
-| Item | How it was verified | Result |
-|---|---|---|
-| **Defect 1 — thinking tokens ate the whole reply** | `max_tokens` is ONE budget covering reasoning *and* content. Reading the six-line English slip, qwen3.5-flash spent **5902 reasoning tokens** of 8192 and only just finished. The Telugu slip did not: `finish_reason: "length"` after **70 seconds**, empty content, which reaches Dad as "could not read any items from this photo". Fixed by sending `reasoning: { enabled: false }` — 232 completion tokens, 2.2s, ~8x cheaper. | **FIXED, verified live** |
-| **Defect 2 — the prompt told the model to divide the rate** | The old wording ("if a line shows both a smaller and a larger number, the smaller one is usually the unit rate") made both models read a *lone* price as a line total. On the Telugu slip "5 no 1650" came back as **rate 330** (1650÷5) and "3 no 240" as **rate 80**. Three of five rows silently wrong, each by a plausible amount. Rewritten to state that one price IS the rate and must not be divided. | **FIXED, verified live** |
-| Every quantity and rate, English slip | All 6 rows exact: 6×1650, 4×450, 25×95, 30×48, 12×125, 8×70. | **PASS (live API)** |
-| Every quantity and rate, Telugu slip | All 5 rows exact: 5×1650, 3×240, 10×450, 20×48, 8×70. | **PASS (live API)** |
-| The line-total trap | Row 3 reads "25 no 95 = 2375" on the paper. The model returns **95**, not 2375 — so the two-price half of the rule still works after the rewrite. | **PASS (live API)** |
-| `confidence` is derived, on real data | `"full"` on both slips once every row had a qty and a rate; `"low"` on the failed control. PI-3.7's derived confidence, finally seen against a real response. | **PASS (live API)** |
-| Origin allowlist, on the real path | A request with no Origin gets **403** and no API call is made. PI-4.2 exercised for real rather than against a stub. | **PASS** |
-| **The check can fail** | Run first against a made-up model id: 0 items, `confidence: "low"`, detail naming HTTP 400. Run before trusting any green above. | **PASS (red control)** |
-
-**Telugu item *names* are the weak spot, and they are graded separately on
-purpose.** A wrong number is money Dad never sees; a wrong name sits in the
-confirm list in front of him and he retypes it. On the mock slip qwen3.5-flash
-rendered ఎంసిబి (MCB) as "Fan Switch 32A" and ఫ్యాన్ బాక్స్ as "Fan Hook".
-Numbers were perfect. The script reports these as `NOTE`, not `FAIL`.
-
-**A documentation error was found and corrected, and it is worth naming.** This
-file and `openrouter.js` both asserted that `qwen/qwen3.7-flash` "does not
-exist" with vision and structured output, citing a catalogue check. The
-catalogue was re-fetched on 2026-08-12 — 406 entries — and **it is there**, takes
-images, costs **half** the configured model ($0.030/M in vs $0.065), answered
-slightly faster, and got the Telugu MCB row right where the incumbent did not.
-The claim was simply wrong. **The model was not switched**: the decision is
-locked to Dad's real handwriting, not a mock, and qwen3.7-flash advertises
-`response_format` but *not* `structured_outputs`, so schema conformance may be
-advisory rather than enforced there. Both questions the real slips answer.
-
-### Round two — real handwritten slips, 2026-08-12
-
-Siva supplied five images of handwritten order slips the same day: a flat
-evenly-lit one, two handheld shots (shadow, creases, a hand in frame, the `3100`
-smudged into ink blobs), a three-page order, and one with Telugu item names.
-They run through `scripts/prepare-slips.ps1` first, which mimics `prepareImage`
-— longest edge to 1600, JPEG q85 — so the model sees the bytes Dad's phone would
-actually upload rather than a 3 MB PNG. That script also splits the three-page
-photo into the three separate images PI-8 expects.
-
-**106 checks, all passing.** But only after the rate defect came back.
-
-| Item | How it was verified | Result |
-|---|---|---|
-| **Defect 2 was NOT fixed — it returned on real photographs** | The prompt rewritten earlier that day held on the font-rendered mocks and **failed on 2 of 6 real images**. On the crumpled shot every row came back divided: 1650÷10=**165**, 2450÷6=**408**, 3100÷4=**775**, 120÷12=**10**, 185÷8=**23**. Page 1 of the three-page order did the same. Reproduced deterministically before being touched. | **FOUND** |
-| Why the first fix was not enough | It forbade dividing *inside the one-price branch*, which the model overrode with its own sense of what wire should cost. A blanket **"NEVER CALCULATE… copied digit for digit"** was not overridable. Verified three consecutive times on both failing images. | **FIXED** |
-| The trap row still works | The blanket ban does not break the two-price rule: `25 no 95 = 2375` still returns **95**. Selection is not calculation. | **PASS** |
-| Handwriting, three photo conditions | Flat, shadowed-and-creased, and crumpled — all five rows exact on each, including the smudged `3100`. | **PASS (live API)** |
-| **Telugu handwriting** | వైర్ 1.5 / వైర్ 2.5 / స్విచ్ / సాకెట్ → "Wire 1.5", "Wire 2.5", "Switch", "Socket", every qty and rate exact. The thing the whole multilingual model choice was for, and it works on real handwriting. | **PASS (live API)** |
-| **PI-8 multi-page against a real model** | Three pages read one call each (2.9s, 3.9s, 2.4s), merged by the real `mergePages`: 8 items, correct order, correct `p1`/`p2`/`p3` badges, no failed pages. PI-8's 18 browser checks all used a faked proxy — this is the first real one. | **PASS (live API)** |
-
-**The lesson worth keeping: font-rendered mocks did not predict real
-handwriting.** The first prompt fix passed every mock and still put five wrong
-rupee figures on screen with `confidence: "full"` — every row had a qty and a
-rate, so nothing warned Dad. A prompt rule the model can weigh against its own
-commercial intuition is not a rule. Ban the behaviour outright.
-
-**What this still does not prove:** these are Siva's slips, not Dad's, and they
-were AI-generated images of handwriting rather than camera photographs — clean
-ink, even strokes, no motion blur or focus miss. Real biro on a carbon copy in
-shop light is still untested, and the smudge on one shot is the only genuine
-degradation in the set.
-
-**The Gemini path could not be checked at all.** `GEMINI_API_KEY` is empty in
-`.env` — only `OPENROUTER_API_KEY` is set. Gemini is the code-level fallback, it
-shares the rewritten prompt (so defect 2 is fixed there too), and it has the
-**same latent defect 1**: `gemini.js` sends no `thinkingConfig`, so thinking
-tokens are charged against the same 8192 ceiling. The one-line fix would be
-`generationConfig.thinkingConfig = { thinkingBudget: 0 }` — **deliberately not
-applied**, because this file's standing rule is that changing that ceiling blind
-is a worse bet than leaving it, and with no key there is no way to verify. Left
-for whoever has a Gemini key; the evidence that it matters is in this table.
-
-### The generated PDF — DONE and VERIFIED 2026-08-12
-
-The other thing nothing had ever looked at. Every PI-2 check read the **DOM**
-that `sharePdf` rasterises, never the file — which is exactly how bug #8 hid.
-
-`scripts/pdf-check.ts` closes it: it drives the built app in Chrome at **390px**,
-seeds a quote, clicks the real Share button, catches the real download, and then
-opens the file — page count, page geometry, and the embedded JPEGs extracted and
-written out so they can be looked at. **20 checks, all passing.** It needs
-`npm install --no-save playwright-core`, deliberately not a dependency, and it
-drives the Chrome already on the machine rather than downloading one.
-
-| Item | How it was verified | Result |
-|---|---|---|
-| **Bug #8 does not reproduce** | All five columns on, 390px viewport: the extracted page image is **1520px** wide — exactly the 760px document at html2canvas's scale 2 — so nothing is cropped. Checked on the file, not the DOM. | **PASS** |
-| The table cannot spill out of the capture | The mechanism itself: `.cv-table` right edge (746.0) against `.cv-doc` right edge (774.0). Held even in the stress case below. | **PASS** |
-| The numbers survive rasterising | Read off the generated image: ₹17,835 at 60%+1.5% → ₹7,026.99 × 6 = **₹42,162**; per-line GST summing to **₹9,013**; grand total **₹59,085**. The engine's per-line rounding, seen in the actual customer document. | **PASS** |
-| Stress: unbreakable name, crore amounts, 20 rows | A part number with no spaces and a ₹9,98,99,001 amount — the widest a cell ever gets, since `formatMoney` groups Indian-style. Still 1520px, still not clipped, and the crore totals render (₹11,80,60,552). | **PASS** |
-| **Defect found — a page break guillotined an item row** | The 20-row quote broke at canvas y=2204, **through the middle of item 12**: its name on page 1, the rest of the same row on page 2, both halves sliced through the glyphs. `sharePdf` cut fixed page-sized bands with no regard for content. Fixed by `pageSlices()`, which prefers row boundaries; the break moved to 2107 and page 2 now opens on a whole row. | **FIXED** |
-| Nothing is lost between pages | The page images sum to the document height (3576px of image vs 3574px of document), so slicing cannot silently drop a row. Asserted on both scenarios. | **PASS** |
-| **The check can fail** | The mid-row check was run against the old code first: it failed on the 20-row quote and passed on the 6-row one. A check that cannot fail is worse than no check. | **PASS (red control)** |
-
-**What this still does not check: the Web Share arm.** Headless Chrome *has*
-`navigator.share`, and it **resolves** — silently, with no share sheet and no
-file anywhere. The first run looked like a hang: no download, no error, the
-button back to normal. The PDF had been built and handed to a share sheet that
-does not exist. The check therefore forces the download branch, which receives
-the identical blob — so this proves the *file*, and says nothing about the
-Android share sheet. That stays on the handover list, where it needs a phone.
+Repeat runs: `npx vite-node scripts/openrouter-live-check.ts` (spends money;
+deliberately not a `*.test.ts`, so CI never runs it) and
+`npx vite-node scripts/pdf-check.ts`.
 
 ### PI-9 → PI-12 — planned 2026-08-17, NOT STARTED
 
@@ -1677,104 +1129,32 @@ real network behaviour, and **anyone actually speaking into a microphone
 against this code**, remain unverified by this plan and stay on the handover
 list.
 
-### PI-9 — Duplicate a quote — DONE and VERIFIED 2026-08-18
+### PI-9 → PI-12 — DONE 2026-08-18, cross-customer copy 2026-08-19
 
-| Item | How it was verified | Result |
-|---|---|---|
-| `duplicateQuote` (`src/types.ts`) — fresh line ids from 1, status forced to `draft`, name gets " (copy)" (or "Copy of Untitled" for a blank/legacy-"Untitled" source), `totalSale` deliberately absent | 10 unit tests: TDD red (`duplicateQuote is not a function`) then green; a deep-copy test confirms mutating a copied line cannot reach the source array | **PASS** |
-| Copy sheet on `CustomerScreen` — ⧉ button per row, prefilled `"<name> (copy)"`, item count, Cancel writes nothing | 9 jsdom component tests in `CustomerScreen.dom.test.tsx` (written in the same task as this write-up — PI-12 §12.4): prefill, item count, cancel-writes-nothing all pass against the real component | **PASS (jsdom)** |
-| Recomputes the total rather than trusting stale `totalSale` (bug #9 guard) | Component test: the fixture's stored `totalSale` (1900) is deliberately stale against its own line (3 × ₹950 = 2850), so a passing assertion of 2850 cannot be a coincidental match on the stored value. Mutation-tested against the real discriminator: `CustomerScreen.tsx`'s `confirmCopy` was temporarily changed to pass `copying.totalSale` (the stale stored value) instead of `totals.totalSale` — the test went red (`expected 1900 to be 2850`), then the source was restored and re-verified clean. (An earlier version of this fixture had the stored and recomputed totals coincidentally equal, which review caught — see the fix report in the task's report file for how that was found and closed.) | **PASS (jsdom), mutation-tested against the real regression** |
-| Always writes a new `draft` document, never overwrites or re-accepts the source | Component test asserts `status === "draft"` and `existingId === undefined` even though the source quote's `status` is `"accepted"` | **PASS (jsdom)** |
-| Re-mints every line id so a copy cannot collide with its source | Component test asserts the copy's first line has `id === 1` while the source's untouched line keeps `id === 4`. Mutation-tested — asserting `id === 4` on the copy fails | **PASS (jsdom), mutation-tested** |
-| Lands Dad in the new quote, ready to change prices | Component test: `onOpenQuote` is called once with the new id and `status: "draft"` | **PASS (jsdom)** |
-| 390px layout, the button really being ≥48×48, the sheet looking right on a phone | **Not performed — no browser in this environment**, in either the task that built the sheet or the task that tested it | **UNVERIFIED** |
+Duplicate a quote (including to a different customer), a one-step undo for the
+last voice or image import plus add-vs-set voice intent, image page reorder with
+a long-read confirm gate, and the jsdom test project that finally put component
+checks in the repo. **Evidence tables in
+[`docs/history/pi-9-to-12-verification.md`](docs/history/pi-9-to-12-verification.md)**,
+including which assertions were mutation-tested and the two genuine test defects
+found along the way (a test that could not fail, and one factually wrong about
+the component).
 
-**Known non-uniqueness trap, avoided rather than hit:** the copy button's
-`aria-label` is `` `Copy quote ${name}` ``, which is **not unique** once two
-quotes share a name (both "Untitled" is the common case). The component
-tests use a single fixture named "Shop order", so they are safe as written —
-but do not copy this selector pattern onto a fixture with duplicate or blank
-names without scoping to the row first.
+**The caveat that matters most, kept here rather than filed away: no browser was
+available for any of PI-9 → PI-12.** jsdom is not a browser — no layout engine,
+no paint, no service worker, and no Web Speech API at all. So:
 
-### PI-10 — Voice undo + edit — DONE 2026-08-18, never proven at a microphone
+- **390px layout is unverified** for the copy sheet, the ▲▼ page controls and the
+  long-read confirmation.
+- **Nobody has spoken into a microphone against this code.** Every voice test
+  fakes the recognizer.
+- **Every component test fakes the network** — `readImageItems`, `saveQuote`,
+  `updateCustomerDoc` and `db` are all mocked.
 
-| Item | How it was verified | Result |
-|---|---|---|
-| One-step Undo bar after a voice or image import (`lastImport` snapshot, `QuoteEditor.tsx`) | 2 jsdom component tests: no Undo bar before any import; an image import shows "Added 1 item from image.", the row lands, Undo removes it and restores the empty state | **PASS (jsdom)** |
-| Undo is one step, not a stack — a second import overwrites the snapshot | Design-level: accepted, not separately pinned by a test in this plan. A hand-edit made to a *pre-existing* row between an import and Undo is also reverted, because the snapshot is the whole `lines` array — reviewed and accepted (not silent: Dad sees the screen change and nothing has reached Firestore yet) | **ACCEPTED BY DESIGN** |
-| The snapshot survives a **failed** save and clears only on a **successful** one | Traced by hand: `setLastImport(null)` sits in the `try` block after `setSavedAt`, not in `catch` or `finally`. Not separately unit-tested | **VERIFIED BY CODE READING** |
-| `parseIntent` classifies `add` vs `set` — a change word at the front, then a field keyword, then a number, refusing an item code in between | 30 `voiceParse.test.ts` tests (16 original + 14 new), including a red-then-green check on the `CODE_WORDS` guard inside the value-scanning loop — which turned out to be **provably unreachable** given the surrounding fallthrough (documented in-code rather than deleted, as insurance against a future loosening of that fallthrough) | **PASS** |
-| `matchLines`/`isAmbiguous` — token-overlap scoring, disambiguation when the top two scores are within 0.15 | 13 `parse/matchLines.test.ts` tests | **PASS** |
-| The full "say a change, get asked which line, tap one" flow reaches the screen | 3 of `VoiceReader.dom.test.tsx`'s 11 tests, against the real component with only `SpeechRecognition` faked: offers to change the matched line and reports it through `onSet`; asks which line on a tie; falls through to an ordinary add on an unmatched target. Mutation-tested (see PI-12) | **PASS (jsdom), mutation-tested** |
-| Rate changes force `sellMode: "direct"` | Traced by hand in `handleSetFromVoice`: a discount-priced line has no single "rate" to overwrite, so a spoken rate change switches the line to direct pricing rather than writing a number that would not drive the total. Not separately unit-tested | **VERIFIED BY CODE READING** |
-| Recognition actually hears a spoken "change" correctly, in a real accent, in a real room | **Not performed.** jsdom has no Web Speech API at all — every test here fakes `SpeechRecognition` entirely | **UNVERIFIED — needs a human at a microphone** |
-
-### PI-11 — Finish the image path — DONE 2026-08-18, logic verified; layout unverified
-
-| Item | How it was verified | Result |
-|---|---|---|
-| `movePage<T>` (`src/parse/movePage.ts`) — pure, never throws, same array reference on any refused move | 8 unit tests (TDD red then green): a real move, a no-op (`from === to`), and every out-of-range case (negative, past the end, empty array) | **PASS** |
-| ▲▼ reorder controls in `ImageReader.tsx`, disabled at the first/last page, `resetRead()` fired only on a genuine move | 2 of `ImageReader.dom.test.tsx`'s 12 tests: moving page 2 earlier changes the **merged item order** (mock keyed by file identity, not call order — see PI-12's Task-9 fix below); the two boundary buttons are disabled with no click at all | **PASS (jsdom)** |
-| A page-badge/▲▼-button visual collision, found by the implementer reading the CSS by hand (not seen in a browser) | Fixed before review: `.ir-page-move` moved from the bottom-left corner (where it overlapped `.ir-page-num`'s `p1`/`p2` badge) to the free bottom-right corner | **FIXED, unverified visually** |
-| A side effect (`resetRead()`) called from inside the `setPages` state updater — a React purity rule `StrictMode` exists to catch | Fixed before review: the move is now computed outside the updater, `setPages` and `resetRead()` fired as separate statements | **FIXED** |
-| 6-page-or-more confirmation ("N pages… about M seconds, keep the app open") before a long sequential read; below 6, reads immediately | `appConfig.image.longReadPages = 6`, `secondsPerPage = 3` (`config/app.config.ts`, citing the 2026-08-12 live measurements of 2.9s/3.9s/2.4s per page). 2 of `ImageReader.dom.test.tsx`'s 12 tests: at 6 pages, clicking Read shows the confirmation copy and makes **zero** network calls until confirmed; below 6, reading starts immediately with no prompt | **PASS (jsdom)** |
-| The confirmation's arithmetic | `Math.round((6 × 3) / 5) × 5 = 20` seconds, checked by hand against the brief's own worked example. **Not asserted by a test** — the two long-read tests in `ImageReader.dom.test.tsx` check `/read one at a time/` and the call count only, never the seconds figure | **PASS (by hand)** |
-| 390px layout: does the confirmation look right, do the ▲▼ buttons register as taps, does the corner fix actually clear the badge on screen | **Not performed — no browser** in either the implementing task or the testing task | **UNVERIFIED** |
-
-### PI-12 — Browser checks into the repo — DONE 2026-08-18
-
-**The point of this PI:** `CLAUDE.md` used to record 88 browser checks across
-PI-8, ImageReader, VoiceReader and customer editing, and **not one of those
-harnesses was ever committed** — every table said "the harness is not in the
-repo," so the checks were real history and completely unrepeatable.
-`ImageReader.tsx` and `VoiceReader.tsx` — multi-page state, sequential reads,
-partial failure, retry preserving hand edits, the whole voice confirm/change
-flow — had **zero automated coverage** before this PI. `QuoteEditor`'s undo
-bar and `CustomerScreen`'s copy sheet (both PI-9/PI-10, above) shipped with
-none either.
-
-| Item | How it was verified | Result |
-|---|---|---|
-| A second Vitest *project*, `dom` (jsdom), alongside the existing `unit` (node) — `src/**/*.dom.test.tsx` only, so nothing already pure silently starts depending on a DOM | `vite.config.ts` `test.projects`; a one-test smoke check (`src/smoke.dom.test.tsx`) renders a button and asserts it; the 241 pre-existing node tests kept passing unedited | **PASS** |
-| `ImageReader.dom.test.tsx` — 12 tests against the real `ImageReaderPanel`, `mergePages`, `movePage`; only `readImageItems` faked | Sequential-not-parallel measured with an in-flight counter (`maxInFlight === 1` across 3 pages, not just asserted by comment); partial-page-failure keeps the good pages; retry re-reads only the failed page **and** keeps a hand edit made to a surviving row; page reorder changes the merged order; the 6-page confirm gate | **PASS (jsdom)** |
-| `VoiceReader.dom.test.tsx` — 11 tests against the real `VoiceReaderPanel`; only `SpeechRecognition` faked (a constructible mock — the brief's first draft used a non-constructible arrow function and threw) | Language toggle + persistence; add/alternatives/decimal-entry/Add-gating; all 3 of the new change-a-line flow (Task 8); mic-refused; a stale `onend` after an error is a no-op. 3 branches mutation-tested directly in `VoiceReader.tsx` (guard removed, set-intent disabled, set-intent widened), each reverted after confirming the right tests and only those went red | **PASS (jsdom), mutation-tested** |
-| `CustomerScreen.dom.test.tsx` — 9 tests, written this task, pinning PI-9's copy sheet | See the PI-9 table above. 2 of the 9 (recomputed total, re-minted line id) were mutation-tested against the real component; the other 7 are single-assertion checks with no branching logic to misfire | **PASS (jsdom); 2/9 mutation-tested** |
-| `QuoteEditor.dom.test.tsx` — 4 tests, written this task | See below. 3 of the 4 (no-cost warning, undo restores lines, discount compounding) were mutation-tested; the 4th ("no undo bar before anything is imported") is the negative control the other undo test needs to mean anything | **PASS (jsdom); 3/4 mutation-tested** |
-| Genuine defect found: a test that could not fail | `ImageReader.dom.test.tsx`'s original "moves a page earlier" asserted only that the page-1 "move earlier" button stays disabled — true unconditionally, before and after the click, on a completely no-op `reorderPage`. Fixed to assert the merged item order instead, keyed by **which file** was read rather than call order (a mock keyed by call order was tried first and shown, empirically, to also pass against a neutered `reorderPage`) | **FOUND AND FIXED** |
-| Genuine defect found: a test factually wrong about the component | `VoiceReader.dom.test.tsx`'s draft asserted that recognition ending while still listening (nothing said, not stopped) returns the panel to idle. Traced by hand and confirmed by running it: the real component **restarts the mic** (capped at 5 restarts) and stays on "Listening…". Replaced with a test of what the `stageRef` guard is actually for — a stale `onend` after the stage has moved on (e.g. to an error) must be a no-op | **FOUND AND FIXED** |
-
-**`QuoteEditor.dom.test.tsx` — what each of the 4 tests covers, and one
-defect fixed in the brief's own draft:**
-
-| Test | What it proves | Notes |
-|---|---|---|
-| Warns when an item is sold with no cost entered | The profit-panel warning (`.qe-profit`) fires once a freshly-added line has a sell rate **and** a qty, both typed through the real sheet | The brief's draft typed only a rate, never a qty. The warning is gated on `lineSaleTotal > 0`, so a ₹0-total line correctly shows **no** warning — the draft as written could never have gone green. Fixed by also typing qty; mutation-tested by removing the qty line again and confirming the test then fails |
-| No Undo bar before anything is imported | The negative case, so the positive case below means something | — |
-| Offers Undo after an import, and restores the previous lines | Drives the real `ImageReaderPanel` (upload → read → Add), confirms the undo bar names the import, then confirms Undo removes the line and returns to the empty state | The brief suggested the voice path, which needs Task 10's `SpeechRecognition` mock; used the image path instead since both share the same `lastImport` snapshot logic. Mutation-tested (asserting the line survives Undo fails, as expected) |
-| Compounds two discounts rather than adding them | Types the CLAUDE.md fixture (17835, 64.7%, 2%) into the real cost-side sheet fields and reads `6,169.84` back off the rendered per-unit price | Mutation-tested against the *additive* result (5,938.85) to confirm the test would catch a regression to adding instead of compounding |
-
-**Test count:** 310 tests were the floor going into this task (241 baseline +
-1 smoke + 10 duplicateQuote + 8 movePage + 14 voiceParse/parseIntent + 13
-matchLines + 12 ImageReader.dom + 11 VoiceReader.dom). Adding the 9
-CustomerScreen.dom and 4 QuoteEditor.dom tests brings the suite to **323
-tests, all passing** — confirmed by two full `npm test` runs (no jsdom
-worker-startup flake on either), `npm run lint` clean, `npm run build` clean.
-
-**A jsdom flake is characterised, not fixed, and worth knowing about.** The
-first `npm test` run after a cold checkout can drop the *entire* `dom`
-project with a `[vitest-pool-runner]: Timeout waiting for worker to respond`
-error — it fails **loudly** (non-zero exit, an explicit error, a whole
-project missing) rather than silently under-reporting a green suite, so it
-cannot be mistaken for a quiet pass. It was **sighted in three separate
-tasks** (Tasks 1, 2 and 5) — hit along the way while those tasks were doing
-something else — but **deliberately reproduced against an untouched baseline
-by stashing changes and re-running only once**, in Task 3. That one
-stash-and-rerun is the baseline confirmation; the three sightings corroborate
-that the flake is real but are not repeated repro attempts in their own right.
-It self-resolves on a second run, and is believed to be this
-machine's OneDrive-synced path plus jsdom's many small files tripping a pool
-startup timeout on first touch — not a config defect. Re-run once before
-trusting a red `dom` project.
+One trap worth not re-learning: `saveQuote` writes `customerId` from its hook's
+closure, so it **cannot** write a quote for another customer and fails silently
+if handed one. Cross-customer copy goes through `copyQuoteTo`, which takes the
+target explicitly and has no `existingId` parameter at all.
 
 ### Deferred until Dad actually asks
 
@@ -1855,3 +1235,16 @@ or another machine needs to know belongs here, in the repo.
 When a PI item is finished, move it from **WHAT TO BUILD NEXT** to **WHAT IS
 DONE** in the same commit as the code. When an audit turns up a new defect, add
 it to **KNOWN BUGS** with the file and the mechanism, not just a symptom.
+
+**Verification tables go in [`docs/history/`](docs/history/), not here.** This
+file was 1,858 lines on 2026-08-19 and is read in full every session; the
+evidence for finished work was most of that weight. Write the receipt in
+`docs/history/`, and leave behind only what the next agent must *act* on — the
+standing rules, the caveats that still bind, and a link. Nothing was deleted in
+that split, and nothing should be: history that is inconvenient to read is still
+the record of what was actually checked.
+
+**`npm run sanity` catches this file drifting.** It flags stale test counts, dead
+modules, unreferenced assets that still ship, secrets, and config that nothing
+reads. Run it before claiming the repo is tidy — it is read-only and takes a
+second.

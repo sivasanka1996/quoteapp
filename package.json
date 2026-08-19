@@ -12,6 +12,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
+    "sanity": "node scripts/repo-sanity.mjs",
     "emulators": "npx firebase-tools emulators:start --only firestore,auth",
     "dev:local": "vite --mode emulator"
   },
@@ -41,7 +42,6 @@
     "typescript-eslint": "^8.59.2",
     "vite": "^8.0.12",
     "vite-plugin-pwa": "^1.3.0",
-    "vitest": "^4.1.9",
-    "workbox-window": "^7.4.1"
+    "vitest": "^4.1.9"
   }
 }

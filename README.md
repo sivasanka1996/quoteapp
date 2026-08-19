@@ -49,14 +49,22 @@ Actions.
 ```bash
 npm install        # required first — node_modules is not committed
 npm run dev        # http://localhost:5173
-npm test           # 104 unit tests
+npm test           # 327 tests — pure functions (node) + components (jsdom)
 npm run lint
-npm run build
+npm run build      # this is also the only real typecheck — see CLAUDE.md
+npm run sanity     # repo hygiene: strays, dead code, doc drift (read-only)
 ```
 
-Copy `.env.example` to `.env.local` if you want the image reader to work
-locally. Without it the rest of the app runs fine and the reader shows a
-configuration message.
+**The image reader needs no local setup.** The Worker URL lives in
+[`config/app.config.ts`](config/app.config.ts), so `npm run dev` reads photos
+through the deployed Worker out of the box. `.env` is only for *secrets* —
+nothing in it is needed to run the app, and `VITE_IMAGE_PROXY_URL` is an
+optional override, commented out in `.env.example`, for pointing a local build
+at a different Worker.
+
+`npm run dev` talks to the **real** Firestore. `npm run dev:local` talks to a
+local emulator instead (`npm run emulators` first, in another terminal — it
+needs a JRE).
 
 There is **no application server to start** — no FastAPI, no uvicorn, no Python.
 Persistence is managed Firestore, which the browser talks to directly; the only
@@ -79,7 +87,7 @@ HomeScreen        search / add customers, headline stats
 ```
 
 The pricing math lives in [`src/calc/engine.ts`](src/calc/engine.ts) — a pure
-module with no UI and no network, covered by 23 tests. Per-line rounding before
+module with no UI and no network, covered by 31 tests. Per-line rounding before
 summing is a correctness requirement, not a cosmetic choice.
 
 Cost and profit cannot reach the customer view: `CustomerView` accepts a
