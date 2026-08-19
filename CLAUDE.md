@@ -683,9 +683,10 @@ costs a little storage and nothing else; delete it there when convenient.
       document — even copying an `accepted` quote — so a copy can never read
       as a second acceptance of the original. `duplicateQuote` (pure,
       `src/types.ts`) has 10 unit tests; the sheet itself has **9 jsdom
-      component tests**. **Known deviation from spec:** no customer picker —
-      copy only works within the same customer; raise with Siva before
-      assuming cross-customer copy exists. See the PI-9 table below.
+      component tests** (14 as of the picker below). **Cross-customer copy
+      shipped 2026-08-19**, closing the spec's last open item: the sheet has a
+      "Copy to" picker, and the write goes through `copyQuoteTo` rather than
+      `saveQuote`. See the PI-9 table below.
 - [x] **PI-10 Voice undo + edit — DONE 2026-08-18, never proven at a real
       microphone.** A one-step Undo bar reverts the most recent voice or image
       import (`lastImport` snapshot in `QuoteEditor.tsx`), cleared only on a
@@ -1636,16 +1637,29 @@ not by adding cleverness. See spec §1.
 is a real dependency for a speculative input), customer delete (still nothing
 asking for it — see KNOWN GAPS), and bug #9 (self-healing).
 
-**One deviation from the spec, needing Siva's word.** The spec's PI-9 sheet
-carries a customer picker, so a basket can be copied to a *different* customer.
-The plan ships the sheet **without it**: `CustomerScreen` has no customer list in
-scope, and reaching one means either a second `useCustomers` subscription on a
-screen that does not need it, or threading the list down from `AppRouter`.
-`duplicateQuote` already takes `customerId`/`customerName` as arguments, so the
-picker is purely additive later. As planned, **copy works within one customer
-only** — which is the smaller half of the value, and worth confirming rather
-than guessing at. **Still true as shipped** — nobody added the picker; raise it
-with Siva rather than assuming cross-customer copy works.
+**~~One deviation from the spec, needing Siva's word.~~ CLOSED 2026-08-19 —
+the customer picker shipped.** The plan originally shipped the copy sheet
+without it, because `CustomerScreen` had no customer list in scope. Siva's call
+on 2026-08-19 was to build it, and doing so exposed a trap worth recording.
+
+**`saveQuote` cannot write a quote for another customer, and passing it one
+fails silently.** It takes `customerName` as an argument but writes
+`customerId` from `useQuotes(customerId)`'s *closure* — so a copy aimed at a
+different customer would have been stored against the customer on screen, with
+the right name and the wrong owner. `useQuotes` therefore gained
+**`copyQuoteTo(target, name, lines, totalSale, createdAt)`**, which takes the
+target explicitly and has **no `existingId` parameter at all**, so the source
+quote is structurally unreachable from the copy path rather than merely
+un-passed. `saveQuote` was left untouched — `QuoteEditor` depends on it.
+
+`useCustomers()` moved from `HomeScreen` up to `AppRouter`, which also stopped
+the listener being torn down and re-established on every navigation. Copying to
+a *different* customer navigates to that customer rather than opening the
+editor, because opening it would leave the header naming one customer while
+the quote belongs to another.
+
+**5 new jsdom tests, mutation-tested:** making `confirmCopy` ignore the picker
+turns 2 of them red, and all 13 pass when it is restored.
 
 **No browser was available for any of PI-9 through PI-12.** Every "DONE"
 below rests on `npm test` (pure functions in `environment: 'node'`, plus —

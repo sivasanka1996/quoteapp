@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { type Customer, quoteStatus } from "./types";
-import { useCustomers } from "./useCustomers";
 import { useAllQuotes } from "./useQuotes";
 import { formatMoney, formatINRShort, formatDate } from "./format";
 import { log } from "./log/logger";
@@ -8,6 +7,9 @@ import { APK_URL, APP_VERSION, isInstalledApp } from "./appInfo";
 import "./HomeScreen.css";
 
 interface Props {
+  customers: Customer[];
+  loading: boolean;
+  addCustomer: ReturnType<typeof import("./useCustomers").useCustomers>["addCustomer"];
   onSelectCustomer: (customer: Customer) => void;
 }
 
@@ -17,8 +19,7 @@ interface CustomerStats {
   lastAt: number;
 }
 
-export function HomeScreen({ onSelectCustomer }: Props) {
-  const { customers, loading, addCustomer } = useCustomers();
+export function HomeScreen({ customers, loading, addCustomer, onSelectCustomer }: Props) {
   const { quotes, loading: quotesLoading } = useAllQuotes();
   const [search, setSearch] = useState("");
   const [showAdd, setShowAdd] = useState(false);

@@ -5,6 +5,7 @@ import { CustomerScreen } from "./CustomerScreen";
 import type { Customer, QuoteDoc } from "./types";
 
 const saveQuote = vi.fn().mockResolvedValue({ id: "q-new", queued: false });
+const copyQuoteTo = vi.fn().mockResolvedValue({ id: "q-new", queued: false });
 
 const existing: QuoteDoc = {
   id: "q1",
@@ -31,7 +32,7 @@ const existing: QuoteDoc = {
 vi.mock("./useQuotes", () => ({
   useQuotes: () => ({
     quotes: [existing], loading: false,
-    saveQuote, setStatus: vi.fn(), deleteQuote: vi.fn(),
+    saveQuote, copyQuoteTo, setStatus: vi.fn(), deleteQuote: vi.fn(),
   }),
   useAllQuotes: () => ({ quotes: [existing], loading: false }),
 }));
@@ -43,8 +44,16 @@ const customer: Customer = {
   address: "Miyapur", createdAt: 1_700_000_000_000,
 };
 
+const other: Customer = {
+  id: "c2", name: "Kumar Traders", phone: "8888888888",
+  address: "Kukatpally", createdAt: 1_700_000_000_000,
+};
+
+const allCustomers = [customer, other];
+
 beforeEach(() => {
   saveQuote.mockClear();
+  copyQuoteTo.mockClear();
   globalThis.URL.createObjectURL = vi.fn(() => "blob:mock");
   globalThis.URL.revokeObjectURL = vi.fn();
 });
@@ -54,15 +63,16 @@ afterEach(() => vi.restoreAllMocks());
 // onNewQuoteFromItems, onOpenQuote, onCustomerChange } — the brief's draft
 // omitted onNewQuoteFromItems (a required prop, consumed by both the image
 // and voice panels below), confirmed by reading the component's interface.
-function screenUnderTest(onOpenQuote = vi.fn()) {
+function screenUnderTest(onOpenQuote = vi.fn(), onCustomerChange = vi.fn()) {
   return (
     <CustomerScreen
       customer={customer}
+      customers={allCustomers}
       onBack={vi.fn()}
       onNewQuote={vi.fn()}
       onNewQuoteFromItems={vi.fn()}
       onOpenQuote={onOpenQuote}
-      onCustomerChange={vi.fn()}
+      onCustomerChange={onCustomerChange}
     />
   );
 }
@@ -80,17 +90,71 @@ describe("CustomerScreen — copying a quote", () => {
     expect(screen.getByText(/1 item will be copied as a new draft/)).toBeInTheDocument();
   });
 
-  it("writes a draft, never a second accepted quote", async () => {
-    render(screenUnderTest());
+  it("writes through copyQuoteTo, which cannot overwrite the source", async () => {
+    const onOpenQuote = vi.fn();
+    render(screenUnderTest(onOpenQuote));
     await userEvent.click(screen.getByRole("button", { name: /Copy quote Shop order/ }));
     await userEvent.click(screen.getByRole("button", { name: "Copy Quote" }));
 
-    await waitFor(() => expect(saveQuote).toHaveBeenCalledTimes(1));
-    // saveQuote(customerName, name, lines, totalSale, status, existingId, createdAt)
-    const call = saveQuote.mock.calls[0];
+    // copyQuoteTo(target, name, lines, totalSale, createdAt) — note it has no
+    // existingId parameter at all, so the source quote is structurally
+    // unreachable from this path rather than merely un-passed.
+    await waitFor(() => expect(copyQuoteTo).toHaveBeenCalledTimes(1));
+    const call = copyQuoteTo.mock.calls[0];
+    expect(call[0]).toEqual({ id: "c1", name: "Ravi Electricals" });
     expect(call[1]).toBe("Shop order (copy)");
-    expect(call[4]).toBe("draft");
-    expect(call[5]).toBeUndefined();   // a new document, not an update
+    expect(saveQuote).not.toHaveBeenCalled();
+
+    // The copy reaches the editor as a draft even though the source was accepted.
+    expect(onOpenQuote.mock.calls[0][0].status).toBe("draft");
+  });
+
+  it("offers every customer, defaulting to the one on screen", async () => {
+    render(screenUnderTest());
+    await userEvent.click(screen.getByRole("button", { name: /Copy quote Shop order/ }));
+
+    const picker = screen.getByRole("combobox", { name: /Copy to/ });
+    expect(picker).toHaveValue("c1");
+    expect(screen.getByRole("option", { name: /Ravi Electricals \(this customer\)/ })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Kumar Traders" })).toBeInTheDocument();
+  });
+
+  it("copies to a different customer when one is picked", async () => {
+    render(screenUnderTest());
+    await userEvent.click(screen.getByRole("button", { name: /Copy quote Shop order/ }));
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: /Copy to/ }), "c2");
+    await userEvent.click(screen.getByRole("button", { name: "Copy Quote" }));
+
+    await waitFor(() => expect(copyQuoteTo).toHaveBeenCalledTimes(1));
+    // The target, not the customer on screen. This is the whole feature: a
+    // basket quoted to one customer, reused for another.
+    expect(copyQuoteTo.mock.calls[0][0]).toEqual({ id: "c2", name: "Kumar Traders" });
+    // Lines still travel.
+    expect(copyQuoteTo.mock.calls[0][2]).toHaveLength(1);
+  });
+
+  it("follows a cross-customer copy to that customer, not into the editor", async () => {
+    // Opening the copy in the editor would leave the header naming Ravi while
+    // the quote belongs to Kumar.
+    const onOpenQuote = vi.fn();
+    const onCustomerChange = vi.fn();
+    render(screenUnderTest(onOpenQuote, onCustomerChange));
+    await userEvent.click(screen.getByRole("button", { name: /Copy quote Shop order/ }));
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: /Copy to/ }), "c2");
+    await userEvent.click(screen.getByRole("button", { name: "Copy Quote" }));
+
+    await waitFor(() => expect(onCustomerChange).toHaveBeenCalledWith(other));
+    expect(onOpenQuote).not.toHaveBeenCalled();
+  });
+
+  it("resets the picker to this customer each time the sheet opens", async () => {
+    render(screenUnderTest());
+    await userEvent.click(screen.getByRole("button", { name: /Copy quote Shop order/ }));
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: /Copy to/ }), "c2");
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await userEvent.click(screen.getByRole("button", { name: /Copy quote Shop order/ }));
+    expect(screen.getByRole("combobox", { name: /Copy to/ })).toHaveValue("c1");
   });
 
   it("recomputes the total instead of copying the stored one", async () => {
@@ -98,11 +162,11 @@ describe("CustomerScreen — copying a quote", () => {
     await userEvent.click(screen.getByRole("button", { name: /Copy quote Shop order/ }));
     await userEvent.click(screen.getByRole("button", { name: "Copy Quote" }));
 
-    await waitFor(() => expect(saveQuote).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(copyQuoteTo).toHaveBeenCalledTimes(1));
     // 3 × 950 = 2850, computed by the real engine from the copied lines —
     // NOT the stored totalSale (1900), which is deliberately stale here so
     // this test cannot be fooled by a coincidental match (bug #9).
-    expect(saveQuote.mock.calls[0][3]).toBe(2850);
+    expect(copyQuoteTo.mock.calls[0][3]).toBe(2850);
   });
 
   it("re-mints the line ids so the copy cannot collide with the source", async () => {
@@ -110,8 +174,8 @@ describe("CustomerScreen — copying a quote", () => {
     await userEvent.click(screen.getByRole("button", { name: /Copy quote Shop order/ }));
     await userEvent.click(screen.getByRole("button", { name: "Copy Quote" }));
 
-    await waitFor(() => expect(saveQuote).toHaveBeenCalledTimes(1));
-    expect(saveQuote.mock.calls[0][2][0].id).toBe(1);
+    await waitFor(() => expect(copyQuoteTo).toHaveBeenCalledTimes(1));
+    expect(copyQuoteTo.mock.calls[0][2][0].id).toBe(1);
     expect(existing.lines[0].id).toBe(4);   // source untouched
   });
 
@@ -123,8 +187,8 @@ describe("CustomerScreen — copying a quote", () => {
     await userEvent.type(field, "Kumar site");
     await userEvent.click(screen.getByRole("button", { name: "Copy Quote" }));
 
-    await waitFor(() => expect(saveQuote).toHaveBeenCalledTimes(1));
-    expect(saveQuote.mock.calls[0][1]).toBe("Kumar site");
+    await waitFor(() => expect(copyQuoteTo).toHaveBeenCalledTimes(1));
+    expect(copyQuoteTo.mock.calls[0][1]).toBe("Kumar site");
   });
 
   it("refuses to copy with a blank name", async () => {
@@ -139,7 +203,7 @@ describe("CustomerScreen — copying a quote", () => {
     await userEvent.click(screen.getByRole("button", { name: /Copy quote Shop order/ }));
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
-    expect(saveQuote).not.toHaveBeenCalled();
+    expect(copyQuoteTo).not.toHaveBeenCalled();
     expect(screen.queryByDisplayValue("Shop order (copy)")).not.toBeInTheDocument();
   });
 

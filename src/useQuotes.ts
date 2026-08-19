@@ -133,6 +133,57 @@ export function useQuotes(customerId: string) {
     }
   }
 
+  /**
+   * A duplicated quote written to a customer that may not be this hook's.
+   *
+   * `saveQuote` cannot do this: it writes `customerId` from the closure above,
+   * so every quote it creates belongs to `useQuotes(customerId)`'s customer.
+   * Passing a different id to it silently does nothing, which is exactly the
+   * trap that made copy-to-another-customer look easy and not be.
+   *
+   * Mints the id on the device and races the server ack, like `saveQuote` —
+   * offline the promise would otherwise never settle and the button would hang
+   * forever (see firestoreAck.ts).
+   */
+  async function copyQuoteTo(
+    target: { id: string; name: string },
+    name: string,
+    lines: UILine[],
+    totalSale: number,
+    createdAt: number
+  ): Promise<SaveResult> {
+    try {
+      const ref = doc(collection(db, "quotes"));
+      const write = setDoc(ref, {
+        customerId: target.id,
+        customerName: target.name,
+        name: name.trim(),
+        lines,
+        totalSale,
+        // Always a draft. A copy of an accepted quote is not itself accepted.
+        status: "draft" as QuoteStatus,
+        createdAt,
+        updatedAt: createdAt,
+      });
+      const queued = await ackOrQueued(write);
+      log.info("firestore", "quote copied", {
+        id: ref.id,
+        toCustomer: target.id,
+        sameCustomer: target.id === customerId,
+        queued,
+        lineCount: lines.length,
+        totalSale,
+      });
+      return { id: ref.id, queued };
+    } catch (e) {
+      log.error("firestore", "quote copy failed", e, {
+        toCustomer: target.id,
+        lineCount: lines.length,
+      });
+      throw e;
+    }
+  }
+
   async function setStatus(id: string, status: QuoteStatus) {
     try {
       await updateDoc(doc(db, "quotes", id), { status, updatedAt: Date.now() });
@@ -153,7 +204,7 @@ export function useQuotes(customerId: string) {
     }
   }
 
-  return { quotes, loading, saveQuote, setStatus, deleteQuote };
+  return { quotes, loading, saveQuote, copyQuoteTo, setStatus, deleteQuote };
 }
 
 /**

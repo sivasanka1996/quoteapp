@@ -5,6 +5,7 @@ import { QuoteEditor } from "./QuoteEditor";
 import { AppHeader } from "./AppHeader";
 import { CompanySettingsPanel } from "./CompanySettings";
 import { useCompanySettings } from "./useCompanySettings";
+import { useCustomers } from "./useCustomers";
 import { type Customer, type QuoteDoc } from "./types";
 import { type ReadItem } from "./readImage";
 
@@ -17,6 +18,11 @@ export function AppRouter() {
   const [screen, setScreen] = useState<Screen>({ name: "home" });
   const [showSettings, setShowSettings] = useState(false);
   const { settings: company, update: updateCompany } = useCompanySettings();
+  // Owned here, not in HomeScreen, for two reasons: the copy sheet on
+  // CustomerScreen needs the list to offer another customer, and HomeScreen
+  // unmounts on every navigation, so keeping the listener there tore it down
+  // and re-established it each time Dad opened a customer.
+  const { customers, loading: customersLoading, addCustomer } = useCustomers();
 
   return (
     <>
@@ -24,6 +30,9 @@ export function AppRouter() {
 
       {screen.name === "home" && (
         <HomeScreen
+          customers={customers}
+          loading={customersLoading}
+          addCustomer={addCustomer}
           onSelectCustomer={(customer) => setScreen({ name: "customer", customer })}
         />
       )}
@@ -31,6 +40,7 @@ export function AppRouter() {
       {screen.name === "customer" && (
         <CustomerScreen
           customer={screen.customer}
+          customers={customers}
           onBack={() => setScreen({ name: "home" })}
           onNewQuote={() =>
             setScreen({ name: "quote", customer: screen.customer, quote: null })

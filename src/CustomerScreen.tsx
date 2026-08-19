@@ -24,6 +24,8 @@ import "./CustomerScreen.css";
 
 interface Props {
   customer: Customer;
+  /** Every customer, so a quote can be copied to a different one. */
+  customers: Customer[];
   onBack: () => void;
   onNewQuote: () => void;
   onNewQuoteFromItems: (items: ReadItem[]) => void;
@@ -42,13 +44,14 @@ type Filter = "all" | QuoteStatus;
 
 export function CustomerScreen({
   customer,
+  customers,
   onBack,
   onNewQuote,
   onNewQuoteFromItems,
   onOpenQuote,
   onCustomerChange,
 }: Props) {
-  const { quotes, loading, deleteQuote, saveQuote } = useQuotes(customer.id);
+  const { quotes, loading, deleteQuote, copyQuoteTo } = useQuotes(customer.id);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [showImageReader, setShowImageReader] = useState(false);
   const [showVoiceReader, setShowVoiceReader] = useState(false);
@@ -109,6 +112,8 @@ export function CustomerScreen({
   const [copying, setCopying] = useState<QuoteDoc | null>(null);
   const [copyName, setCopyName] = useState("");
   const [copyBusy, setCopyBusy] = useState(false);
+  /** Who the copy is for. Defaults to the customer already on screen. */
+  const [copyToId, setCopyToId] = useState(customer.id);
   const [copyError, setCopyError] = useState<string | null>(null);
 
   function openCopy(q: QuoteDoc) {
@@ -118,6 +123,7 @@ export function CustomerScreen({
       customerId: customer.id, customerName: customer.name, now: Date.now(),
     }).name);
     setCopyError(null);
+    setCopyToId(customer.id);
     setCopying(q);
   }
 
@@ -126,40 +132,54 @@ export function CustomerScreen({
     setCopyBusy(true);
     setCopyError(null);
     try {
+      // Falls back to the current customer if the picked one vanished from the
+      // list mid-sheet — a copy landing on the wrong customer is worse than a
+      // copy landing where he started.
+      const target = customers.find((c) => c.id === copyToId) ?? customer;
       const d = duplicateQuote(copying, {
-        customerId: customer.id,
-        customerName: customer.name,
+        customerId: target.id,
+        customerName: target.name,
         now: Date.now(),
       });
       // Recomputed, never copied — the stored totalSale can be stale on
       // pre-PI-2 quotes with fractional quantities (bug #9).
       const { totals } = calcQuote(d.lines.map(toLineInput));
-      const res = await saveQuote(
-        d.customerName,
+      // NOT saveQuote: that writes customerId from useQuotes(customer.id)'s
+      // closure, so it can only ever create a quote for the customer on screen.
+      const res = await copyQuoteTo(
+        { id: target.id, name: target.name },
         copyName.trim() || d.name,
         d.lines,
         totals.totalSale,
-        d.status,
-        undefined,
         d.createdAt
       );
       log.info("ui", "quote duplicated", {
-        from: copying.id, to: res.id, queued: res.queued, lineCount: d.lines.length,
+        from: copying.id,
+        to: res.id,
+        queued: res.queued,
+        lineCount: d.lines.length,
+        toAnotherCustomer: target.id !== customer.id,
       });
       setCopying(null);
-      // Land him in the editor, ready to change prices — which is the whole
-      // reason he copied it.
-      onOpenQuote({
+      const copied: QuoteDoc = {
         id: res.id,
-        customerId: d.customerId,
-        customerName: d.customerName,
+        customerId: target.id,
+        customerName: target.name,
         name: copyName.trim() || d.name,
         lines: d.lines,
         totalSale: totals.totalSale,
         status: d.status,
         createdAt: d.createdAt,
         updatedAt: d.createdAt,
-      });
+      };
+      // Only follow the copy into the editor when it belongs to the customer
+      // already on screen. Opening a quote for someone else would leave the
+      // header naming this customer while the quote belongs to another.
+      if (target.id === customer.id) {
+        onOpenQuote(copied);
+      } else {
+        onCustomerChange(target);
+      }
     } catch (e) {
       log.error("ui", "quote duplicate failed", e, { from: copying.id });
       setCopyError("Could not copy this quote. Please try again.");
@@ -454,6 +474,20 @@ export function CustomerScreen({
                   onChange={(e) => setCopyName(e.target.value)}
                   autoFocus
                 />
+              </label>
+              <label>
+                <span>Copy to</span>
+                <select
+                  className="cs-copy-to"
+                  value={copyToId}
+                  onChange={(e) => setCopyToId(e.target.value)}
+                >
+                  {customers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}{c.id === customer.id ? " (this customer)" : ""}
+                    </option>
+                  ))}
+                </select>
               </label>
               <p className="cs-sheet-note">
                 {copying.lines?.length ?? 0} item
