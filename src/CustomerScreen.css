@@ -514,19 +514,23 @@
 /* Copy control on a quote row. `.cs-row-main` fills the row, so this sits
    after it as a fixed-width sibling. */
 .cs-row-copy {
-  min-width: var(--tap);
+  width: var(--tap);
   min-height: var(--tap);
-  flex: 0 0 auto;
+  flex-shrink: 0;
   display: grid;
   place-items: center;
   font-size: var(--fs-lg);
-  color: var(--ink-3);
-  background: transparent;
+  color: var(--ink-4);
+  background: var(--surface);
   border: none;
-  border-radius: var(--r-md);
+  /* Matches .cs-del-btn exactly. The row renders [name][copy][delete]; without
+     this divider the copy button reads as part of the name button rather than
+     as its own control, and a radius here would fight .cs-row's own clip. */
+  border-left: 1px solid var(--line-2);
   cursor: pointer;
+  transition: all var(--dur) var(--ease);
 }
-.cs-row-copy:hover { background: var(--surface-2); color: var(--ink); }
+.cs-row-copy:hover { background: var(--green-50); color: var(--green-700); }
 .cs-row-copy:focus-visible { outline: 2px solid var(--green-600); outline-offset: -2px; }
 
 .cs-copy-error {
