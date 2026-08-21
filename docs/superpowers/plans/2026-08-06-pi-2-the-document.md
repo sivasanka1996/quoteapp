@@ -1,5 +1,17 @@
 # PI-2 — The Document — Implementation Plan
 
+> ## ✅ COMPLETE — this plan is a historical record
+>
+> **PI-2 shipped and was verified on 2026-08-06.**
+> The unticked `- [ ]` boxes below were never ticked off as the work landed;
+> they record the plan as written, **not** work outstanding. Do not pick a task
+> up from here.
+>
+> What shipped is in [`CLAUDE.md`](../../../CLAUDE.md) under WHAT IS DONE; the
+> evidence is in [`pi-1-to-4-verification.md`](../../../docs/history/pi-1-to-4-verification.md).
+> Banner added 2026-08-20, when the boxes were found still reading as pending.
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Turn the customer-facing view from a price list into a quotation a business can act on — name, address, date, number, validity, terms, a rupee symbol on every amount, and quantities that survive a decimal point.

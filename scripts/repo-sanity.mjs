@@ -326,9 +326,15 @@ const tracked = execSync("git ls-files", { encoding: "utf8" })
     /suite to \*?\*?(\d{2,4}) *\n? *tests?\*?\*?/g,
     /(\d{2,4})\s+tests?,\s*all\s+passing/g,
     /\*\*(\d{2,4})\s+tests?,\s*all\s+passing/g,
+    /suite is (\d{2,4}) *\n? *tests\b/g, // TESTING.md prose
+    /(\d{2,4}) tests · \d+ files/g, // DESIGN.md §12's tree header
   ];
   const claims = [];
-  for (const doc of ["README.md", "CLAUDE.md"]) {
+  // TESTING.md and DESIGN.md were added to this list on 2026-08-20: TESTING.md
+  // still claimed 222 and DESIGN.md §12 still claimed 215 while the suite had
+  // reached 327, and nothing caught either because this check only read two
+  // files. A count asserted anywhere is a count that can rot.
+  for (const doc of ["README.md", "CLAUDE.md", "TESTING.md", "DESIGN.md"]) {
     if (!exists(doc)) continue;
     const text = read(doc);
     for (const re of TOTAL_CLAIM) {

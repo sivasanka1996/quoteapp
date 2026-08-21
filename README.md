@@ -113,7 +113,7 @@ Three files, in this order:
 | File | What it carries |
 |---|---|
 | [CLAUDE.md](CLAUDE.md) | The plan, the decisions and their history, known bugs, what is verified and how |
-| [DESIGN.md](DESIGN.md) | The shape of the system — diagrams, data model, deploy topology, the runbook |
+| [DESIGN.md](DESIGN.md) | **The only architecture doc** — diagrams, data model, the annotated repo map, how it got here, deploy topology, the runbook |
 | [HUMAN-TASKS.md](HUMAN-TASKS.md) | Work blocked on a person: a console login, a repo permission, a photo, Dad's phone |
 
 Read `CLAUDE.md` first. It explains the one thing that shapes every trade-off

@@ -1,5 +1,17 @@
 # PI-5 → PI-8 — Implementation Plan
 
+> ## ✅ COMPLETE — this plan is a historical record
+>
+> **PI-5 through PI-8 all shipped on 2026-08-10.**
+> The unticked `- [ ]` boxes below were never ticked off as the work landed;
+> they record the plan as written, **not** work outstanding. Do not pick a task
+> up from here.
+>
+> What shipped is in [`CLAUDE.md`](../../../CLAUDE.md) under WHAT IS DONE; the
+> evidence is in [`pi-5-to-8-verification.md`](../../../docs/history/pi-5-to-8-verification.md).
+> Banner added 2026-08-20, when the boxes were found still reading as pending.
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Give the app an eye (structured logging), fix the parser that is

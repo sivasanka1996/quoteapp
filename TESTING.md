@@ -28,17 +28,34 @@ test against the live project with dummy records and move on.
 
 ## Already proved — do not redo
 
+**Run `npm test` for the authoritative numbers; the per-row counts below are
+deliberately omitted because they drift.** As of 2026-08-20 the suite is 327
+tests across 21 files — 286 in the `unit` project (node) and 41 in `dom`
+(jsdom).
+
 | Feature | How | Result |
 |---|---|---|
-| Calc engine, parsers, logger, merge | 222 unit tests | green |
-| Multi-page reading, sequential + partial failure + retry | 18 browser checks, faked proxy | green |
-| Log export, IndexedDB, `?debug=1` | 17 browser checks | green |
-| Offline add-customer (bug #10) | 7 browser checks, red-then-green | green |
-| Voice **parser** (`parseTranscript`) | 16 unit tests | green |
-| Image **panel** (confirm list, warnings, decimals) | 23 browser checks, faked proxy | green |
+| Calc engine, parsers, logger, merge, worker | `unit` project (node) | green |
+| Multi-page reading, sequential + partial failure + retry | `ImageReader.dom` — **in the repo since PI-12** | green |
+| Image panel: confirm list, warnings, decimals, reorder, long-read gate | `ImageReader.dom` | green |
+| Voice panel: language toggle, add, change-a-line, mic refusal | `VoiceReader.dom` | green |
+| Copy-a-quote sheet, incl. the cross-customer picker | `CustomerScreen.dom` | green |
+| Undo bar, no-cost warning, compounding discounts | `QuoteEditor.dom` | green |
+| Voice **parser** (`parseTranscript`, `parseIntent`) | `unit` project | green |
+| Log export, IndexedDB, `?debug=1` | 17 browser checks (harness **not** in the repo) | green |
+| Offline add-customer (bug #10) | 7 browser checks, red-then-green (harness not in the repo) | green |
 
-**What all of that shares: no real model has ever been involved.** Every image
-test stubs `fetch`; every voice test feeds a string straight to the parser.
+**Two things that whole table shares.**
+
+1. **No real model has ever been involved.** Every image test stubs the network;
+   every voice test feeds a string straight to the parser. The live-API arm is
+   §1 below, and it is done separately.
+2. **jsdom is not a browser** — no layout engine, no paint, no service worker,
+   and no Web Speech API at all. The rows marked `.dom` prove *panel logic*, not
+   that anything renders correctly at 390px or that a microphone works.
+
+The rows whose harness is "not in the repo" are real history but **unrepeatable**
+— that is exactly the gap PI-12 was built to stop widening.
 
 ---
 

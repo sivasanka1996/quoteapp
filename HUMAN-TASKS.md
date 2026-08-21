@@ -8,8 +8,9 @@ be done from a checkout, which is why it is here and not in the PI plan.
 `CLAUDE.md` — that file is the plan, this file is the queue of things only a
 human can clear.*
 
-**Ordered by what unblocks the most.** Item 1 gates everything that reaches Dad
-through the website. Item 2 reaches him without item 1.
+**Ordered by what unblocks the most.** Item 1 is now **cleared** — push works as
+of 2026-08-19 — so the queue starts at item 2, which is also the only item that
+reaches Dad without a merge to `main`.
 
 > ## Standing instruction — Siva, 2026-08-10, sharpened 2026-08-12
 >
@@ -38,22 +39,22 @@ through the website. Item 2 reaches him without item 1.
 
 ---
 
-## 1. GitHub push access — Siva is handling this
+## 1. ~~GitHub push access~~ — **CLEARED 2026-08-19**
 
-- [ ] Get `RevanParimi` write access to `sivasanka1996/quoteapp`, or push from an
-      account that has it.
+- [x] Write access to `sivasanka1996/quoteapp`.
 
-**Status:** Siva is sorting this out with the repo owner; no action needed from
-anyone else. Listed only because it explains why the two items below matter.
+**Proved, not assumed:** `git push origin feature/Vision_Draft` succeeded
+(`7ae2fc4..ad18ece`). Someone accepted the invitation or fixed the token. The
+403 this section described from 2026-08-10 is gone.
 
-**What is stuck behind it:** `git push` to `origin` returns **403**. Work is
-committed locally and going nowhere. `deploy.yml` triggers on push to `main`, so
-**nothing on `feature/Vision_Draft` is live for Dad** — not PI-1 trust, not the
-PI-2 quotation document, not the PI-3 client-side downscale. The branch is
-several real improvements deep and Dad has none of them yet.
+**What changed for the agent:** **push when asked** — do not re-report the 403,
+and do not tell Siva to push by hand.
 
-**Verify when cleared:** `git push` succeeds, then merge to `main` and watch the
-Actions run go green through lint → test → build → deploy.
+**What did NOT change: still never push `main`.** That is the one thing this
+being fixed makes newly dangerous. `deploy.yml` triggers on `push: branches:
+[main]`, so a push to `main` deploys to Dad immediately — a release decision,
+and Siva's to make. `origin/main` is still at `a159e6a`; pushing
+`feature/Vision_Draft` runs no workflow and deploys nothing.
 
 ---
 

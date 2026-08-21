@@ -7,9 +7,12 @@ No servers to run, no containers, no Python, entirely on free tiers.
 
 `React 19` · `TypeScript` · `Vite 8` · `Firestore` · `Cloudflare Workers` · `Gemini 2.5` · `Vitest`
 
-*Written 2026-08-08 on `feature/Vision_Draft`. Companion to
+*Written 2026-08-08 on `feature/Vision_Draft`; §12 rewritten and §§15–17 merged
+in from a separate architecture doc on 2026-08-20. Companion to
 [CLAUDE.md](CLAUDE.md) (the plan and its history) and
 [HUMAN-TASKS.md](HUMAN-TASKS.md) (work blocked on a person).
+**This is the only architecture document — if you are about to start a second
+one, add a section here instead.**
 Where this file and `git` disagree, `git` is right.*
 
 </div>
@@ -34,6 +37,9 @@ Where this file and `git` disagree, `git` is right.*
 | [12. Test topology](#12-test-topology) | What is covered, what is not |
 | [13. Leftover design](#13-leftover-design) | **Swept from every plan and memory** |
 | [14. Runbook](#14-runbook) | **Launch + connectivity commands** |
+| [15. Repo map](#15-repo-map--every-file-and-what-it-is-for) | Every file, annotated with intent |
+| [16. How it got here](#16-how-it-got-here--v1--now) | v1 → now, and what forced each change |
+| [17. Stack](#17-stack--and-what-each-choice-stands-in-for) | Each choice, and what it stands in for |
 
 ---
 
@@ -88,7 +94,7 @@ flowchart TB
     end
 
     gem["Gemini 2.5 Flash<br/>→ Pro on retry · DEFAULT"]
-    orouter["OpenRouter<br/>qwen/qwen3.7-flash · opt-in"]
+    orouter["OpenRouter<br/>qwen/qwen3.5-flash-02-23 · opt-in"]
     speech["Browser Web Speech API<br/>on-device, no network"]
 
     pwa -->|"static assets, once"| host
@@ -240,7 +246,7 @@ fields as `(stored[key] ?? "")` for the same reason. Both are tested.
 ## 6. The calc engine
 
 [`calc/engine.ts`](src/calc/engine.ts) is **pure** — no UI, no network, no
-Firestore. That is what makes 23 tests able to pin the money down.
+Firestore. That is what makes 31 tests able to pin the money down.
 
 ```mermaid
 flowchart LR
@@ -481,46 +487,67 @@ executables**.
 
 ## 12. Test topology
 
+*Rewritten 2026-08-20. This section described 215 tests in a single node
+project and said component tests were impossible — all three facts were
+overtaken by PI-12. Run `npm test` for the authoritative numbers.*
+
 ```
-215 tests · 11 files · all environment: 'node'
-├── cf-worker/image-reader…   38  structured output, escalation, confidence, origin
-│                                 allowlist, structured logging, AI_PROVIDER routing
-├── calc/engine.test.ts       31  the money, against fixtures (+8 numeric chain, PI-6)
-├── types.test.ts             24  quoteStatus, seedNextId, hasNoCost, parseQty, customerPatch
-├── log/logger.test.ts        22  levels, debug flag, ring buffer, error normalising, sinks
-├── parse/numberWords.test.ts 17  English + Telugu 1–100, multi-token numbers
-├── cf-worker/providers/…     17  OpenRouter: request shape, normalising, never-throws
-├── voiceParse.test.ts        16  English + Telugu transcripts (+7 tokenizer rules, PI-6)
-├── format.test.ts            15  Indian lakh/crore, short form, dates, quote numbers
-├── readImage.test.ts         14  downscale maths, offline guard (+6 data-URL, PI-6)
-├── log/export.test.ts        12  filename shape, line format, level selection
-└── parse/mergePages.test.ts   9  page order, badging, partial failure
+npm test  →  327 tests · 21 files · TWO Vitest projects
+│
+├── project "unit"   environment: node    286 tests / 16 files
+│   │   glob **/*.test.{js,ts}
+│   ├── cf-worker/…      the Worker as a plain fetch(Request) → Response
+│   │                    handler, with globalThis.fetch stubbed
+│   └── every pure module: engine, types, voiceParse, numberWords,
+│       matchLines, mergePages, movePage, format, sharePdf, logger,
+│       export, readImage, firestoreAck, schema
+│
+└── project "dom"    environment: jsdom    41 tests / 5 files
+        glob src/**/*.dom.test.tsx, setup src/test-setup.ts
+    ├── ImageReader.dom     sequential-not-parallel reads (measured with an
+    │                       in-flight counter, not merely asserted), partial
+    │                       page failure, retry keeping hand edits, reorder,
+    │                       the long-read gate
+    ├── VoiceReader.dom     language persistence, add / alternatives / gating,
+    │                       the change-a-line flow, mic refusal
+    ├── CustomerScreen.dom  the copy sheet: prefill, recomputed total, re-minted
+    │                       ids, cancel writes nothing, the customer picker
+    ├── QuoteEditor.dom     no-cost warning, undo bar, compounding discounts
+    └── smoke.dom           one test proving the project itself is wired up
 ```
 
-**Everything testable here is a pure function, and that is structural.**
-`vite.config.ts` sets `environment: 'node'`, so there are **no component or hook
-tests** — adding one requires switching to jsdom first. The engine, the
-formatters, the parsers and the patch builders were all written as pure functions
-precisely so they could be pinned down without a DOM.
-
-The Worker is the one apparent exception and is not really one:
-`image-reader.js` is a plain `fetch(Request) → Response` handler, so it runs in
-the node environment with `globalThis.fetch` stubbed.
+**Two projects, not one environment switched over — and that is deliberate.**
+Flipping `environment` to `jsdom` globally was the obvious-looking fix for "no
+component tests", and it would have taken the Cloudflare Worker's tests with
+it: `image-reader.js` is a plain `fetch(Request) → Response` handler that jsdom
+serves no better than node, while quietly changing what those tests exercise.
+The separate `*.dom.test.tsx` glob keeps the boundary explicit, so nobody later
+writes a "pure" test that silently depends on a DOM being present. **A new
+component test just needs to be a `*.dom.test.tsx` file under `src/`** — no
+config change.
 
 ### What the tests do **not** cover — know these before trusting green
 
 | Gap | Why it exists | Closes when |
 |---|---|---|
-| **No real Gemini call, ever** | Every Worker test stubs `fetch` | The first real photo read after `wrangler deploy` |
-| **No real multi-page read** | PI-8's 18 browser checks fake the proxy, so they prove the *client* merges pages, not that the model reads page 3 of Dad's handwriting | The first real multi-page read after deploy |
-| **The generated PDF** | Every check reads the DOM `sharePdf` rasterises, not the file. This is exactly how bug #8 hid | Someone opens a shared file from a phone |
+| **Nobody has spoken into a microphone** | jsdom has no Web Speech API at all, so every voice test fakes the recognizer and proves only the panel's logic *once a transcript arrives* | Siva spends 15 minutes at a mic — `TESTING.md` §3 |
+| **390px layout, and any paint at all** | jsdom has no layout engine. The copy sheet, the ▲▼ controls and the long-read gate are logic-verified only | Someone opens it on a phone-width browser |
+| **Every component test fakes the network** | `readImageItems`, `saveQuote`, `updateCustomerDoc` and `db` are mocked, so no test has met real Firestore latency or a real `ACK_TIMEOUT_MS` race | Manual check, or a live harness |
+| **No real *Gemini* call, ever** | Worker tests stub `fetch`. The live arm that *was* run went through OpenRouter | The first real read after `wrangler deploy` |
 | **Service-worker offline shell** | The SW never reaches `active` under Playwright — harness limit, not a build bug | Airplane-mode cold start on Dad's phone |
-| **Any component render** | `environment: 'node'` | A deliberate jsdom switch |
+| **The Android share sheet** | Headless Chrome resolves `navigator.share` without showing anything | Dad taps Share on his phone |
 
-Browser verification is therefore done by **driving the built app in Chromium
-with Playwright against the real Firestore**, throwaway data deleted afterwards.
-Those harnesses are *not in the repo* — they need Playwright and a live project.
-Recipes are recorded per-PI in [CLAUDE.md](CLAUDE.md).
+**Three gaps this table used to list are now closed**, by scripts that are
+deliberately *not* `*.test.ts` so CI never runs them: the real model read and
+real handwriting (`openrouter-live-check.ts`, which spends money), and the
+generated PDF **file** rather than the DOM (`pdf-check.ts`, real Chrome). Both
+found genuine defects. See §14 for how to re-run them.
+
+**Historical browser checks are unrepeatable.** Before PI-12, verification meant
+driving the built app in Chromium with Playwright against the real Firestore —
+88 checks across PI-8, ImageReader, VoiceReader and customer editing. **None of
+those harnesses was committed.** That is precisely the gap the `dom` project
+exists to stop widening.
 
 > **Standing rule:** do not add a half-configured test setup to claim coverage. A
 > manual check, honestly reported, beats a fake test.
@@ -542,8 +569,8 @@ files. **Nothing buildable is left in the PI plan.**
 | Delete the stale composite index | HUMAN-TASKS §6b | Firebase console. Cosmetic |
 | `KEYSTORE_PASSWORD` secret | HUMAN-TASKS §3 | GitHub settings. Next APK build fails without it |
 | Deploy the Worker + read one real slip | HUMAN-TASKS §2 | Cloudflare OAuth |
-| Push access (403) | HUMAN-TASKS §1 | Repo owner |
-| Airplane-mode cold start · real PDF · cost hidden · permissions walkthrough | HUMAN-TASKS §5 | Dad's actual phone |
+| Airplane-mode cold start · share sheet · cost hidden · permissions walkthrough | HUMAN-TASKS §5 | Dad's actual phone |
+| **Voice at a real microphone** | TESTING.md §3 | 15 minutes of Siva's voice. jsdom has no Web Speech API, so no test can reach this |
 | **Cost-side rounding sequence** — tunable, unconfirmed | CLAUDE.md | One real vendor quote from Dad |
 
 ### Open by choice — do not build until asked
@@ -553,13 +580,14 @@ files. **Nothing buildable is left in the PI plan.**
 | **Customer delete UI** | The cascade batch already exists and is tested. Put it behind a type-the-name confirmation and say how many quotes go with it |
 | Natural-language questions over quote history | **Not RAG.** A year of quotes fits in one prompt — send the whole list |
 | Telugu → English item-name transliteration | A lookup table Dad builds by using the app, not a model call |
-| Undo for the last voice action; voice *editing* of existing lines | Voice only adds today |
-| jsdom switch for component tests | A deliberate decision, not a drive-by |
+| PDF upload for slips | Dad photographs paper. `pdf.js` is a real dependency for a speculative input |
 
 ### Closed, but easy to re-open by mistake
 
 | Thing | Status |
 |---|---|
+| **Undo for the last voice/image import; voice *editing* of existing lines** | **Built in PI-10, 2026-08-18.** This table listed it as "voice only adds today" until 2026-08-20. `lastImport` snapshot + `parseIntent` add-vs-set + `matchLines`. Never driven at a real microphone |
+| **jsdom for component tests** | **Built in PI-12, 2026-08-18** as a second Vitest *project*, not a global switch — see §12 for why that distinction is load-bearing |
 | **Fuse.js fuzzy item search** | **Never was a feature.** It appears in memory only as the *worked example* of right-sizing (fuzzy match over a plain array, **not** embeddings + a vector DB). "No inventory, no product catalog, no price memory" is a locked decision — do not build search over item names because Fuse.js is mentioned |
 | Bug #9 — stale `totalSale` on pre-PI-2 fractional quotes | Open, **won't fix**. Self-healing on next save, only toward correctness |
 | PI-3.6 — keep the browser Web Speech API | Settled. Revisit only if Dad complains about Telugu; AI4Bharat IndicWhisper is the fit |
@@ -708,14 +736,16 @@ Every status code above was verified against the real handler on 2026-08-08 —
 
 ```bash
 npm run lint      # eslint, incl. cf-worker JS. Must be clean — CI enforces it
-npm test          # 104 tests, all node-environment
+npm test          # both Vitest projects: node + jsdom (§12)
 npm run build     # tsc -b && vite build — this is where typechecking happens
+npm run sanity    # repo hygiene + doc drift. Read-only, exits 1 on ERROR only
 ```
 
 ### 14.7 Ship
 
 ```bash
-# Web app — only main deploys. Push is Siva's job.
+# Web app — only main deploys, and that deploys to Dad IMMEDIATELY.
+# Pushing main is a release decision: Siva's call, never assumed.
 git push origin main        # → Actions: lint → test → build → Firebase Hosting
 
 # Worker — goes live for Dad IMMEDIATELY, from any branch. Watch it after.
@@ -725,6 +755,239 @@ cd cf-worker && npx wrangler deploy
 #       → download artifact → attach to a new Release
 #       → then bump APK_VERSION in src/appInfo.ts to that tag
 ```
+
+---
+
+## 15. Repo map — every file, and what it is *for*
+
+File names do not carry intent, so this tree annotates it. §4 is the *screen*
+flow; this is the *code* layout.
+
+```
+QuoteApp/
+│
+├── config/
+│   └── app.config.ts ──── THE one config file. Imported by BOTH halves: Vite
+│                          bundles it into the app, wrangler bundles it into
+│                          the Worker, so the two cannot drift. Model, token
+│                          ceiling, worker URL, origin allowlist, upload size,
+│                          log caps, ack timeout. Precedence: env var > file,
+│                          so a rollback is a dashboard edit, not a deploy.
+│                          Keys are NOT here (public repo) — it names each
+│                          secret and the command to set it.
+│
+├── src/                                       ── the app
+│   │
+│   ├── main.tsx → ErrorBoundary → App → AppRouter
+│   │   AppRouter.tsx ──── the whole router: one discriminated union of screens
+│   │                      { home | customer | quote }. Owns useCustomers() so
+│   │                      the listener survives navigation and the copy sheet
+│   │                      can offer a different customer.
+│   │
+│   ├── ═══ SCREENS ═════════════════════════════════════════════════════════
+│   │   HomeScreen ──────── stat tiles, search, customer rows, APK banner
+│   │     └── CustomerScreen ─ quote history, status filter, edit-customer
+│   │          │              sheet, and the ⧉ copy sheet (same or DIFFERENT
+│   │          │              customer)
+│   │          └── QuoteEditor ─ THE business view. Collapsed rows + bottom-
+│   │               │           sheet line editor, blanket discount panel,
+│   │               │           profit summary, one-step Undo for the last
+│   │               │           voice/image import
+│   │               └── CustomerView ─ THE customer document. Takes
+│   │                                  CustomerLine[] — no cost field exists
+│   │                                  on that type (§10).
+│   │
+│   ├── ═══ THE MATH (pure — no UI, no network) ═════════════════════════════
+│   │   calc/engine.ts ──── §6. Logs and RE-THROWS: a silently wrong total is
+│   │                       the one unacceptable outcome, so failure must reach
+│   │                       the ErrorBoundary.
+│   │   calc/lineInput.ts ─ UILine (all strings, what the editor holds) →
+│   │                       LineInput (all numbers, what the engine takes).
+│   │                       Lifted out of the component so the copy sheet can
+│   │                       total a quote without importing a screen.
+│   │   types.ts ────────── UILine / Customer / QuoteDoc + the pure helpers:
+│   │                       quoteStatus, seedNextId, hasNoCost, parseQty,
+│   │                       customerPatch, duplicateQuote
+│   │   format.ts ───────── Indian lakh/crore grouping, short form, dates
+│   │
+│   ├── ═══ DATA LAYER (Firestore, offline-first — §5, §8) ══════════════════
+│   │   firebase.ts ─────── init + persistent IndexedDB cache. `--mode
+│   │                       emulator` swaps in a memory cache pointed at
+│   │                       localhost, and shouts about it in the console.
+│   │   useCustomers.ts ─── CRUD + deleteCustomerAndQuotes (one writeBatch, so
+│   │                       a customer and their quotes go together)
+│   │   useQuotes.ts ────── per-customer snapshot + saveQuote + copyQuoteTo
+│   │   firestoreAck.ts ─── ackOrQueued(). Any write driving a button goes
+│   │                       through here, or it hangs offline.
+│   │
+│   ├── ═══ INPUT PATH 1 — PHOTOGRAPH A SLIP (§7) ═══════════════════════════
+│   │   ImageReader.tsx ─── multi-page camera/gallery panel, ▲▼ reorder,
+│   │                       long-read confirm gate, merged confirm list
+│   │   readImage.ts ────── downscale to 1600px, POST to the Worker, honest
+│   │                       offline refusal
+│   │   parse/mergePages.ts  several pages → one list, page badges, and the
+│   │                        failed-page list. One bad photo never loses the
+│   │                        other four.
+│   │   parse/movePage.ts    one page to a new index; an out-of-range move
+│   │                        returns the list untouched rather than losing it
+│   │
+│   ├── ═══ INPUT PATH 2 — SPEAK (§7) ═══════════════════════════════════════
+│   │   VoiceReader.tsx ─── mic UI, en-IN/te-IN toggle, warm-up before it
+│   │                       invites speech, tap-on/tap-off recording
+│   │   voiceParse.ts ───── a TOKENIZER: tokenize → classify (NUM / NUM_WORD /
+│   │                       UNIT / RATE_KW / CODE_KW / WORD) → assemble.
+│   │                       parseIntent() tells "add a line" from "change that
+│   │                       line's rate".
+│   │   parse/numberWords.ts   English + Telugu 1–100, both tables always
+│   │                          consulted regardless of the language toggle
+│   │   parse/matchLines.ts    which existing line did he mean? Token-overlap
+│   │                          scoring. isAmbiguous() forces the app to ASK
+│   │                          when the top two are within 0.15.
+│   │
+│   ├── ═══ OUTPUT (§9) ═════════════════════════════════════════════════════
+│   │   sharePdf.ts ─────── element → A4 PDF → Web Share API. Rasterised on
+│   │                       purpose: jsPDF's fonts cannot render Telugu.
+│   │                       pageSlices() breaks pages at ROW boundaries, so a
+│   │                       page break cannot guillotine an item row.
+│   │
+│   ├── ═══ DIAGNOSTICS ═════════════════════════════════════════════════════
+│   │   log/logger.ts ───── 4 levels, closed scope union, debug behind a flag
+│   │                       Siva can talk Dad into turning on over the phone.
+│   │                       NEVER THROWS — it is called from inside catch
+│   │                       blocks, so a logger that can crash is worse than
+│   │                       no logger at all.
+│   │   log/buffer.ts ───── ring buffer, 2000 records / ~1 MB
+│   │   log/idb.ts ──────── IndexedDB persistence, batched, fully guarded, so
+│   │                       the evidence survives the reload a crash forces
+│   │   log/export.ts ───── buffer → timestamped .log file Dad can send
+│   │
+│   └── *.dom.test.tsx / *.test.ts ─ colocated with what they test (§12)
+│
+├── cf-worker/                                 ── the only server-side code (§3)
+│   ├── image-reader.js ─── THE ROUTER ONLY: origin allowlist, CORS, request
+│   │                       shape, structured logging, and what an empty item
+│   │                       list means. Knows nothing about any model.
+│   ├── providers/index.js  pickProvider(env). Unknown name → gemini + warn: a
+│   │                       typo must never be why a read fails in a shop.
+│   ├── providers/gemini.js     Flash → Pro retry. Default, and the only
+│   │                           provider ever proved against a real photograph.
+│   ├── providers/openrouter.js same contract, opt-in, reasoning explicitly OFF
+│   ├── schema.js ───────── the shared prompt + both structured-output
+│   │                       dialects + normalize + confidenceOf. Shared so
+│   │                       swapping provider cannot quietly change the ask.
+│   └── test-support/env.js  env factories. A test STATES the environment it
+│                            needs; it never inherits an ambient one.
+│
+│   THE PROVIDER CONTRACT:  read(imageBase64, mimeType, env, rid) NEVER THROWS.
+│   A failure is `items: []` with `detail` set. That is precisely what lets the
+│   router carry no try/catch around the read.
+│
+├── scripts/                                   ── none are *.test.ts, so CI
+│   │                                             never runs them
+│   ├── repo-sanity.mjs ─── `npm run sanity`: strays, dead modules, unused
+│   │                       deps, secret hygiene, doc drift (including the test
+│   │                       counts asserted in these docs). Zero deps,
+│   │                       read-only.
+│   ├── cascade-check.ts ── live cascade-delete check against REAL Firestore
+│   ├── openrouter-live-check.ts   drives the REAL worker + REAL model. Costs
+│   │                              money — hence never in CI.
+│   └── pdf-check.ts ────── builds a real PDF in real Chrome and inspects the
+│                           FILE, not the DOM
+│
+└── docs/
+    ├── superpowers/specs|plans/   design + implementation docs per PI group
+    └── history/                   the verification tables behind every "DONE"
+                                   claim in CLAUDE.md
+```
+
+---
+
+## 16. How it got here — v1 → now
+
+*Merged in from a standalone `ARCHITECTURE.md` on 2026-08-20; two architecture
+documents were already restating each other.*
+
+Almost every module in §15 exists to answer a specific failure of the first
+version. The initial commit (`9d6b6bb`) was, structurally, **a calculator with a
+print view**:
+
+```
+QuoteApp/  ── v1, initial commit
+│
+├── package.json          deps: react, react-dom.  That is the entire list.
+│
+├── src/
+│   ├── App.tsx           ONE screen. Line items, pricing, totals, all of it.
+│   ├── calc/engine.ts    the math — already pure, already tested. The good part.
+│   ├── CustomerView.tsx  the printable document
+│   ├── CompanySettings.tsx + useCompanySettings.ts   → localStorage
+│   ├── format.ts         Indian lakh/crore grouping
+│   ├── index.css         styles
+│   └── main.tsx
+│
+├── firebase.json / .firebaserc      hosting configured…
+└── .github/workflows/deploy.yml     …and auto-deploying from day one
+```
+
+It could not persist a quote at all — reload and it was gone — had no concept of
+a customer, no input but the keyboard, no error handling and no diagnostics.
+
+The layers arrived in this order, and each is still visible in §15: `1e0086c`
+added a localStorage quote drawer (single-device, deleted later); `7fc9681`
+replaced it with Firestore and the four-screen flow; `b293c3a` added image
+reading as **one 145-line worker with `Access-Control-Allow-Origin: *`**, a
+prompt that asked for JSON inside prose, and a regex that hunted a fenced code
+block out of the reply; `4116f2a` brought the design tokens and the first voice
+parser — three regexes, Telugu number words 1–10, and **no English number words
+at all**.
+
+### The delta, and the failure that forced each change
+
+| Area | Before | Now | Why it moved |
+|---|---|---|---|
+| **Quote persistence** | Nothing, then localStorage | Firestore, per customer, synced | localStorage is one device. He quotes on a phone and reviews on a laptop. |
+| **Offline** | Default memory cache — no signal meant no first snapshot | IndexedDB persistent cache; writes queue and drain | He works in basements. An empty list looks exactly like lost data. |
+| **Saving** | `await setDoc(...)` driving the button | `ackOrQueued()` races a 2.5s timeout | Firestore resolves only on *server* ack. Offline, the button hung forever. |
+| **Customers** | No such concept | Collection, search, editable name/phone/address | A wrong phone was printing on every quotation with no way to fix it. Correcting it now fixes quotes **already saved** (§4). |
+| **Quote lifecycle** | A quote just existed | `draft/sent/accepted/declined`, set by hand | Nothing infers status; guessing would be worse than not showing it. |
+| **Duplicating** | Retype it | `duplicateQuote()` — fresh ids, forced `draft`, total **recomputed** | Copying stored `totalSale` would carry bug #9's stale figure into a new document. |
+| **Items by photo** | One photo; `Origin: *`; JSON hunted out of prose; `confidence` a constant | Multi-page, sequential, page badges, ▲▼ reorder, per-page retry, schema-constrained output, derived confidence, origin allowlist | Batching shares one 8192-token budget. `Origin: *` on a public repo made the key a free relay. A fence-hunting regex fails the day the model writes a sentence first. |
+| **The prompt** | Rate guidance the model could reason around | **"NEVER CALCULATE… copied digit for digit"** | The narrower fix passed every font-rendered mock, then put **five wrong rupee figures** on screen from real handwriting — at `confidence: "full"`. |
+| **Items by voice** | Three regexes; Telugu 1–10; no English number words | Tokenizer; English + Telugu 1–100; `CODE_KW`; add-vs-set intent; ask-when-ambiguous | The old chain read `"six wire rate 1650"` as qty 1 and `"2 wire code 4402"` as ₹4402. |
+| **The microphone** | `start()`, then "Speak now" | Warm-up, `starting` stage until `audiostart`, interim results, tap-off | `start()` returned instantly but recording began **3785 ms later** — measured. The fix came from instrumenting, not reasoning. |
+| **AI provider** | Hardcoded in the worker body | Router + providers behind a never-throws contract, chosen by env var | **Rollback becomes an env var, not a deploy.** |
+| **Configuration** | Four places | `config/app.config.ts`, imported by both halves | Two places to set one value is one place to forget. |
+| **Error policy** | None | Layered — and calc **re-throws** | A swallowed calc error is a wrong number on a customer's quotation. |
+| **Diagnostics** | `console.log`, gone on reload | Ring buffer → IndexedDB → exportable `.log` | "It didn't work" is unactionable. Now it is an attachment. |
+| **PDF** | Fixed-height bands | `pageSlices()` cuts at row boundaries | The old maths guillotined item rows through their glyphs. |
+| **Types** | `parseInt` in five places | `parseQty`, `seedNextId`, `CustomerLine` | `parseInt("2.5")` billed 2.5 m of wire as 2 m, silently. |
+| **Tests** | 2 files | 327 across 21, two projects (§12) | — |
+
+---
+
+## 17. Stack — and what each choice stands in for
+
+The last column is the load-bearing one: this is a two-user app, and the
+recurring temptation is to build for a scale that does not exist.
+
+| Layer | Choice | Its actual job here | Deliberately not |
+|---|---|---|---|
+| UI | **React 19 + TypeScript** | Four screens; types carry the domain invariants (§10) | — |
+| Build | **Vite 8** | Dev server, bundle, **and the only real typecheck** (`tsc -b`) | `npx tsc --noEmit` checks *nothing* — the root tsconfig holds only `references` |
+| State | **`useState` + one screen union** | Navigation is a `setState`; Firestore listeners are the async state | Redux / Zustand / React Router |
+| Persistence | **Firestore** (Spark free) | Two collections, browser talks to it directly | An application server (§3) |
+| Offline | **Firestore persistent cache** | Cold start with no signal; queued writes | A hand-rolled sync layer |
+| Hosting | **Firebase Hosting** | HTTPS, which camera and mic require | — |
+| CI/CD | **GitHub Actions** | lint → test → build → deploy, `main` only | — |
+| Installable | **vite-plugin-pwa** (Workbox) | Home-screen install, offline shell | — |
+| Android | **TWA APK via Gradle**, on GitHub Releases | A wrapper around the hosted site — why APK and web versions legitimately differ | Firebase Hosting for the `.apk`; Spark refuses executables |
+| AI proxy | **Cloudflare Worker** (free) | Holds the key the browser must not see; origin allowlist | Putting the key in the frontend bundle. The repo is public. |
+| Vision model | **Gemini 2.5 Flash → Pro**, OpenRouter behind the same contract | Handwritten slip → structured items | Fine-tuning; a self-hosted model |
+| Speech | **Web Speech API**, in-browser | Transcript only | A server-side ASR model — Gemini is not in the voice path at all |
+| Item matching | **Token-overlap scoring** (~70 lines) | Which of ~20 lines in *this* quote he meant | Fuse.js, embeddings, a vector DB — slower and costlier at two dozen in-memory strings |
+| PDF | **jspdf + html2canvas**, lazy-loaded | Rasterised A4, so Telugu and the logo reproduce exactly | Text-based PDF — jsPDF cannot render Telugu |
+| Tests | **Vitest**, two projects + Testing Library | §12 | Playwright/Cypress in CI |
+| Lint | **eslint** (flat config), enforced in CI | Covers `src/`, `config/`, `scripts/` | — |
 
 ---
 

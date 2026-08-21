@@ -1,5 +1,17 @@
 # PI-9 → PI-12 Implementation Plan
 
+> ## ✅ COMPLETE — this plan is a historical record
+>
+> **PI-9 through PI-12 all shipped on 2026-08-18; the cross-customer copy followed on 2026-08-19.**
+> The unticked `- [ ]` boxes below were never ticked off as the work landed;
+> they record the plan as written, **not** work outstanding. Do not pick a task
+> up from here.
+>
+> What shipped is in [`CLAUDE.md`](../../../CLAUDE.md) under WHAT IS DONE; the
+> evidence is in [`pi-9-to-12-verification.md`](../../../docs/history/pi-9-to-12-verification.md).
+> Banner added 2026-08-20, when the boxes were found still reading as pending.
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Ship four independent improvements to the quotation app — duplicate a quote, undo and voice-edit a line, finish the multi-page image path, and get the app's component behaviour under automated test for the first time.
