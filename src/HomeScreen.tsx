@@ -1,12 +1,13 @@
 import { useMemo, useState } from "react";
-import { type Customer, quoteStatus } from "./types";
+import { type Customer } from "./types";
 import { useCustomers } from "./useCustomers";
 import { useAllQuotes } from "./useQuotes";
-import { formatINR, formatINRShort, formatDate } from "./format";
-import { APK_URL, APP_VERSION, isInstalledApp } from "./appInfo";
+import { formatINR, formatDate } from "./format";
+import { APP_VERSION } from "./appInfo";
 import "./HomeScreen.css";
 
 interface Props {
+  onBack: () => void;
   onSelectCustomer: (customer: Customer) => void;
 }
 
@@ -16,9 +17,9 @@ interface CustomerStats {
   lastAt: number;
 }
 
-export function HomeScreen({ onSelectCustomer }: Props) {
+export function HomeScreen({ onBack, onSelectCustomer }: Props) {
   const { customers, loading, addCustomer } = useCustomers();
-  const { quotes, loading: quotesLoading } = useAllQuotes();
+  const { quotes } = useAllQuotes();
   const [search, setSearch] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState("");
@@ -26,45 +27,19 @@ export function HomeScreen({ onSelectCustomer }: Props) {
   const [newAddress, setNewAddress] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // Per-customer rollups, plus the four headline figures
-  const { byCustomer, stats } = useMemo(() => {
-    const byCustomer = new Map<string, CustomerStats>();
-    const now = new Date();
-    let thisMonth = 0;
-    let pending = 0;
-    let acceptedValue = 0;
-
+  // Per-customer rollups (quote count/total/last-quoted date) for the list rows below
+  const byCustomer = useMemo(() => {
+    const map = new Map<string, CustomerStats>();
     for (const q of quotes) {
-      const prev = byCustomer.get(q.customerId) ?? { count: 0, total: 0, lastAt: 0 };
-      byCustomer.set(q.customerId, {
+      const prev = map.get(q.customerId) ?? { count: 0, total: 0, lastAt: 0 };
+      map.set(q.customerId, {
         count: prev.count + 1,
         total: prev.total + (q.totalSale || 0),
         lastAt: Math.max(prev.lastAt, q.updatedAt ?? q.createdAt ?? 0),
       });
-
-      const created = new Date(q.createdAt ?? 0);
-      if (
-        created.getMonth() === now.getMonth() &&
-        created.getFullYear() === now.getFullYear()
-      ) {
-        thisMonth++;
-      }
-
-      const st = quoteStatus(q);
-      if (st === "draft" || st === "sent") pending++;
-      if (st === "accepted") acceptedValue += q.totalSale || 0;
     }
-
-    return {
-      byCustomer,
-      stats: {
-        customers: customers.length,
-        thisMonth,
-        pending,
-        acceptedValue,
-      },
-    };
-  }, [quotes, customers.length]);
+    return map;
+  }, [quotes]);
 
   const filtered = customers.filter(
     (c) =>
@@ -92,41 +67,12 @@ export function HomeScreen({ onSelectCustomer }: Props) {
 
   return (
     <div className="home">
-      <div className="home-stats">
-        <StatTile
-          label="Total Customers"
-          value={loading ? "—" : String(stats.customers)}
-          icon="people"
-        />
-        <StatTile
-          label="Quotes This Month"
-          value={quotesLoading ? "—" : String(stats.thisMonth)}
-          icon="doc"
-        />
-        <StatTile
-          label="Pending Quotes"
-          value={quotesLoading ? "—" : String(stats.pending)}
-          icon="clock"
-        />
-        <StatTile
-          label="Accepted Value"
-          value={quotesLoading ? "—" : "₹" + formatINRShort(stats.acceptedValue)}
-          icon="rupee"
-        />
+      <div className="home-top">
+        <button className="home-back" onClick={onBack} aria-label="Back to dashboard">
+          ←
+        </button>
+        <h1 className="home-section-title">Quotations</h1>
       </div>
-
-      {!isInstalledApp() && (
-        <a className="home-apk" href={APK_URL} download="QuotationApp.apk">
-          <span className="home-apk-icon" aria-hidden="true">
-            <PhoneIcon />
-          </span>
-          <span className="home-apk-text">
-            <span className="home-apk-title">Download Android App</span>
-            <span className="home-apk-sub">Install directly on your phone</span>
-          </span>
-          <span className="home-apk-btn">Download</span>
-        </a>
-      )}
 
       <div className="home-section-head">
         <div>
@@ -295,66 +241,6 @@ function initials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-function StatTile({
-  label,
-  value,
-  icon,
-}: {
-  label: string;
-  value: string;
-  icon: "people" | "doc" | "clock" | "rupee";
-}) {
-  return (
-    <div className="home-tile">
-      <span className="home-tile-icon" aria-hidden="true">
-        <TileIcon kind={icon} />
-      </span>
-      <span className="home-tile-value tnum">{value}</span>
-      <span className="home-tile-label">{label}</span>
-    </div>
-  );
-}
-
-function TileIcon({ kind }: { kind: "people" | "doc" | "clock" | "rupee" }) {
-  const common = {
-    width: 18,
-    height: 18,
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: 1.8,
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
-  };
-  if (kind === "people")
-    return (
-      <svg {...common}>
-        <circle cx="9" cy="8" r="3.2" />
-        <path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5" />
-        <path d="M16 11a3 3 0 100-6M17 19c0-2.2-.8-3.6-2-4.5" />
-      </svg>
-    );
-  if (kind === "doc")
-    return (
-      <svg {...common}>
-        <path d="M6 3h8l4 4v14H6z" />
-        <path d="M14 3v4h4M9 12h6M9 16h6" />
-      </svg>
-    );
-  if (kind === "clock")
-    return (
-      <svg {...common}>
-        <circle cx="12" cy="12" r="8.5" />
-        <path d="M12 7.5V12l3 2" />
-      </svg>
-    );
-  return (
-    <svg {...common}>
-      <path d="M7 5h10M7 9h10M7 5c6 0 6 8 0 8h2l6 6" />
-    </svg>
-  );
-}
-
 function SearchIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -374,23 +260,6 @@ function ChevronIcon() {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-    </svg>
-  );
-}
-
-function PhoneIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <rect
-        x="6.5"
-        y="2.5"
-        width="11"
-        height="19"
-        rx="2.5"
-        stroke="currentColor"
-        strokeWidth="1.8"
-      />
-      <path d="M10.5 18.5h3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }

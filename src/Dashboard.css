@@ -1,0 +1,209 @@
+.db {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: var(--s-5) var(--s-4) calc(var(--s-10) + env(safe-area-inset-bottom));
+}
+
+/* --- Stat tiles --- */
+
+.db-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--s-3);
+  margin-bottom: var(--s-4);
+}
+
+.db-tile {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: var(--s-4);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-shadow: var(--sh-sm);
+}
+
+.db-tile-icon {
+  color: var(--green-600);
+  margin-bottom: var(--s-2);
+  display: block;
+  line-height: 0;
+}
+
+.db-tile-value {
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--ink);
+}
+
+.db-tile-label {
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+}
+
+/* --- APK banner --- */
+
+.db-apk {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  background: var(--green-50);
+  border: 1px solid var(--green-100);
+  border-radius: var(--r-lg);
+  padding: var(--s-3) var(--s-4);
+  margin-bottom: var(--s-6);
+  text-decoration: none;
+  min-height: var(--tap);
+}
+
+.db-apk-icon {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: var(--r-md);
+  background: var(--green-700);
+  color: #fff;
+  display: grid;
+  place-items: center;
+}
+
+.db-apk-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.db-apk-title {
+  font-size: var(--fs-base);
+  font-weight: 700;
+  color: var(--green-900);
+}
+
+.db-apk-sub {
+  font-size: var(--fs-sm);
+  color: var(--green-600);
+}
+
+.db-apk-btn {
+  flex-shrink: 0;
+  background: var(--green-700);
+  color: #fff;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  padding: 10px var(--s-4);
+  border-radius: var(--r-full);
+}
+
+/* --- Section head --- */
+
+.db-section-head {
+  margin-bottom: var(--s-4);
+}
+
+.db-section-head h2 {
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  margin: 0;
+}
+
+/* --- Module tiles --- */
+
+.db-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s-3);
+  margin-bottom: var(--s-6);
+}
+
+.db-section-tile {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: 76px;
+  padding: var(--s-4);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+
+.db-section-tile:not(:disabled):hover {
+  border-color: var(--green-500);
+  box-shadow: var(--sh-md);
+}
+
+.db-section-tile:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.db-section-tile-icon {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: var(--r-md);
+  background: var(--green-50);
+  color: var(--green-700);
+  display: grid;
+  place-items: center;
+}
+
+.db-section-tile-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.db-section-tile-title {
+  font-size: var(--fs-base);
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.db-section-tile-desc {
+  font-size: var(--fs-sm);
+  color: var(--ink-3);
+}
+
+.db-section-tile-chev {
+  color: var(--ink-4);
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+/* --- Footer --- */
+
+.db-footer {
+  text-align: center;
+  font-size: var(--fs-xs);
+  color: var(--ink-4);
+  margin: var(--s-8) 0 0;
+}
+
+/* --- Mobile --- */
+
+@media (max-width: 700px) {
+  .db {
+    padding: var(--s-4) var(--s-3) calc(var(--s-10) + env(safe-area-inset-bottom));
+  }
+
+  .db-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .db-tiles {
+    grid-template-columns: 1fr;
+  }
+
+  .db-apk-sub {
+    display: none;
+  }
+}

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Dashboard } from "./Dashboard";
 import { HomeScreen } from "./HomeScreen";
 import { CustomerScreen } from "./CustomerScreen";
 import { QuoteEditor } from "./QuoteEditor";
@@ -9,14 +10,21 @@ import { useCompanySettings } from "./useCompanySettings";
 import { type Customer, type QuoteDoc } from "./types";
 import { type ReadItem } from "./readImage";
 
-type Screen =
+// Top-level app areas — see docs/ROADMAP.md. Pricing/Billing aren't built yet,
+// so their Dashboard tiles are disabled and have no render branch below.
+type Section = "dashboard" | "quotations" | "ideas";
+
+// Quotations' own nested flow, same shape as before Section routing existed —
+// kept alive across navigation so leaving and re-entering Quotations resumes
+// wherever the user left off.
+type QuotationsScreen =
   | { name: "home" }
   | { name: "customer"; customer: Customer }
-  | { name: "quote"; customer: Customer; quote: QuoteDoc | null; initialItems?: ReadItem[] }
-  | { name: "ideas" };
+  | { name: "quote"; customer: Customer; quote: QuoteDoc | null; initialItems?: ReadItem[] };
 
 export function AppRouter() {
-  const [screen, setScreen] = useState<Screen>({ name: "home" });
+  const [section, setSection] = useState<Section>("dashboard");
+  const [quotationsScreen, setQuotationsScreen] = useState<QuotationsScreen>({ name: "home" });
   const [showSettings, setShowSettings] = useState(false);
   const { settings: company, update: updateCompany } = useCompanySettings();
 
@@ -24,47 +32,52 @@ export function AppRouter() {
     <>
       <AppHeader
         onOpenSettings={() => setShowSettings(true)}
-        onOpenIdeas={() => setScreen({ name: "ideas" })}
+        onOpenIdeas={() => setSection("ideas")}
       />
 
-      {screen.name === "ideas" && (
-        <IdeaTracker onBack={() => setScreen({ name: "home" })} />
+      {section === "dashboard" && (
+        <Dashboard onOpenQuotations={() => setSection("quotations")} />
       )}
 
-      {screen.name === "home" && (
+      {section === "ideas" && (
+        <IdeaTracker onBack={() => setSection("dashboard")} />
+      )}
+
+      {section === "quotations" && quotationsScreen.name === "home" && (
         <HomeScreen
-          onSelectCustomer={(customer) => setScreen({ name: "customer", customer })}
+          onBack={() => setSection("dashboard")}
+          onSelectCustomer={(customer) => setQuotationsScreen({ name: "customer", customer })}
         />
       )}
 
-      {screen.name === "customer" && (
+      {section === "quotations" && quotationsScreen.name === "customer" && (
         <CustomerScreen
-          customer={screen.customer}
-          onBack={() => setScreen({ name: "home" })}
+          customer={quotationsScreen.customer}
+          onBack={() => setQuotationsScreen({ name: "home" })}
           onNewQuote={() =>
-            setScreen({ name: "quote", customer: screen.customer, quote: null })
+            setQuotationsScreen({ name: "quote", customer: quotationsScreen.customer, quote: null })
           }
           onNewQuoteFromItems={(items) =>
-            setScreen({
+            setQuotationsScreen({
               name: "quote",
-              customer: screen.customer,
+              customer: quotationsScreen.customer,
               quote: null,
               initialItems: items,
             })
           }
           onOpenQuote={(quote) =>
-            setScreen({ name: "quote", customer: screen.customer, quote })
+            setQuotationsScreen({ name: "quote", customer: quotationsScreen.customer, quote })
           }
         />
       )}
 
-      {screen.name === "quote" && (
+      {section === "quotations" && quotationsScreen.name === "quote" && (
         <QuoteEditor
-          customer={screen.customer}
-          existingQuote={screen.quote}
-          initialItems={screen.initialItems}
+          customer={quotationsScreen.customer}
+          existingQuote={quotationsScreen.quote}
+          initialItems={quotationsScreen.initialItems}
           onBack={() =>
-            setScreen({ name: "customer", customer: screen.customer })
+            setQuotationsScreen({ name: "customer", customer: quotationsScreen.customer })
           }
         />
       )}

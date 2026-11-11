@@ -31,8 +31,8 @@ dependency-free approach the app already used for its screen flow.
 
 ## Current phase
 
-**Step 2 — Dashboard shell + `Section` routing.** Quotations and the Idea
-Tracker are built; Dashboard/Pricing/Billing are planned, not started.
+**Step 3 — Pricing.** Quotations, the Idea Tracker, and the Dashboard are
+built; Pricing/Billing are planned, not started.
 
 ## Build order
 
@@ -40,7 +40,7 @@ Tracker are built; Dashboard/Pricing/Billing are planned, not started.
 |---|---|---|
 | 0 | Scaffold `docs/` (this folder) | Done |
 | 1 | Idea Tracker (`useIdeas.ts`, `IdeaTracker.tsx`) | Done |
-| 2 | Dashboard shell + `Section` routing in `AppRouter.tsx` | Not started |
+| 2 | Dashboard shell + `Section` routing in `AppRouter.tsx` | Done |
 | 3 | Pricing (`usePricing.ts`, `PricingScreen.tsx`, reuses `ImageReaderPanel`) | Not started |
 | 4 | Quotations ↔ Pricing autocomplete in `QuoteEditor.tsx` | Not started |
 | 5 | Extract shared line-items editor out of `QuoteEditor.tsx` | Not started |
