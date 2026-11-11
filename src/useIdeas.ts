@@ -3,7 +3,7 @@ import {
   collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { type IdeaDoc, type IdeaStatus } from "./types";
+import { type IdeaDoc, type IdeaStatus, type IdeaService } from "./types";
 
 export function useIdeas() {
   const [ideas, setIdeas] = useState<IdeaDoc[]>([]);
@@ -23,11 +23,12 @@ export function useIdeas() {
     return unsub;
   }, []);
 
-  async function addIdea(text: string): Promise<string> {
+  async function addIdea(text: string, service: IdeaService): Promise<string> {
     const now = Date.now();
     const ref = await addDoc(collection(db, "ideas"), {
       text: text.trim(),
       status: "idea" as IdeaStatus,
+      service,
       createdAt: now,
       updatedAt: now,
     });
@@ -38,9 +39,13 @@ export function useIdeas() {
     await updateDoc(doc(db, "ideas", id), { status, updatedAt: Date.now() });
   }
 
+  async function setService(id: string, service: IdeaService) {
+    await updateDoc(doc(db, "ideas", id), { service, updatedAt: Date.now() });
+  }
+
   async function deleteIdea(id: string) {
     await deleteDoc(doc(db, "ideas", id));
   }
 
-  return { ideas, loading, addIdea, setStatus, deleteIdea };
+  return { ideas, loading, addIdea, setStatus, setService, deleteIdea };
 }

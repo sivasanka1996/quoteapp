@@ -76,10 +76,35 @@ export const IDEA_STATUS_LABEL: Record<IdeaStatus, string> = {
   built: "Built",
 };
 
+// Which app area an idea belongs to — matches the module areas in ROADMAP.md
+export type IdeaService = "dashboard" | "pricing" | "quotations" | "billing" | "general";
+
+export const IDEA_SERVICES: IdeaService[] = [
+  "dashboard",
+  "pricing",
+  "quotations",
+  "billing",
+  "general",
+];
+
+export const IDEA_SERVICE_LABEL: Record<IdeaService, string> = {
+  dashboard: "Dashboard",
+  pricing: "Pricing",
+  quotations: "Quotations",
+  billing: "Billing",
+  general: "General",
+};
+
 export interface IdeaDoc {
   id: string;
   text: string;
   status: IdeaStatus;
+  service?: IdeaService; // optional — ideas saved before this field existed read as undefined
   createdAt: number;
   updatedAt: number;
+}
+
+// Ideas written before `service` existed read as undefined — treat them as general
+export function ideaService(idea: IdeaDoc): IdeaService {
+  return idea.service ?? "general";
 }

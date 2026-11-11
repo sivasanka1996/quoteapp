@@ -45,6 +45,10 @@ for the home/dashboard stat tiles).
 ```
 text: string
 status: "idea" | "finalized" | "building" | "built"
+service?: "dashboard" | "pricing" | "quotations" | "billing" | "general"
+                               // optional — ideas saved before this field
+                               // existed read as undefined; ideaService(idea)
+                               // in types.ts falls back to "general"
 createdAt: number             // Date.now(), not serverTimestamp()
 updatedAt: number
 ```

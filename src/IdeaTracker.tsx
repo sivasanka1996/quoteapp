@@ -2,7 +2,11 @@ import { useMemo, useState } from "react";
 import {
   IDEA_STATUSES,
   IDEA_STATUS_LABEL,
+  IDEA_SERVICES,
+  IDEA_SERVICE_LABEL,
+  ideaService,
   type IdeaStatus,
+  type IdeaService,
 } from "./types";
 import { useIdeas } from "./useIdeas";
 import { formatDate } from "./format";
@@ -15,8 +19,9 @@ interface Props {
 type Filter = "all" | IdeaStatus;
 
 export function IdeaTracker({ onBack }: Props) {
-  const { ideas, loading, addIdea, setStatus, deleteIdea } = useIdeas();
+  const { ideas, loading, addIdea, setStatus, setService, deleteIdea } = useIdeas();
   const [text, setText] = useState("");
+  const [newService, setNewService] = useState<IdeaService>("general");
   const [adding, setAdding] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -26,10 +31,19 @@ export function IdeaTracker({ onBack }: Props) {
     [ideas, filter]
   );
 
+  const groups = useMemo(() => {
+    const byService = new Map<IdeaService, typeof visible>();
+    for (const s of IDEA_SERVICES) byService.set(s, []);
+    for (const idea of visible) byService.get(ideaService(idea))!.push(idea);
+    return IDEA_SERVICES.map((s) => [s, byService.get(s)!] as const).filter(
+      ([, items]) => items.length > 0
+    );
+  }, [visible]);
+
   async function handleAdd() {
     if (!text.trim()) return;
     setAdding(true);
-    await addIdea(text);
+    await addIdea(text, newService);
     setAdding(false);
     setText("");
   }
@@ -60,6 +74,18 @@ export function IdeaTracker({ onBack }: Props) {
             if (e.key === "Enter") handleAdd();
           }}
         />
+        <select
+          className="it-add-service"
+          value={newService}
+          onChange={(e) => setNewService(e.target.value as IdeaService)}
+          aria-label="Service for new idea"
+        >
+          {IDEA_SERVICES.map((s) => (
+            <option key={s} value={s}>
+              {IDEA_SERVICE_LABEL[s]}
+            </option>
+          ))}
+        </select>
         <button
           className="it-add-btn"
           onClick={handleAdd}
@@ -109,54 +135,76 @@ export function IdeaTracker({ onBack }: Props) {
           </button>
         </div>
       ) : (
-        <div className="it-list">
-          {visible.map((idea) => (
-            <div className="it-row" key={idea.id}>
-              <div className="it-row-body">
-                <span className="it-row-text">{idea.text}</span>
-                <span className="it-row-meta">{formatDate(idea.createdAt)}</span>
-                <div className="it-sp" role="group" aria-label="Idea status">
-                  {IDEA_STATUSES.map((s) => (
-                    <button
-                      key={s}
-                      className={`it-sp-btn it-sp-${s} ${idea.status === s ? "is-active" : ""}`}
-                      aria-pressed={idea.status === s}
-                      onClick={() => setStatus(idea.id, s)}
-                    >
-                      {IDEA_STATUS_LABEL[s]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {deleteConfirm === idea.id ? (
-                <div className="it-confirm">
-                  <span>Delete this idea?</span>
-                  <button
-                    className="it-del-yes"
-                    onClick={() => {
-                      deleteIdea(idea.id);
-                      setDeleteConfirm(null);
-                    }}
-                  >
-                    Delete
-                  </button>
-                  <button className="it-del-no" onClick={() => setDeleteConfirm(null)}>
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <button
-                  className="it-del-btn"
-                  onClick={() => setDeleteConfirm(idea.id)}
-                  aria-label="Delete idea"
-                >
-                  <TrashIcon />
-                </button>
-              )}
+        groups.map(([service, items]) => (
+          <div className="it-group" key={service}>
+            <div className="it-group-head">
+              <h3>{IDEA_SERVICE_LABEL[service]}</h3>
+              <span className="it-group-count">{items.length}</span>
             </div>
-          ))}
-        </div>
+            <div className="it-list">
+              {items.map((idea) => (
+                <div className="it-row" key={idea.id}>
+                  <div className="it-row-body">
+                    <span className="it-row-text">{idea.text}</span>
+                    <div className="it-row-meta-line">
+                      <span className="it-row-meta">{formatDate(idea.createdAt)}</span>
+                      <select
+                        className="it-row-service"
+                        value={ideaService(idea)}
+                        onChange={(e) => setService(idea.id, e.target.value as IdeaService)}
+                        aria-label="Move idea to a different service"
+                      >
+                        {IDEA_SERVICES.map((s) => (
+                          <option key={s} value={s}>
+                            {IDEA_SERVICE_LABEL[s]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="it-sp" role="group" aria-label="Idea status">
+                      {IDEA_STATUSES.map((s) => (
+                        <button
+                          key={s}
+                          className={`it-sp-btn it-sp-${s} ${idea.status === s ? "is-active" : ""}`}
+                          aria-pressed={idea.status === s}
+                          onClick={() => setStatus(idea.id, s)}
+                        >
+                          {IDEA_STATUS_LABEL[s]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {deleteConfirm === idea.id ? (
+                    <div className="it-confirm">
+                      <span>Delete this idea?</span>
+                      <button
+                        className="it-del-yes"
+                        onClick={() => {
+                          deleteIdea(idea.id);
+                          setDeleteConfirm(null);
+                        }}
+                      >
+                        Delete
+                      </button>
+                      <button className="it-del-no" onClick={() => setDeleteConfirm(null)}>
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      className="it-del-btn"
+                      onClick={() => setDeleteConfirm(idea.id)}
+                      aria-label="Delete idea"
+                    >
+                      <TrashIcon />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))
       )}
     </div>
   );
