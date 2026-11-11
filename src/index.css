@@ -43,6 +43,16 @@
   --st-declined: #b42318;
   --st-declined-bg: #fdeceb;
 
+  /* --- Idea status --- */
+  --idea-idea: var(--st-draft);
+  --idea-idea-bg: var(--st-draft-bg);
+  --idea-finalized: var(--st-sent);
+  --idea-finalized-bg: var(--st-sent-bg);
+  --idea-building: #b54708;
+  --idea-building-bg: #fdf1e2;
+  --idea-built: var(--st-accepted);
+  --idea-built-bg: var(--st-accepted-bg);
+
   /* --- Type scale --- */
   --fs-xs: 0.72rem;
   --fs-sm: 0.82rem;

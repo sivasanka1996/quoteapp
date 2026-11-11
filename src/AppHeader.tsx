@@ -2,10 +2,11 @@ import "./AppHeader.css";
 
 interface Props {
   onOpenSettings: () => void;
+  onOpenIdeas: () => void;
 }
 
 /** The persistent app bar shown on every screen. */
-export function AppHeader({ onOpenSettings }: Props) {
+export function AppHeader({ onOpenSettings, onOpenIdeas }: Props) {
   return (
     <header className="ah">
       <div className="ah-inner">
@@ -16,16 +17,40 @@ export function AppHeader({ onOpenSettings }: Props) {
             <span className="ah-sub">Manage your customer quotes</span>
           </span>
         </div>
-        <button
-          className="ah-icon-btn"
-          onClick={onOpenSettings}
-          aria-label="Company settings"
-          title="Company settings"
-        >
-          <GearIcon />
-        </button>
+        <div className="ah-actions">
+          <button
+            className="ah-icon-btn"
+            onClick={onOpenIdeas}
+            aria-label="Idea tracker"
+            title="Idea tracker"
+          >
+            <BulbIcon />
+          </button>
+          <button
+            className="ah-icon-btn"
+            onClick={onOpenSettings}
+            aria-label="Company settings"
+            title="Company settings"
+          >
+            <GearIcon />
+          </button>
+        </div>
       </div>
     </header>
+  );
+}
+
+function BulbIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M9 18h6M10 21h4M8 14.5A5.5 5.5 0 1116 14.5c0 1.8-1 2.8-1.7 3.5H9.7C9 17.3 8 16.3 8 14.5z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 

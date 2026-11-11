@@ -58,3 +58,28 @@ export interface QuoteDoc {
 export function quoteStatus(q: QuoteDoc): QuoteStatus {
   return q.status ?? "draft";
 }
+
+// Build-tracking status for an idea — see docs/ideas.md
+export type IdeaStatus = "idea" | "finalized" | "building" | "built";
+
+export const IDEA_STATUSES: IdeaStatus[] = [
+  "idea",
+  "finalized",
+  "building",
+  "built",
+];
+
+export const IDEA_STATUS_LABEL: Record<IdeaStatus, string> = {
+  idea: "Idea",
+  finalized: "Finalized",
+  building: "Building",
+  built: "Built",
+};
+
+export interface IdeaDoc {
+  id: string;
+  text: string;
+  status: IdeaStatus;
+  createdAt: number;
+  updatedAt: number;
+}

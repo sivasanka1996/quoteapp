@@ -2,6 +2,7 @@ import { useState } from "react";
 import { HomeScreen } from "./HomeScreen";
 import { CustomerScreen } from "./CustomerScreen";
 import { QuoteEditor } from "./QuoteEditor";
+import { IdeaTracker } from "./IdeaTracker";
 import { AppHeader } from "./AppHeader";
 import { CompanySettingsPanel } from "./CompanySettings";
 import { useCompanySettings } from "./useCompanySettings";
@@ -11,7 +12,8 @@ import { type ReadItem } from "./readImage";
 type Screen =
   | { name: "home" }
   | { name: "customer"; customer: Customer }
-  | { name: "quote"; customer: Customer; quote: QuoteDoc | null; initialItems?: ReadItem[] };
+  | { name: "quote"; customer: Customer; quote: QuoteDoc | null; initialItems?: ReadItem[] }
+  | { name: "ideas" };
 
 export function AppRouter() {
   const [screen, setScreen] = useState<Screen>({ name: "home" });
@@ -20,7 +22,14 @@ export function AppRouter() {
 
   return (
     <>
-      <AppHeader onOpenSettings={() => setShowSettings(true)} />
+      <AppHeader
+        onOpenSettings={() => setShowSettings(true)}
+        onOpenIdeas={() => setScreen({ name: "ideas" })}
+      />
+
+      {screen.name === "ideas" && (
+        <IdeaTracker onBack={() => setScreen({ name: "home" })} />
+      )}
 
       {screen.name === "home" && (
         <HomeScreen

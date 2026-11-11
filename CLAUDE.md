@@ -2,9 +2,24 @@
 
 ## What this app is
 
-A quotation app for Dad (electrical materials supplier / middleman). He takes orders, buys from vendors, supplies to customers. Profit = gap between vendor discount and customer rate. GST is pass-through and never enters profit.
+A business app for Dad (electrical materials supplier / middleman). Built by
+Siva for his dad — non-technical end user, mobile-first, Telugu-friendly.
 
-Built by Siva for his dad. Non-technical end user — mobile-first, big touch targets, Telugu-friendly.
+The app is growing from a single Quotations tool into four areas: a
+**Dashboard**, a **Pricing** catalog, **Quotations**, and **Billing** — plus
+a dev-facing **Idea Tracker**. See [docs/ROADMAP.md](docs/ROADMAP.md) for the
+full picture and current build status.
+
+**Read `docs/` before the code when you need to know what exists, what's
+planned, or why something was decided.** This file stays a short map; it
+does not duplicate what's in there.
+
+- [docs/ROADMAP.md](docs/ROADMAP.md) — big picture, build order, current phase
+- [docs/DATA_MODEL.md](docs/DATA_MODEL.md) — every Firestore collection, whole app
+- [docs/CONFIG.md](docs/CONFIG.md) — every API key / secret / env var, where it lives
+- [docs/BUSINESS.md](docs/BUSINESS.md) — Dad's business domain, profit model, GST, discount math
+- [docs/DEPLOY.md](docs/DEPLOY.md) — release, APK build, key rotation, rollback
+- [docs/dashboard.md](docs/dashboard.md) / [pricing.md](docs/pricing.md) / [quotations.md](docs/quotations.md) / [billing.md](docs/billing.md) / [ideas.md](docs/ideas.md) — one file per module: status, what it does, key files, decisions, open questions
 
 ---
 
@@ -13,19 +28,21 @@ Built by Siva for his dad. Non-technical end user — mobile-first, big touch ta
 - **App:** https://quoteapp-3f48e.web.app
 - **GitHub:** https://github.com/sivasanka1996/quoteapp (public repo)
 - **Firebase project:** quoteapp-3f48e
-- **Android APK:** https://github.com/sivasanka1996/quoteapp/releases/download/v1.0/app-debug.apk
-- **GitHub Release:** https://github.com/sivasanka1996/quoteapp/releases/tag/v1.0
+- **Android APK:** https://github.com/sivasanka1996/quoteapp/releases/download/v1.4/app-debug.apk
+- **GitHub Release:** https://github.com/sivasanka1996/quoteapp/releases/tag/v1.4
+
+  ⚠ `APK_URL` in `src/appInfo.ts` points at the `v1.4` release asset, but
+  `APP_VERSION` in the same file says `"v1.5"`. Resolve before next release —
+  see [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ---
 
 ## Stack
 
-- **Frontend:** React + Vite + TypeScript
-- **Storage:** Firebase Firestore (quotes + customers sync across devices)
-- **Hosting:** Firebase Hosting (HTTPS, required for camera/mic)
-- **CI/CD:** GitHub Actions → auto-deploys to Firebase on every push to `main`
-- **PWA:** vite-plugin-pwa, installable on Android/iOS home screen
-- **Android APK:** Built via GitHub Actions (Build Android APK workflow) using Gradle + TWA
+React + Vite + TypeScript, Firebase Firestore, Firebase Hosting, GitHub
+Actions CI/CD, vite-plugin-pwa, Android APK via Gradle/TWA. No router
+library, no state-management library — plain `useState` throughout. Details
+and secrets map: [docs/CONFIG.md](docs/CONFIG.md), [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ---
 
@@ -34,261 +51,63 @@ Built by Siva for his dad. Non-technical end user — mobile-first, big touch ta
 ```bash
 npm install
 npm run dev        # http://localhost:5173
-npm test           # 41 unit tests (Vitest)
+npm test           # Vitest
 npm run lint       # eslint — clean, keep it that way
 npm run build      # production build
 ```
 
----
-
-## Deploy
-
-Push to `main` → GitHub Actions runs tests → builds → deploys to Firebase automatically.
-
-Secrets required in GitHub repo settings:
-- `FIREBASE_TOKEN` — from `firebase login:ci`
-
-Manual APK build: Actions → **Build Android APK** → Run workflow → download artifact → attach to GitHub Release.
-
-**Note:** Firebase Spark plan blocks executable files — APK cannot be hosted on Firebase Hosting. It is hosted on GitHub Releases instead. The home screen banner links directly to the release asset.
+Image reading needs `VITE_IMAGE_PROXY_URL` — see
+[docs/CONFIG.md](docs/CONFIG.md) for what to put in `.env.local`.
 
 ---
 
-## Architecture
+## Architecture stance
 
-### Screen flow
-```
-HomeScreen (search/add customers)
-  → CustomerScreen (customer's quote history)
-    → QuoteEditor (edit quote, save to Firestore)
-      → CustomerView (customer-facing PDF, print)
-```
+Single Firebase Spark-plan app. Modules (Dashboard/Pricing/Quotations/
+Billing) are **code-level** boundaries — separate files/components/hooks —
+not separate services, deployments, or a multi-tenant data model. That's
+deliberate: one business, today; splitting infrastructure now would be pure
+overhead, and the modular code can be pulled apart later if it's ever
+actually needed.
 
-### Key files
-```
-src/
-  index.css              — DESIGN TOKENS (color, type scale, spacing, radii, shadows)
-  AppRouter.tsx          — view manager (home/customer/quote) + AppHeader + settings
-  AppHeader.tsx/css      — persistent app bar (logo, title, settings gear)
-  HomeScreen.tsx/css     — stat tiles, APK banner, search, customer rows
-  CustomerScreen.tsx/css — quote history per customer, status badges, status filter
-  QuoteEditor.tsx/css    — collapsed item rows + edit sheet + blanket/summary sidebar
-  CustomerView.tsx/css   — customer-facing document, column toggles, print, share
-  StatusBadge.tsx/css    — quote status badge + status picker
-  CompanySettings.tsx    — company name/address/phone/GSTIN/logo (localStorage)
-  App.tsx                — re-exports AppRouter
-  appInfo.ts             — version, APK URL, isInstalledApp() standalone detection
-  firebase.ts            — Firebase init + Firestore db export
-  types.ts               — shared types (UILine, Customer, QuoteDoc, QuoteStatus)
-  types.test.ts          — 2 tests for the quoteStatus fallback
-  useCustomers.ts        — Firestore CRUD for customers collection
-  useQuotes.ts           — Firestore CRUD per customer + useAllQuotes() for home stats
-  useCompanySettings.ts  — company details in localStorage
-  useQuoteStorage.ts     — legacy localStorage quote storage (kept, not primary)
-  sharePdf.ts            — element → A4 PDF → Web Share API (lazy-loads jspdf)
-  readImage.ts           — swappable image reader (Gemini via CF Worker)
-  voiceParse.ts          — voice transcript parser (English + Telugu)
-  voiceParse.test.ts     — 9 parser tests
-  VoiceReader.tsx/css    — mic UI, language toggle, alternatives
-  calc/engine.ts         — PURE calc functions (no UI, no network)
-  calc/engine.test.ts    — 21 tests verifying fixture numbers
-  format.ts              — Indian number formatting (lakh/crore), short form, dates
-  format.test.ts         — 9 formatting tests
-```
-
-### Design system
-
-All color, spacing, type, radii and shadow values live as CSS custom properties in
-`src/index.css`. Screens consume tokens — do not hardcode hex values or px spacing.
-Money uses `.tnum` (tabular numerals) so digit columns align. Touch targets are
+Design tokens (color, type scale, spacing, radii, shadows) live in
+`src/index.css` — every screen consumes them, nothing hardcodes hex values
+or px spacing. Money uses `.tnum` for tabular numerals. Touch targets are
 `var(--tap)` = 48px minimum.
-
-### Firestore collections
-```
-customers/{id}
-  name: string
-  phone: string
-  address: string
-  createdAt: timestamp
-
-quotes/{id}
-  customerId: string
-  customerName: string (denormalized)
-  name: string
-  lines: UILine[]
-  totalSale: number (denormalized for list display)
-  status: "draft" | "sent" | "accepted" | "declined"
-  createdAt: number
-  updatedAt: number
-```
-
-`status` is set by hand in the quote editor — nothing infers it. Quotes written
-before the field existed read as `undefined`; use `quoteStatus(q)` from
-`types.ts`, which falls back to `"draft"`.
-
----
-
-## Calc engine — the heart of the app
-
-**Discount mode:** `list × (1 − d1) × (1 − d2) × …` (compounding, NOT additive)
-- e.g. `17835 × (1−0.647) × (1−0.02) = 6169.84`
-
-**Direct rate mode:** rate entered directly
-
-**Per-line math:**
-```
-lineCostTotal = round(resolvedCost × qty)
-lineSaleTotal = round(resolvedSell × qty)
-lineProfit    = lineSaleTotal − lineCostTotal
-gstAmount     = round(lineSaleTotal × gstPct/100)
-```
-
-**Totals:** sum already-rounded line values (per-line rounding is a correctness requirement, not cosmetic)
-
-**Profit:** pre-GST gap between sell and cost. GST is pass-through and never enters profit.
-
----
-
-## UILine shape (shared type in types.ts)
-
-```typescript
-interface UILine {
-  id: number;
-  name: string; qty: string;
-  costMode: "discount" | "direct";
-  costList: string; costDisc1: string; costDisc2: string; costRate: string;
-  sellMode: "discount" | "direct";
-  sellList: string; sellDisc1: string; sellDisc2: string; sellRate: string;
-  gstPct: string;
-}
-```
-
-Discount fields are plain numbers (e.g. `"64.7"`, `"2"`). The engine builds `"64.7% + 2%"` internally.
 
 ---
 
 ## Key decisions (locked)
 
-- No inventory, no product catalog, no price memory, no AI chat
-- GST default 18%, editable per line, pass-through only
-- Discounts compound (never additive)
-- Blanket discount panel: apply same discount to all or selected lines
-- Customer PDF hides cost/profit — shows only sell side with optional discount %
-- Company header (name, address, phone, GSTIN, logo) on customer PDF
-- Column toggles on customer PDF (show/hide Qty, List price, Discount, Rate, Amount)
-- Everything is free — Spark plan Firebase, no Blaze
-- APK hosted on GitHub Releases (not Firebase — Spark blocks executables)
+- GST default 18%, editable per line, pass-through only — never profit
+- Discounts compound (never additive) — see [docs/BUSINESS.md](docs/BUSINESS.md)
+- Customer-facing documents hide cost/profit
+- Everything free — Firebase Spark plan, no Blaze
+- APK hosted on GitHub Releases, not Firebase (Spark blocks executables)
+- Idea Tracker and all current Firestore collections are open
+  (`allow read, write: if true`) until the pre-handover auth work below
 
 ---
 
-## Firestore rules
+## Before handing the app to Dad
 
-Currently open (test mode):
-```
-allow read, write: if true;
-```
-File: `firestore.rules` — deployed automatically with `firebase deploy`.
-
-**Before handing to Dad:** add authentication + lock rules to authenticated users only.
-
----
-
-## Current build status — WHAT IS DONE
-
-- [x] Full visual redesign — design tokens, all four screens, mobile-first
-- [x] Quote status (draft/sent/accepted/declined) — badges, filter, home stat tiles
-- [x] Business / Customer view toggle in the quote editor
-- [x] Collapsed item rows + bottom-sheet line editor (cost, sell, GST, profit)
-- [x] Share as PDF / WhatsApp — Web Share API, falls back to file download
-- [x] Voice input — en-IN default, English/తెలుగు toggle, Telugu-aware parser
-- [x] Calc engine — 41 tests passing
-- [x] Quote editor — card UI, blanket discount (apply to all / selected), profit summary
-- [x] Discount inputs — plain number fields (Discount % + Extra disc %), no % symbol to type
-- [x] Customer PDF — column toggles, company header (logo/name/address/GSTIN), print to PDF
-- [x] Firebase Hosting + GitHub Actions auto-deploy on push to main
-- [x] PWA — installable on phone (manifest, icons, service worker)
-- [x] Customer management — home screen search/add, customer quote history, Firestore sync
-- [x] Company settings — name, address, phone, GSTIN, logo upload, saved to localStorage
-- [x] Save & persist — quotes saved to Firestore per customer, not localStorage
-- [x] Android APK — built via GitHub Actions using Gradle/TWA, hosted on GitHub Releases v1.0
-- [x] APK download banner on home screen — green banner linking to GitHub Release
-- [x] Image reading — "📷 Read image" button in QuoteEditor; Cloudflare Worker proxy for Gemini; swappable module `src/readImage.ts`; Telugu + English; confirmation UI before adding items
-
----
-
-## WHAT TO BUILD NEXT (in order)
-
-### Step 4 — Image reading — NEEDS ACTIVATION (code is done)
-
-All code is committed. To activate:
-1. Get a free Gemini API key from https://aistudio.google.com/ (free tier, no card)
-2. Deploy the Cloudflare Worker:
-   ```
-   cd cf-worker
-   npx wrangler deploy
-   npx wrangler secret put GEMINI_API_KEY   ← paste key when prompted
-   ```
-3. Copy the deployed worker URL, add to `.env.local` in project root:
-   ```
-   VITE_IMAGE_PROXY_URL=https://quoteapp-image-reader.<account>.workers.dev
-   ```
-4. Push to main — GitHub Actions will deploy the updated frontend
-
-**Key files:**
-- `src/readImage.ts` — swappable reader module (swap this file to change the AI engine)
-- `src/ImageReader.tsx` + `src/ImageReader.css` — camera/upload UI, confirmation list
-- `cf-worker/image-reader.js` — the Cloudflare Worker (Gemini proxy, key stored as secret)
-- `cf-worker/wrangler.toml` — worker config
-
-### Step 5 — Voice — DONE, with one gap
-
-Built: mic button, Web Speech API, `en-IN` default with an English/తెలుగు toggle
-persisted to localStorage, "I heard: …" confirmation before anything is added,
-up to 3 alternatives as tappable chips, Telugu rate keywords and digits.
-
-Still open:
-- No undo on the last voice action
-- Voice only ADDS items; it cannot edit an existing line's fields
-- In Telugu mode item names stay in Telugu script and land on the customer PDF
-  as-is. Transliterating needs a lookup table of Dad's actual item vocabulary.
-
-### Before handover to Dad
 - Add Firebase Authentication (Google sign-in or phone OTP)
 - Lock Firestore rules to authenticated users only
-- Test on his actual phone/browser
-- Walk him through camera + mic permissions (one-time)
-- Confirm customer PDF hides cost/profit before he sends one
+- Test on his actual phone/browser; walk him through camera + mic permissions
+- Confirm customer-facing documents hide cost/profit before he sends one
+- Resolve the APK version mismatch (see Live URLs above)
+- Delete dead code: `src/QuoteDrawer.tsx`, `src/QuoteDrawer.css`,
+  `src/useQuoteStorage.ts` (superseded by Firestore-backed `useQuotes.ts`;
+  nothing imports them)
 
 ---
 
-## Firebase config (web SDK — safe to be public)
+## Known gaps (Quotations, today)
 
-```typescript
-const firebaseConfig = {
-  apiKey: "AIzaSyCAWvi1Ekiz_smS1INzxjf5Mjk9SToKoOA",
-  authDomain: "quoteapp-3f48e.firebaseapp.com",
-  projectId: "quoteapp-3f48e",
-  storageBucket: "quoteapp-3f48e.firebasestorage.app",
-  messagingSenderId: "166477443018",
-  appId: "1:166477443018:web:10d7dc1534306a1c492933",
-  measurementId: "G-V9BM3DFZ6V",
-};
-```
-
----
-
-## Rounding note (important)
-
-Cost-side rounding sequence is TUNABLE — confirm with Siva against a real quote from Dad.
-Customer (sell) side numbers match exactly with clean direct rates.
-Do not burn time forcing cost totals to the rupee until the rounding sequence is confirmed.
-
----
-
-## APK build notes
-
-- Built with Gradle using TWA (Trusted Web Activity) — wraps the hosted web app
-- Android project files generated in CI, no Android project committed to repo
-- Uses `assembleDebug` — works for direct sideload install, not Play Store
-- To rebuild: Actions → Build Android APK → Run workflow → attach new APK to a new GitHub Release
-- Firebase Spark blocks hosting `.apk` files — always use GitHub Releases for APK distribution
+- Voice input can only add items, not edit existing lines; no undo on the
+  last voice action
+- Telugu-spoken item names stay in Telugu script on the customer-facing
+  document — transliterating needs a lookup table of Dad's actual item
+  vocabulary
+- Cost-side rounding sequence is tunable, not fully confirmed against a real
+  quote from Dad — see [docs/BUSINESS.md](docs/BUSINESS.md)
