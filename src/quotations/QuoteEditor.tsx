@@ -6,10 +6,12 @@ import { CustomerView, type CustomerLine } from "./CustomerView";
 import { useCompanySettings } from "../shared/useCompanySettings";
 import { useQuotes } from "../shared/useQuotes";
 import { StatusPicker } from "../shared/StatusBadge";
-import { type UILine, type Customer, type QuoteDoc, type QuoteStatus } from "../types";
+import { type UILine, type Customer, type QuoteDoc, type QuoteStatus, type ItemDoc } from "../types";
 import { ImageReaderPanel } from "../shared/ImageReader";
 import { type ReadItem } from "../readImage";
 import { VoiceReaderPanel, type VoiceItem } from "../shared/VoiceReader";
+import { usePricing } from "../pricing/usePricing";
+import { findMatches, exactMatch } from "../shared/matchCatalog";
 import "./QuoteEditor.css";
 
 // ---- Helpers ----
@@ -30,6 +32,14 @@ function toLineInput(l: UILine): LineInput {
     cost: toPriceMode(l.costMode, l.costList, l.costDisc1, l.costDisc2, l.costRate),
     sell: toPriceMode(l.sellMode, l.sellList, l.sellDisc1, l.sellDisc2, l.sellRate),
     gstPct: parseFloat(l.gstPct) || 0,
+  };
+}
+
+/** Copies a catalog item's cost fields onto a line — shape matches 1:1. */
+function costPatchFrom(item: ItemDoc): Partial<UILine> {
+  return {
+    costMode: item.costMode, costList: item.costList,
+    costDisc1: item.costDisc1, costDisc2: item.costDisc2, costRate: item.costRate,
   };
 }
 
@@ -94,6 +104,7 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
 
   const { settings: company } = useCompanySettings();
   const { saveQuote } = useQuotes(customer.id);
+  const { items: catalogItems } = usePricing();
 
   const { results, totals } = useMemo(() => {
     const { lines: results, totals } = calcQuote(lines.map(toLineInput));
@@ -137,24 +148,30 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
   }
 
   function handleAddFromVoice(voiceItem: VoiceItem) {
+    const match = exactMatch(catalogItems, voiceItem.name);
     setLines((prev) => [...prev, {
       ...blankLine(),
       name: voiceItem.name,
       qty: String(voiceItem.qty || 1),
       sellMode: "direct" as const,
       sellRate: voiceItem.rate != null ? String(voiceItem.rate) : "",
+      ...(match ? costPatchFrom(match) : {}),
     }]);
     setSavedAt(null);
   }
 
   function handleAddFromImage(readItems: ReadItem[]) {
-    const newLines: UILine[] = readItems.map((it) => ({
-      ...blankLine(),
-      name: it.name,
-      qty: String(it.qty || 1),
-      sellMode: "direct" as const,
-      sellRate: it.rate != null ? String(it.rate) : "",
-    }));
+    const newLines: UILine[] = readItems.map((it) => {
+      const match = exactMatch(catalogItems, it.name);
+      return {
+        ...blankLine(),
+        name: it.name,
+        qty: String(it.qty || 1),
+        sellMode: "direct" as const,
+        sellRate: it.rate != null ? String(it.rate) : "",
+        ...(match ? costPatchFrom(match) : {}),
+      };
+    });
     setLines((prev) => [...prev, ...newLines]);
     setSavedAt(null);
   }
@@ -411,6 +428,7 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
           line={editing}
           index={editingIndex + 1}
           result={results[editingIndex]}
+          catalogItems={catalogItems}
           onChange={(patch) => updateLine(editing.id, patch)}
           onDelete={() => { deleteLine(editing.id); setEditingId(null); }}
           onClose={() => setEditingId(null)}
@@ -501,14 +519,21 @@ function LineRow({
 // ---- Line editor bottom sheet ----
 
 function LineEditorSheet({
-  line: l, index, result: r, onChange, onDelete, onClose,
+  line: l, index, result: r, catalogItems, onChange, onDelete, onClose,
 }: {
-  line: UILine; index: number; result: LineResult;
+  line: UILine; index: number; result: LineResult; catalogItems: ItemDoc[];
   onChange: (patch: Partial<UILine>) => void;
   onDelete: () => void;
   onClose: () => void;
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestions = useMemo(() => findMatches(catalogItems, l.name), [catalogItems, l.name]);
+
+  function pickCatalogItem(item: ItemDoc) {
+    onChange({ name: item.name, ...costPatchFrom(item) });
+    setShowSuggestions(false);
+  }
 
   return (
     <div
@@ -522,15 +547,29 @@ function LineEditorSheet({
         </div>
 
         <div className="qe-sheet-body">
-          <label className="qe-field">
+          <label className="qe-field qe-field-autocomplete">
             <span>Item name</span>
             <input
               className="qe-input"
               value={l.name}
               placeholder="size / item"
               autoFocus
-              onChange={(e) => onChange({ name: e.target.value })}
+              onChange={(e) => { onChange({ name: e.target.value }); setShowSuggestions(true); }}
+              onFocus={() => setShowSuggestions(true)}
+              onBlur={() => setShowSuggestions(false)}
             />
+            {showSuggestions && suggestions.length > 0 && (
+              <ul className="qe-suggest">
+                {suggestions.map((m) => (
+                  <li key={m.id}>
+                    <button type="button" onMouseDown={(e) => { e.preventDefault(); pickCatalogItem(m); }}>
+                      <span className="qe-suggest-name">{m.name}</span>
+                      {m.brand && <span className="qe-suggest-brand">{m.brand}</span>}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </label>
 
           <label className="qe-field qe-field-third">

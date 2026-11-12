@@ -40,14 +40,17 @@ needed no hosting config change.
 `src/billing/` once that exists), plus `src/shared/` for code used by more
 than one module (`AppHeader`, `StatusBadge`, `CompanySettings`, `ImageReader`,
 `VoiceReader`, `useCustomers`, `useQuotes`, `useCompanySettings`,
-`priceMode`). App-wide infrastructure (`AppRouter.tsx`, `types.ts`,
-`firebase.ts`, `format.ts`, `calc/`) stays at `src/` root.
+`priceMode`, `matchCatalog`). App-wide infrastructure (`AppRouter.tsx`,
+`types.ts`, `firebase.ts`, `format.ts`, `calc/`) stays at `src/` root. Note
+`src/quotations/QuoteEditor.tsx` imports `usePricing` from `src/pricing/` —
+a deliberate cross-module dependency, since Quotations consuming the
+Pricing catalog is the point of Step 4.
 
 ## Current phase
 
-**Step 4 — Quotations ↔ Pricing autocomplete.** Quotations, the Idea
-Tracker, the Dashboard, and Pricing are built; Billing is planned, not
-started.
+**Step 5 — extract shared line-items editor.** Quotations, the Idea
+Tracker, the Dashboard, and Pricing are built, and Quotations now pulls cost
+from the Pricing catalog (Step 4); Billing is planned, not started.
 
 ## Build order
 
@@ -57,7 +60,7 @@ started.
 | 1 | Idea Tracker (`useIdeas.ts`, `IdeaTracker.tsx`) | Done |
 | 2 | Dashboard shell + `Section` routing in `AppRouter.tsx` | Done |
 | 3 | Pricing (`usePricing.ts`, `PricingScreen.tsx`, reuses `ImageReaderPanel`) — cost-only catalog, by item+brand, no sell/no qty tiers | Done |
-| 4 | Quotations ↔ Pricing autocomplete in `QuoteEditor.tsx` | Not started |
+| 4 | Quotations ↔ Pricing autocomplete in `QuoteEditor.tsx` — manual-typing dropdown + image/voice auto-fill via `matchCatalog.ts` | Done |
 | 5 | Extract shared line-items editor out of `QuoteEditor.tsx` | Not started |
 | 6 | Billing (`useInvoices.ts`, `InvoiceEditor.tsx`, `BillingScreen.tsx`, Convert-to-Invoice) | Not started |
 
