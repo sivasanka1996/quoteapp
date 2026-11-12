@@ -7,9 +7,9 @@ import {
   ideaService,
   type IdeaStatus,
   type IdeaService,
-} from "./types";
+} from "../types";
 import { useIdeas } from "./useIdeas";
-import { formatDate } from "./format";
+import { formatDate } from "../format";
 import "./IdeaTracker.css";
 
 interface Props {

@@ -1,9 +1,9 @@
 import { useMemo } from "react";
-import { quoteStatus } from "./types";
-import { useCustomers } from "./useCustomers";
-import { useAllQuotes } from "./useQuotes";
-import { formatINRShort } from "./format";
-import { APK_URL, APP_VERSION, isInstalledApp } from "./appInfo";
+import { quoteStatus } from "../types";
+import { useCustomers } from "../shared/useCustomers";
+import { useAllQuotes } from "../shared/useQuotes";
+import { formatINRShort } from "../format";
+import { APK_URL, APP_VERSION, isInstalledApp } from "../appInfo";
 import "./Dashboard.css";
 
 interface Props {

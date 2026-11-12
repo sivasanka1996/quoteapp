@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
-import { type Customer } from "./types";
-import { useCustomers } from "./useCustomers";
-import { useAllQuotes } from "./useQuotes";
-import { formatINR, formatDate } from "./format";
-import { APP_VERSION } from "./appInfo";
+import { type Customer } from "../types";
+import { useCustomers } from "../shared/useCustomers";
+import { useAllQuotes } from "../shared/useQuotes";
+import { formatINR, formatDate } from "../format";
+import { APP_VERSION } from "../appInfo";
 import "./HomeScreen.css";
 
 interface Props {

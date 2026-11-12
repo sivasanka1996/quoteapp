@@ -6,13 +6,13 @@ import {
   QUOTE_STATUSES,
   STATUS_LABEL,
   quoteStatus,
-} from "./types";
-import { useQuotes } from "./useQuotes";
-import { formatINR, formatDate } from "./format";
-import { StatusBadge } from "./StatusBadge";
-import { ImageReaderPanel } from "./ImageReader";
-import { VoiceReaderPanel } from "./VoiceReader";
-import { type ReadItem } from "./readImage";
+} from "../types";
+import { useQuotes } from "../shared/useQuotes";
+import { formatINR, formatDate } from "../format";
+import { StatusBadge } from "../shared/StatusBadge";
+import { ImageReaderPanel } from "../shared/ImageReader";
+import { VoiceReaderPanel } from "../shared/VoiceReader";
+import { type ReadItem } from "../readImage";
 import "./CustomerScreen.css";
 
 interface Props {

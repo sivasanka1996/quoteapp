@@ -141,3 +141,8 @@ button {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Route resolving a customer/quote id from the URL (direct load/refresh) */
+.route-loading {
+  min-height: 40vh;
+}

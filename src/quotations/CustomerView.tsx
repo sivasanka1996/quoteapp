@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { type LineResult } from "./calc/engine";
-import { type CompanySettings } from "./useCompanySettings";
-import { formatINR } from "./format";
-import { shareQuotePdf, pdfFilename } from "./sharePdf";
+import { type LineResult } from "../calc/engine";
+import { type CompanySettings } from "../shared/useCompanySettings";
+import { formatINR } from "../format";
+import { shareQuotePdf, pdfFilename } from "../sharePdf";
 import "./CustomerView.css";
 
 export interface CustomerLine {

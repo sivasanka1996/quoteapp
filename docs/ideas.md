@@ -19,20 +19,19 @@ quick, low-friction capture of raw ideas and their status day-to-day;
 designed and built.
 
 ## Key files
-- `src/useIdeas.ts` — `onSnapshot` on `ideas` (sorted client-side by
+- `src/ideas/useIdeas.ts` — `onSnapshot` on `ideas` (sorted client-side by
   `createdAt` desc, same no-composite-index approach as `useQuotes.ts`) +
   `addIdea`, `setStatus`, `setService`, `deleteIdea`
-- `src/IdeaTracker.tsx` + `.css` — add box (text + service picker), status
-  filter, idea rows grouped into per-service sections, each row with an
-  inline status picker, a service dropdown to re-group it, and
+- `src/ideas/IdeaTracker.tsx` + `.css` — add box (text + service picker),
+  status filter, idea rows grouped into per-service sections, each row with
+  an inline status picker, a service dropdown to re-group it, and
   delete-with-confirm
 - `src/types.ts` — `IdeaStatus`/`IDEA_STATUSES`/`IDEA_STATUS_LABEL`,
   `IdeaService`/`IDEA_SERVICES`/`IDEA_SERVICE_LABEL`, `IdeaDoc`,
   `ideaService(idea)` (defaults missing `service` to `"general"`)
-- `src/AppHeader.tsx` — lightbulb icon in the header opens the tracker from
-  anywhere
-- `src/AppRouter.tsx` — added an `"ideas"` screen alongside
-  `home`/`customer`/`quote`
+- `src/shared/AppHeader.tsx` — lightbulb icon in the header opens the tracker
+  from anywhere
+- `src/AppRouter.tsx` — `/ideas` route renders this screen
 - `src/index.css` — added `--idea-*` color tokens (reuses the draft/sent/
   accepted quote-status colors for idea/finalized/built, adds one new amber
   pair for building)

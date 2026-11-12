@@ -3,8 +3,8 @@ import {
   collection, onSnapshot, addDoc, updateDoc, deleteDoc,
   doc, orderBy, query, serverTimestamp,
 } from "firebase/firestore";
-import { db } from "./firebase";
-import { type Customer } from "./types";
+import { db } from "../firebase";
+import { type Customer } from "../types";
 
 export function useCustomers() {
   const [customers, setCustomers] = useState<Customer[]>([]);

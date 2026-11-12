@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { readImageItems, type ReadItem } from "./readImage";
+import { readImageItems, type ReadItem } from "../readImage";
 import "./ImageReader.css";
 
 interface Props {

@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import {
   collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc,
 } from "firebase/firestore";
-import { db } from "./firebase";
-import { type IdeaDoc, type IdeaStatus, type IdeaService } from "./types";
+import { db } from "../firebase";
+import { type IdeaDoc, type IdeaStatus, type IdeaService } from "../types";
 
 export function useIdeas() {
   const [ideas, setIdeas] = useState<IdeaDoc[]>([]);

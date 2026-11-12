@@ -3,8 +3,8 @@ import {
   collection, onSnapshot, addDoc, updateDoc, deleteDoc,
   doc, query, where,
 } from "firebase/firestore";
-import { db } from "./firebase";
-import { type UILine, type QuoteDoc, type QuoteStatus } from "./types";
+import { db } from "../firebase";
+import { type UILine, type QuoteDoc, type QuoteStatus } from "../types";
 
 export function useQuotes(customerId: string) {
   const [quotes, setQuotes] = useState<QuoteDoc[]>([]);

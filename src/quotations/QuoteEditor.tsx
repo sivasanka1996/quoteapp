@@ -1,14 +1,14 @@
 import { useMemo, useState } from "react";
-import { calcQuote, type LineInput, type LineResult, type PriceMode } from "./calc/engine";
-import { formatINR, formatPct } from "./format";
+import { calcQuote, type LineInput, type LineResult, type PriceMode } from "../calc/engine";
+import { formatINR, formatPct } from "../format";
 import { CustomerView, type CustomerLine } from "./CustomerView";
-import { useCompanySettings } from "./useCompanySettings";
-import { useQuotes } from "./useQuotes";
-import { StatusPicker } from "./StatusBadge";
-import { type UILine, type Customer, type QuoteDoc, type QuoteStatus } from "./types";
-import { ImageReaderPanel } from "./ImageReader";
-import { type ReadItem } from "./readImage";
-import { VoiceReaderPanel, type VoiceItem } from "./VoiceReader";
+import { useCompanySettings } from "../shared/useCompanySettings";
+import { useQuotes } from "../shared/useQuotes";
+import { StatusPicker } from "../shared/StatusBadge";
+import { type UILine, type Customer, type QuoteDoc, type QuoteStatus } from "../types";
+import { ImageReaderPanel } from "../shared/ImageReader";
+import { type ReadItem } from "../readImage";
+import { VoiceReaderPanel, type VoiceItem } from "../shared/VoiceReader";
 import "./QuoteEditor.css";
 
 // ---- Helpers ----

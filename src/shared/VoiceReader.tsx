@@ -4,10 +4,10 @@ import {
   VOICE_LANG_KEY,
   type VoiceItem,
   type VoiceLang,
-} from "./voiceParse";
+} from "../voiceParse";
 import "./VoiceReader.css";
 
-export type { VoiceItem } from "./voiceParse";
+export type { VoiceItem } from "../voiceParse";
 
 interface Props {
   onAdd: (item: VoiceItem) => void;

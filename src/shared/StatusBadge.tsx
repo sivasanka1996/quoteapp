@@ -1,4 +1,4 @@
-import { QUOTE_STATUSES, STATUS_LABEL, type QuoteStatus } from "./types";
+import { QUOTE_STATUSES, STATUS_LABEL, type QuoteStatus } from "../types";
 import "./StatusBadge.css";
 
 export function StatusBadge({ status }: { status: QuoteStatus }) {

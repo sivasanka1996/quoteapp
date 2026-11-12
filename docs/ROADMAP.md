@@ -25,9 +25,21 @@ today, and splitting infrastructure now would be pure overhead. If the
 business ever needs to scale to multiple tenants, the modular code makes
 that a refactor, not a rewrite.
 
-No router library — navigation is a plain `Section` state in `AppRouter.tsx`
-(`"dashboard" | "pricing" | "quotations" | "billing" | "ideas"`), same
-dependency-free approach the app already used for its screen flow.
+No router library — `AppRouter.tsx` parses `window.location.pathname` into a
+`Route` union on load and on every `popstate`, and a `navigate()` helper
+pushes new paths via the plain History API. Real URLs per screen (`/`,
+`/ideas`, `/quotation`, `/quotation/customer/:id`, `/quotation/customer/:id/
+quote/:id`) — back/forward and refresh-to-same-screen work without a router
+dependency. Firebase Hosting already rewrites every path to `index.html`
+(`firebase.json`), so this needed no hosting config change.
+
+`src/` is organized by module, one folder each:
+`src/dashboard/`, `src/quotations/`, `src/ideas/` (and `src/pricing/`,
+`src/billing/` once those exist), plus `src/shared/` for code used by more
+than one module (`AppHeader`, `StatusBadge`, `CompanySettings`, `ImageReader`,
+`VoiceReader`, `useCustomers`, `useQuotes`, `useCompanySettings`). App-wide
+infrastructure (`AppRouter.tsx`, `types.ts`, `firebase.ts`, `format.ts`,
+`calc/`) stays at `src/` root.
 
 ## Current phase
 

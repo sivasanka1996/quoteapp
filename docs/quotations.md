@@ -12,17 +12,22 @@ accepted / declined); and switch to a customer-facing view that hides
 cost/profit, for printing or sharing as a PDF over WhatsApp.
 
 ## Key files
-- `src/HomeScreen.tsx` — customer search/add/list (entry point)
-- `src/CustomerScreen.tsx` — a customer's quote history, status filter
-- `src/QuoteEditor.tsx` — the editor: line rows, bottom-sheet line editor,
-  blanket discount panel, profit summary, save
-- `src/CustomerView.tsx` — the customer-facing document (print/share)
+- `src/quotations/HomeScreen.tsx` — customer search/add/list (entry point)
+- `src/quotations/CustomerScreen.tsx` — a customer's quote history, status
+  filter
+- `src/quotations/QuoteEditor.tsx` — the editor: line rows, bottom-sheet line
+  editor, blanket discount panel, profit summary, save
+- `src/quotations/CustomerView.tsx` — the customer-facing document
+  (print/share)
 - `src/calc/engine.ts` — pure pricing/profit/GST math, no UI, no network
-- `src/useQuotes.ts` — Firestore CRUD, `useQuotes(customerId)` +
+- `src/shared/useQuotes.ts` — Firestore CRUD, `useQuotes(customerId)` +
   `useAllQuotes()` for aggregate stats
-- `src/StatusBadge.tsx` — status pill + picker
-- `src/sharePdf.ts`, `src/ImageReader.tsx`, `src/VoiceReader.tsx` — shared
-  utilities also used elsewhere
+- `src/shared/StatusBadge.tsx` — status pill + picker
+- `src/sharePdf.ts`, `src/shared/ImageReader.tsx`, `src/shared/VoiceReader.tsx`
+  — shared utilities also used elsewhere
+- `src/AppRouter.tsx` — resolves `/quotation`, `/quotation/customer/:id`, and
+  `/quotation/customer/:id/quote/:id` into this flow's screens; see
+  [dashboard.md](dashboard.md)'s Key files for the routing mechanism
 
 ## Decisions made
 - Discounts compound (`list × (1−d1) × (1−d2)`), never add — see

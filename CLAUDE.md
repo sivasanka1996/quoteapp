@@ -14,6 +14,13 @@ full picture and current build status.
 planned, or why something was decided.** This file stays a short map; it
 does not duplicate what's in there.
 
+**After finishing any task (a feature, a fix, a refactor), update the
+relevant `docs/` file(s) in the same turn — not batched later.** At minimum:
+the module doc for whatever changed (status/what-it-does/key-files/
+decisions), `docs/ROADMAP.md`'s build-order table and current-phase line if
+build status moved, and `docs/DATA_MODEL.md`/`CONFIG.md` if a collection,
+field, or env var was added.
+
 - [docs/ROADMAP.md](docs/ROADMAP.md) — big picture, build order, current phase
 - [docs/DATA_MODEL.md](docs/DATA_MODEL.md) — every Firestore collection, whole app
 - [docs/CONFIG.md](docs/CONFIG.md) — every API key / secret / env var, where it lives
@@ -41,8 +48,10 @@ does not duplicate what's in there.
 
 React + Vite + TypeScript, Firebase Firestore, Firebase Hosting, GitHub
 Actions CI/CD, vite-plugin-pwa, Android APK via Gradle/TWA. No router
-library, no state-management library — plain `useState` throughout. Details
-and secrets map: [docs/CONFIG.md](docs/CONFIG.md), [docs/DEPLOY.md](docs/DEPLOY.md).
+library, no state-management library — `AppRouter.tsx` maps real browser
+URLs to screens via plain `useState` + the History API (see
+[docs/ROADMAP.md](docs/ROADMAP.md)). Details and secrets map:
+[docs/CONFIG.md](docs/CONFIG.md), [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ---
 
