@@ -4,6 +4,7 @@ import { HomeScreen } from "./quotations/HomeScreen";
 import { CustomerScreen } from "./quotations/CustomerScreen";
 import { QuoteEditor } from "./quotations/QuoteEditor";
 import { IdeaTracker } from "./ideas/IdeaTracker";
+import { PricingScreen } from "./pricing/PricingScreen";
 import { AppHeader } from "./shared/AppHeader";
 import { CompanySettingsPanel } from "./shared/CompanySettings";
 import { useCompanySettings } from "./shared/useCompanySettings";
@@ -19,6 +20,7 @@ import { type ReadItem } from "./readImage";
 type Route =
   | { name: "dashboard" }
   | { name: "ideas" }
+  | { name: "pricing" }
   | { name: "quotations-home" }
   | { name: "quotations-customer"; customerId: string }
   | { name: "quotations-quote-new"; customerId: string }
@@ -28,6 +30,8 @@ function parsePath(pathname: string): Route {
   const parts = pathname.split("/").filter(Boolean);
 
   if (parts[0] === "ideas") return { name: "ideas" };
+
+  if (parts[0] === "pricing") return { name: "pricing" };
 
   if (parts[0] === "quotation") {
     if (parts[1] === "customer" && parts[2]) {
@@ -52,6 +56,8 @@ function pathFor(route: Route): string {
       return "/";
     case "ideas":
       return "/ideas";
+    case "pricing":
+      return "/pricing";
     case "quotations-home":
       return "/quotation";
     case "quotations-customer":
@@ -127,11 +133,18 @@ export function AppRouter() {
       />
 
       {effectiveRoute.name === "dashboard" && (
-        <Dashboard onOpenQuotations={() => navigate({ name: "quotations-home" })} />
+        <Dashboard
+          onOpenQuotations={() => navigate({ name: "quotations-home" })}
+          onOpenPricing={() => navigate({ name: "pricing" })}
+        />
       )}
 
       {effectiveRoute.name === "ideas" && (
         <IdeaTracker onBack={() => navigate({ name: "dashboard" })} />
+      )}
+
+      {effectiveRoute.name === "pricing" && (
+        <PricingScreen onBack={() => navigate({ name: "dashboard" })} />
       )}
 
       {effectiveRoute.name === "quotations-home" && (

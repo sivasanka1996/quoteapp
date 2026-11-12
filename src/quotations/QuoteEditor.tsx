@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { calcQuote, type LineInput, type LineResult, type PriceMode } from "../calc/engine";
+import { calcQuote, type LineInput, type LineResult } from "../calc/engine";
+import { toPriceMode } from "../shared/priceMode";
 import { formatINR, formatPct } from "../format";
 import { CustomerView, type CustomerLine } from "./CustomerView";
 import { useCompanySettings } from "../shared/useCompanySettings";
@@ -21,21 +22,6 @@ function blankLine(): UILine {
     sellMode: "direct", sellList: "", sellDisc1: "", sellDisc2: "", sellRate: "",
     gstPct: "18",
   };
-}
-
-function buildDiscountExpr(d1: string, d2: string): string {
-  const v1 = parseFloat(d1), v2 = parseFloat(d2);
-  if (!v1 && !v2) return "0%";
-  if (v1 && v2) return `${v1}% + ${v2}%`;
-  return `${v1 || v2}%`;
-}
-
-function toPriceMode(
-  mode: "discount" | "direct", list: string,
-  disc1: string, disc2: string, rate: string
-): PriceMode {
-  if (mode === "direct") return { kind: "direct", rate: parseFloat(rate) || 0 };
-  return { kind: "discount", listPrice: parseFloat(list) || 0, discountExpr: buildDiscountExpr(disc1, disc2) };
 }
 
 function toLineInput(l: UILine): LineInput {
@@ -630,9 +616,9 @@ function LineEditorSheet({
 
 // ---- Price side ----
 
-interface SidePatch { mode?: "discount" | "direct"; list?: string; disc1?: string; disc2?: string; rate?: string; }
+export interface SidePatch { mode?: "discount" | "direct"; list?: string; disc1?: string; disc2?: string; rate?: string; }
 
-function PriceSide({ kind, label, mode, list, disc1, disc2, rate, resolved, total, onChange }: {
+export function PriceSide({ kind, label, mode, list, disc1, disc2, rate, resolved, total, onChange }: {
   kind: "cost" | "sell"; label: string; mode: "discount" | "direct";
   list: string; disc1: string; disc2: string; rate: string;
   resolved: number; total: number; onChange: (p: SidePatch) => void;

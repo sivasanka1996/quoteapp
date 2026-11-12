@@ -6,8 +6,9 @@ One app, four business-facing areas for Dad's electrical supply business,
 plus one dev-facing tool:
 
 - **Dashboard** — overview: stat tiles, tiles into the other sections.
-- **Pricing** — a persistent item price catalog, fed by photographing vendor
-  price lists (reuses the existing image-reading pipeline).
+- **Pricing** — a persistent vendor **cost** catalog, by item and brand, fed
+  by photographing vendor price lists (reuses the existing image-reading
+  pipeline). Sell pricing stays in Quotations' existing discount tool.
 - **Quotations** — today's existing feature, extended to pull prices from the
   Pricing catalog instead of typing them from scratch each time.
 - **Billing** — invoice generation, either standalone or converted from an
@@ -28,23 +29,25 @@ that a refactor, not a rewrite.
 No router library — `AppRouter.tsx` parses `window.location.pathname` into a
 `Route` union on load and on every `popstate`, and a `navigate()` helper
 pushes new paths via the plain History API. Real URLs per screen (`/`,
-`/ideas`, `/quotation`, `/quotation/customer/:id`, `/quotation/customer/:id/
-quote/:id`) — back/forward and refresh-to-same-screen work without a router
-dependency. Firebase Hosting already rewrites every path to `index.html`
-(`firebase.json`), so this needed no hosting config change.
+`/ideas`, `/pricing`, `/quotation`, `/quotation/customer/:id`,
+`/quotation/customer/:id/quote/:id`) — back/forward and
+refresh-to-same-screen work without a router dependency. Firebase Hosting
+already rewrites every path to `index.html` (`firebase.json`), so this
+needed no hosting config change.
 
 `src/` is organized by module, one folder each:
-`src/dashboard/`, `src/quotations/`, `src/ideas/` (and `src/pricing/`,
-`src/billing/` once those exist), plus `src/shared/` for code used by more
+`src/dashboard/`, `src/quotations/`, `src/ideas/`, `src/pricing/` (and
+`src/billing/` once that exists), plus `src/shared/` for code used by more
 than one module (`AppHeader`, `StatusBadge`, `CompanySettings`, `ImageReader`,
-`VoiceReader`, `useCustomers`, `useQuotes`, `useCompanySettings`). App-wide
-infrastructure (`AppRouter.tsx`, `types.ts`, `firebase.ts`, `format.ts`,
-`calc/`) stays at `src/` root.
+`VoiceReader`, `useCustomers`, `useQuotes`, `useCompanySettings`,
+`priceMode`). App-wide infrastructure (`AppRouter.tsx`, `types.ts`,
+`firebase.ts`, `format.ts`, `calc/`) stays at `src/` root.
 
 ## Current phase
 
-**Step 3 — Pricing.** Quotations, the Idea Tracker, and the Dashboard are
-built; Pricing/Billing are planned, not started.
+**Step 4 — Quotations ↔ Pricing autocomplete.** Quotations, the Idea
+Tracker, the Dashboard, and Pricing are built; Billing is planned, not
+started.
 
 ## Build order
 
@@ -53,7 +56,7 @@ built; Pricing/Billing are planned, not started.
 | 0 | Scaffold `docs/` (this folder) | Done |
 | 1 | Idea Tracker (`useIdeas.ts`, `IdeaTracker.tsx`) | Done |
 | 2 | Dashboard shell + `Section` routing in `AppRouter.tsx` | Done |
-| 3 | Pricing (`usePricing.ts`, `PricingScreen.tsx`, reuses `ImageReaderPanel`) | Not started |
+| 3 | Pricing (`usePricing.ts`, `PricingScreen.tsx`, reuses `ImageReaderPanel`) — cost-only catalog, by item+brand, no sell/no qty tiers | Done |
 | 4 | Quotations ↔ Pricing autocomplete in `QuoteEditor.tsx` | Not started |
 | 5 | Extract shared line-items editor out of `QuoteEditor.tsx` | Not started |
 | 6 | Billing (`useInvoices.ts`, `InvoiceEditor.tsx`, `BillingScreen.tsx`, Convert-to-Invoice) | Not started |

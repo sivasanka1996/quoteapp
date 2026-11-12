@@ -8,10 +8,11 @@ import "./Dashboard.css";
 
 interface Props {
   onOpenQuotations: () => void;
+  onOpenPricing: () => void;
 }
 
 /** App root: headline stat tiles, the APK banner, and tiles into each business section. */
-export function Dashboard({ onOpenQuotations }: Props) {
+export function Dashboard({ onOpenQuotations, onOpenPricing }: Props) {
   const { customers, loading: customersLoading } = useCustomers();
   const { quotes, loading: quotesLoading } = useAllQuotes();
 
@@ -90,9 +91,9 @@ export function Dashboard({ onOpenQuotations }: Props) {
         />
         <SectionTile
           title="Pricing"
-          desc="Item catalog — coming soon"
+          desc="Vendor cost catalog, by item and brand"
           icon="tag"
-          disabled
+          onClick={onOpenPricing}
         />
         <SectionTile
           title="Billing"

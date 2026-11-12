@@ -55,19 +55,23 @@ updatedAt: number
 Read/written by `src/useIdeas.ts`. No link to `customers`/`quotes` — this is
 the dev-facing build tracker, not a business collection.
 
-## Planned (not created yet — see [ROADMAP.md](ROADMAP.md) for build order)
-
-### `items/{id}` — Pricing catalog (Step 3)
+### `items/{id}` — Pricing catalog
 ```
 name: string
+brand: string                 // free text, e.g. "Finolex"; "" when no brand split
 unit: string                  // e.g. "per piece", "per meter" — optional
 costMode: "discount" | "direct"
 costList, costDisc1, costDisc2, costRate: string   // same shape as UILine's cost fields
-sellMode: "discount" | "direct"
-sellList, sellDisc1, sellDisc2, sellRate: string
 updatedAt: number
 source: "manual" | "image"    // how the item was entered
 ```
+Cost only — no sell fields. One row per item **per brand** (same item in two
+brands = two rows); no quantity-based price tiers. Sell price to the
+customer stays entirely in the quote tool (`QuoteEditor.tsx`'s existing
+discount chains), not in this collection. Read/written by
+`src/pricing/usePricing.ts`.
+
+## Planned (not created yet — see [ROADMAP.md](ROADMAP.md) for build order)
 
 ### `invoices/{id}` — Billing (Step 6)
 ```

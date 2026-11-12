@@ -108,3 +108,21 @@ export interface IdeaDoc {
 export function ideaService(idea: IdeaDoc): IdeaService {
   return idea.service ?? "general";
 }
+
+// A catalog entry in the Pricing module — see docs/pricing.md
+// Cost only: this is Dad's vendor price reference. Sell price to the
+// customer is decided per-quote via the existing discount tool in
+// QuoteEditor, not stored here.
+export interface ItemDoc {
+  id: string;
+  name: string;
+  brand: string; // free text — e.g. "Finolex"; "" when the item has no brand split
+  unit: string; // e.g. "per piece", "per meter" — optional, may be ""
+  costMode: "discount" | "direct";
+  costList: string;
+  costDisc1: string;
+  costDisc2: string;
+  costRate: string;
+  updatedAt: number;
+  source: "manual" | "image";
+}
