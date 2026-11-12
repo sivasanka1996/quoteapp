@@ -46,20 +46,25 @@ export function usePricing() {
   // Merge a scanned vendor price list into the catalog. A whole upload is
   // one brand — Dad declares it once before uploading rather than the
   // image reader trying to read a brand name off the document, which
-  // often isn't printed per line anyway. Match by exact name+brand
-  // (trimmed, case-insensitive) and update that item's cost rate, else
-  // insert a new catalog entry — see "Decisions made" in docs/pricing.md.
-  // The scanned "rate" is the vendor's cost, not a sell price — sell/
-  // discount stays in the quote tool.
+  // often isn't printed per line anyway. Match against the existing
+  // catalog for that brand: prefer Gemini's own `catalogId` (it saw the
+  // full brand-scoped catalog and the image together, so it can match by
+  // meaning through OCR noise/abbreviations), falling back to exact
+  // name+brand text if that's absent — see "Decisions made" in
+  // docs/pricing.md. Either way: match → update that row's cost rate, no
+  // match → insert a new catalog entry. The scanned "rate" is the
+  // vendor's cost, not a sell price — sell/discount stays in the quote
+  // tool.
   async function mergeFromImage(
-    scanned: { name: string; rate: number | null }[],
+    scanned: { name: string; rate: number | null; catalogId?: string | null }[],
     brand: string
   ) {
     const b = brand.trim();
     for (const it of scanned) {
       const name = it.name.trim();
       if (!name) continue;
-      const existing = items.find(
+      const byId = it.catalogId ? items.find((x) => x.id === it.catalogId) : undefined;
+      const existing = byId ?? items.find(
         (x) =>
           x.name.trim().toLowerCase() === name.toLowerCase() &&
           x.brand.trim().toLowerCase() === b.toLowerCase()

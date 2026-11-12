@@ -2,6 +2,8 @@ export interface ReadItem {
   name: string;
   qty: number;
   rate: number | null;
+  /** Matched Pricing catalog item id, set only when a `catalog` hint list was passed in. */
+  catalogId?: string | null;
 }
 
 export interface ReadResult {
@@ -10,11 +12,17 @@ export interface ReadResult {
   notes?: string;
 }
 
+/** A minimal catalog item, sent so Gemini can match extracted lines against it by meaning. */
+export interface CatalogHint {
+  id: string;
+  name: string;
+}
+
 // Point VITE_IMAGE_PROXY_URL at your deployed Cloudflare Worker.
 // Add to .env.local: VITE_IMAGE_PROXY_URL=https://your-worker.workers.dev
 const PROXY_URL = import.meta.env.VITE_IMAGE_PROXY_URL as string | undefined;
 
-export async function readImageItems(file: File): Promise<ReadResult> {
+export async function readImageItems(file: File, catalog?: CatalogHint[]): Promise<ReadResult> {
   if (!PROXY_URL) {
     throw new Error(
       "Image reader not configured — add VITE_IMAGE_PROXY_URL=https://... to .env.local"
@@ -26,7 +34,11 @@ export async function readImageItems(file: File): Promise<ReadResult> {
   const response = await fetch(PROXY_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ imageBase64, mimeType: file.type || "image/jpeg" }),
+    body: JSON.stringify({
+      imageBase64,
+      mimeType: file.type || "image/jpeg",
+      ...(catalog && catalog.length > 0 ? { catalog } : {}),
+    }),
   });
 
   if (!response.ok) {

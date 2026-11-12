@@ -43,6 +43,16 @@ function costPatchFrom(item: ItemDoc): Partial<UILine> {
   };
 }
 
+/**
+ * The catalog item for a scanned line: prefer Gemini's own `catalogId`
+ * match (it saw the full catalog and can handle OCR noise / abbreviations),
+ * falling back to a plain exact-name match if that's absent or stale.
+ */
+function catalogMatchFor(catalogItems: ItemDoc[], it: ReadItem): ItemDoc | null {
+  const byId = it.catalogId ? catalogItems.find((c) => c.id === it.catalogId) : undefined;
+  return byId ?? exactMatch(catalogItems, it.name);
+}
+
 /** "64.7% + 2%" for display, or "" when there is no discount */
 function discountLabel(d1: string, d2: string): string {
   const v1 = parseFloat(d1), v2 = parseFloat(d2);
@@ -105,6 +115,10 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
   const { settings: company } = useCompanySettings();
   const { saveQuote } = useQuotes(customer.id);
   const { items: catalogItems } = usePricing();
+  const catalogHints = useMemo(
+    () => catalogItems.map((c) => ({ id: c.id, name: c.name })),
+    [catalogItems]
+  );
 
   const { results, totals } = useMemo(() => {
     const { lines: results, totals } = calcQuote(lines.map(toLineInput));
@@ -162,7 +176,7 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
 
   function handleAddFromImage(readItems: ReadItem[]) {
     const newLines: UILine[] = readItems.map((it) => {
-      const match = exactMatch(catalogItems, it.name);
+      const match = catalogMatchFor(catalogItems, it);
       return {
         ...blankLine(),
         name: it.name,
@@ -436,7 +450,11 @@ export function QuoteEditor({ customer, existingQuote, initialItems, onBack }: P
       )}
 
       {showImageReader && (
-        <ImageReaderPanel onAdd={handleAddFromImage} onClose={() => setShowImageReader(false)} />
+        <ImageReaderPanel
+          onAdd={handleAddFromImage}
+          onClose={() => setShowImageReader(false)}
+          catalog={catalogHints}
+        />
       )}
       {showVoiceReader && (
         <VoiceReaderPanel onAdd={handleAddFromVoice} onClose={() => setShowVoiceReader(false)} />

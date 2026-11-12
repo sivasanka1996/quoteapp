@@ -30,6 +30,20 @@ CI via Gradle/TWA (Trusted Web Activity), wrapping the hosted web app. Uses
 Firebase Spark blocks hosting executable files, which is why the APK lives
 on GitHub Releases instead of Firebase Hosting.
 
+## Deploying Cloudflare Worker code changes
+
+`.github/workflows/deploy.yml` only deploys the web app (Firebase Hosting)
+on push — it does **not** touch the Cloudflare Worker. A code change to
+`cf-worker/image-reader.js` sits unused until deployed manually:
+
+```
+cd cf-worker
+npx wrangler deploy
+```
+
+Requires `wrangler login` (or a `CLOUDFLARE_API_TOKEN` env var) once per
+machine — check with `npx wrangler whoami`.
+
 ## Rotating the Gemini / Cloudflare Worker key
 
 ```

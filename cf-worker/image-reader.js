@@ -1,16 +1,37 @@
 // Cloudflare Worker — Gemini image-reading proxy for Quoteapp
 
-const PROMPT = `This image contains a list of electrical materials with quantities and prices. Focus only on the handwritten or printed document in the image — ignore any computer screens or backgrounds.
+// When the caller passes `catalog` (existing Pricing items), Gemini is asked
+// to also match each extracted line against it by meaning — not exact text —
+// so OCR noise, abbreviations, and unit-formatting differences (e.g. "sqmm"
+// vs "sq mm") still resolve to the right catalog row. See docs/pricing.md
+// and docs/quotations.md for how callers use the resulting `catalogId`.
+function buildPrompt(catalog) {
+  const hasCatalog = Array.isArray(catalog) && catalog.length > 0;
+
+  const schema = hasCatalog
+    ? `[{"name":"item description in English","qty":number,"rate":number or null,"catalogId":"id from the catalog list below, or null"}]`
+    : `[{"name":"item description in English","qty":number,"rate":number or null}]`;
+
+  const catalogField = hasCatalog
+    ? `\n- catalogId: if this item clearly matches one in the catalog list below, its id — match by meaning, not exact text (tolerate OCR mistakes, abbreviations, word order, spacing, unit formatting like "sqmm" vs "sq mm"); if nothing matches confidently, use null`
+    : "";
+
+  const catalogBlock = hasCatalog
+    ? `\n\nExisting catalog (id: name) — use these ids for catalogId matching:\n${catalog.map((c) => `${c.id}: ${c.name}`).join("\n")}`
+    : "";
+
+  return `This image contains a list of electrical materials with quantities and prices. Focus only on the handwritten or printed document in the image — ignore any computer screens or backgrounds.
 
 Understand the document and extract every line item. Return a JSON array only, no explanation:
 
-[{"name":"item description in English","qty":number,"rate":number or null}]
+${schema}
 
 - name: what the item is (wire size, MCB, socket, lug, pipe, fan, isolator, etc.)
 - qty: the quantity for that line item
-- rate: the unit price per item (NOT the line total — if a line shows both a smaller and larger number, the smaller one is usually the unit rate)
+- rate: the unit price per item (NOT the line total — if a line shows both a smaller and larger number, the smaller one is usually the unit rate)${catalogField}
 
-Extract ALL items from top to bottom. Return only the JSON array.`;
+Extract ALL items from top to bottom. Return only the JSON array.${catalogBlock}`;
+}
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -36,11 +57,12 @@ export default {
       return new Response("Method not allowed", { status: 405, headers: CORS });
     }
 
-    let imageBase64, mimeType;
+    let imageBase64, mimeType, catalog;
     try {
       const body = await request.json();
       imageBase64 = body.imageBase64;
       mimeType = body.mimeType || "image/jpeg";
+      catalog = Array.isArray(body.catalog) ? body.catalog : [];
     } catch {
       return json({ error: "Invalid request body" }, 400);
     }
@@ -57,7 +79,7 @@ export default {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             contents: [{ parts: [
-              { text: PROMPT },
+              { text: buildPrompt(catalog) },
               { inline_data: { mime_type: mimeType, data: imageBase64 } },
             ]}],
             generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },

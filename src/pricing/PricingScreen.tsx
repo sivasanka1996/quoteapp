@@ -70,8 +70,18 @@ export function PricingScreen({ onBack }: Props) {
     setEditingId(null);
   }
 
+  const uploadCatalogHints = useMemo(() => {
+    const b = uploadBrand.trim().toLowerCase();
+    return items
+      .filter((it) => it.brand.trim().toLowerCase() === b)
+      .map((it) => ({ id: it.id, name: it.name }));
+  }, [items, uploadBrand]);
+
   function handleAddFromImage(readItems: ReadItem[]) {
-    mergeFromImage(readItems.map((it) => ({ name: it.name, rate: it.rate })), uploadBrand);
+    mergeFromImage(
+      readItems.map((it) => ({ name: it.name, rate: it.rate, catalogId: it.catalogId ?? null })),
+      uploadBrand
+    );
   }
 
   function patchCost(p: SidePatch) {
@@ -270,7 +280,11 @@ export function PricingScreen({ onBack }: Props) {
       )}
 
       {showImageReader && (
-        <ImageReaderPanel onAdd={handleAddFromImage} onClose={() => setShowImageReader(false)} />
+        <ImageReaderPanel
+          onAdd={handleAddFromImage}
+          onClose={() => setShowImageReader(false)}
+          catalog={uploadCatalogHints}
+        />
       )}
     </div>
   );

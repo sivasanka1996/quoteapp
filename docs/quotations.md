@@ -51,12 +51,18 @@ also be matched against the Pricing catalog to pull in cost automatically
   (`costMode/costList/costDisc1/costDisc2/costRate`) straight from the
   catalog entry — same shape, direct copy. Sell side stays manual, as
   always; the catalog has no sell fields (see [pricing.md](pricing.md)).
-- **Catalog auto-fill for image/voice items:** when Dad scans a price list or
-  speaks items into a quote, each scanned item's cost is auto-filled the
-  same way *if* exactly one catalog item shares that exact name. If the
-  same name exists under two+ brands, it's left blank rather than guessing
-  which brand — Dad resolves it by hand via the editor's autocomplete, which
-  shows the brand per suggestion.
+- **Catalog auto-fill for image items is Gemini-matched, not exact-text:**
+  the full catalog (id+name) is sent to the image-reading worker alongside
+  the photo, and Gemini returns a `catalogId` per scanned line when it finds
+  a confident match *by meaning* — tolerant of OCR mistakes, abbreviations,
+  and formatting (`sqmm` vs `sq mm`). `catalogMatchFor()` in
+  `QuoteEditor.tsx` prefers that id, falling back to `exactMatch()` (plain
+  name equality) only when Gemini didn't return one. See
+  [pricing.md](pricing.md) for the worker-side prompt change
+  (`cf-worker/image-reader.js`'s `buildPrompt()`).
+- **Catalog auto-fill for voice items stays exact-name-only** — voice
+  parsing doesn't go through Gemini, so there's no semantic match available
+  there; `exactMatch()` is used directly, same as before.
 - Both paths reuse `PriceSide`'s cost fields verbatim; there's no separate
   "catalog price" concept — once picked, it's just the line's cost, editable
   afterward like anything typed by hand.

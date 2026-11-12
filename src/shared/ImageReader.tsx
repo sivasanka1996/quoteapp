@@ -1,10 +1,12 @@
 import { useRef, useState } from "react";
-import { readImageItems, type ReadItem } from "../readImage";
+import { readImageItems, type ReadItem, type CatalogHint } from "../readImage";
 import "./ImageReader.css";
 
 interface Props {
   onAdd: (items: ReadItem[]) => void;
   onClose: () => void;
+  /** Existing Pricing catalog items — when given, Gemini also matches each extracted line against them. */
+  catalog?: CatalogHint[];
 }
 
 type Stage = "idle" | "camera" | "reading" | "confirming" | "error";
@@ -16,7 +18,7 @@ interface ConfirmItem extends ReadItem {
 
 let _itemSeq = 0;
 
-export function ImageReaderPanel({ onAdd, onClose }: Props) {
+export function ImageReaderPanel({ onAdd, onClose, catalog }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -90,7 +92,7 @@ export function ImageReaderPanel({ onAdd, onClose }: Props) {
       const file = imageBlob instanceof File
         ? imageBlob
         : new File([imageBlob], "photo.jpg", { type: "image/jpeg" });
-      const result = await readImageItems(file);
+      const result = await readImageItems(file, catalog);
       setItems(result.items.map((it) => ({ ...it, _id: _itemSeq++, checked: true })));
       setNotes(result.notes ?? "");
       setStage("confirming");
