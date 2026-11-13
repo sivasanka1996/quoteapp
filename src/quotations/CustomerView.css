@@ -177,6 +177,15 @@
   color: #1a1a1a;
 }
 
+.cv-invoice-number {
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #5d6963;
+  margin: 0 0 6px;
+  text-transform: uppercase;
+}
+
 .cv-table {
   width: 100%;
   border-collapse: collapse;

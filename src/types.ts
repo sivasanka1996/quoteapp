@@ -109,6 +109,31 @@ export function ideaService(idea: IdeaDoc): IdeaService {
   return idea.service ?? "general";
 }
 
+// Where an invoice stands on payment — see docs/billing.md
+export type PaymentStatus = "unpaid" | "partial" | "paid";
+
+export const PAYMENT_STATUSES: PaymentStatus[] = ["unpaid", "partial", "paid"];
+
+export const PAYMENT_STATUS_LABEL: Record<PaymentStatus, string> = {
+  unpaid: "Unpaid",
+  partial: "Partial",
+  paid: "Paid",
+};
+
+export interface InvoiceDoc {
+  id: string;
+  customerId: string;
+  customerName: string;
+  name: string; // invoice label/description — mirrors QuoteDoc.name
+  invoiceNumber: string; // "INV-YYYYMMDD-NN" — placeholder scheme, see docs/billing.md
+  quoteId?: string; // set when this invoice was converted from a quote
+  lines: UILine[];
+  totalSale: number; // denormalized for list display
+  paymentStatus: PaymentStatus;
+  createdAt: number;
+  updatedAt: number;
+}
+
 // A catalog entry in the Pricing module — see docs/pricing.md
 // Cost only: this is Dad's vendor price reference. Sell price to the
 // customer is decided per-quote via the existing discount tool in

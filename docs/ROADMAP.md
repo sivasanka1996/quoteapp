@@ -30,27 +30,32 @@ No router library — `AppRouter.tsx` parses `window.location.pathname` into a
 `Route` union on load and on every `popstate`, and a `navigate()` helper
 pushes new paths via the plain History API. Real URLs per screen (`/`,
 `/ideas`, `/pricing`, `/quotation`, `/quotation/customer/:id`,
-`/quotation/customer/:id/quote/:id`) — back/forward and
-refresh-to-same-screen work without a router dependency. Firebase Hosting
-already rewrites every path to `index.html` (`firebase.json`), so this
-needed no hosting config change.
+`/quotation/customer/:id/quote/:id`, `/billing`,
+`/billing/customer/:id`, `/billing/customer/:id/invoice/:id`) —
+back/forward and refresh-to-same-screen work without a router dependency.
+Firebase Hosting already rewrites every path to `index.html`
+(`firebase.json`), so this needed no hosting config change.
 
 `src/` is organized by module, one folder each:
-`src/dashboard/`, `src/quotations/`, `src/ideas/`, `src/pricing/` (and
-`src/billing/` once that exists), plus `src/shared/` for code used by more
-than one module (`AppHeader`, `StatusBadge`, `CompanySettings`, `ImageReader`,
-`VoiceReader`, `useCustomers`, `useQuotes`, `useCompanySettings`,
-`priceMode`, `matchCatalog`). App-wide infrastructure (`AppRouter.tsx`,
-`types.ts`, `firebase.ts`, `format.ts`, `calc/`) stays at `src/` root. Note
-`src/quotations/QuoteEditor.tsx` imports `usePricing` from `src/pricing/` —
-a deliberate cross-module dependency, since Quotations consuming the
-Pricing catalog is the point of Step 4.
+`src/dashboard/`, `src/quotations/`, `src/ideas/`, `src/pricing/`,
+`src/billing/`, plus `src/shared/` for code used by more than one module
+(`AppHeader`, `StatusBadge`, `CompanySettings`, `ImageReader`,
+`VoiceReader`, `useCustomers`, `useQuotes`, `useInvoices`,
+`useCompanySettings`, `priceMode`, `matchCatalog`, `lineHelpers`,
+`LineItemsEditor`). App-wide infrastructure (`AppRouter.tsx`, `types.ts`,
+`firebase.ts`, `format.ts`, `calc/`) stays at `src/` root. Note
+`src/quotations/QuoteEditor.tsx` and `src/billing/InvoiceEditor.tsx` both
+import `usePricing` from `src/pricing/` — a deliberate cross-module
+dependency, since both consuming the Pricing catalog is the point of
+Step 4.
 
 ## Current phase
 
-**Step 5 — extract shared line-items editor.** Quotations, the Idea
-Tracker, the Dashboard, and Pricing are built, and Quotations now pulls cost
-from the Pricing catalog (Step 4); Billing is planned, not started.
+**All six build-order steps are done.** Dashboard, Pricing, Quotations
+(with catalog autocomplete), and Billing are all built and wired together;
+the Idea Tracker has tracked the whole build. What's next is Dad actually
+using it and the pre-handover checklist in `CLAUDE.md` (auth, locking
+Firestore rules, etc.) — not a new module.
 
 ## Build order
 
@@ -61,13 +66,18 @@ from the Pricing catalog (Step 4); Billing is planned, not started.
 | 2 | Dashboard shell + `Section` routing in `AppRouter.tsx` | Done |
 | 3 | Pricing (`usePricing.ts`, `PricingScreen.tsx`, reuses `ImageReaderPanel`) — cost-only catalog, by item+brand, no sell/no qty tiers | Done |
 | 4 | Quotations ↔ Pricing autocomplete in `QuoteEditor.tsx` — manual-typing dropdown + image/voice auto-fill via `matchCatalog.ts` | Done |
-| 5 | Extract shared line-items editor out of `QuoteEditor.tsx` | Not started |
-| 6 | Billing (`useInvoices.ts`, `InvoiceEditor.tsx`, `BillingScreen.tsx`, Convert-to-Invoice) | Not started |
+| 5 | Extract shared line-items editor out of `QuoteEditor.tsx` — `LineItemsEditor.tsx` + `lineHelpers.ts`, no behavior change | Done |
+| 6 | Billing (`useInvoices.ts`, `InvoiceEditor.tsx`, `BillingHomeScreen.tsx`, `BillingCustomerScreen.tsx`, Convert-to-Invoice) | Done |
 
-Each step ships and is checked (`npm test`, `npm run lint`, manual pass)
-before the next starts. Each step's doc update happens in the same commit as
-its code — this table's Status column and each module doc are kept current
-as part of the work, not batched later.
+Each step ships and is checked (`npm run lint`, `npm run build` i.e.
+`tsc -b`, manual pass) before the next starts. `npm test` is run too, but
+every test file currently fails with the same pre-existing
+vitest/environment error (`Cannot read properties of undefined (reading
+'config')`) — reproduced on unmodified, already-committed code via
+`git stash`, so it's unrelated to any of these six steps and still unfixed.
+Each step's doc update happens in the same commit as its code — this
+table's Status column and each module doc are kept current as part of the
+work, not batched later.
 
 ## Docs index
 

@@ -53,6 +53,14 @@
   --idea-built: var(--st-accepted);
   --idea-built-bg: var(--st-accepted-bg);
 
+  /* --- Payment status (Billing) --- */
+  --pay-unpaid: var(--st-declined);
+  --pay-unpaid-bg: var(--st-declined-bg);
+  --pay-partial: var(--idea-building);
+  --pay-partial-bg: var(--idea-building-bg);
+  --pay-paid: var(--st-accepted);
+  --pay-paid-bg: var(--st-accepted-bg);
+
   /* --- Type scale --- */
   --fs-xs: 0.72rem;
   --fs-sm: 0.82rem;

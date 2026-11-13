@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { quoteStatus } from "../types";
 import { useCustomers } from "../shared/useCustomers";
 import { useAllQuotes } from "../shared/useQuotes";
+import { useAllInvoices } from "../shared/useInvoices";
 import { formatINRShort } from "../format";
 import { APK_URL, APP_VERSION, isInstalledApp } from "../appInfo";
 import "./Dashboard.css";
@@ -9,12 +10,14 @@ import "./Dashboard.css";
 interface Props {
   onOpenQuotations: () => void;
   onOpenPricing: () => void;
+  onOpenBilling: () => void;
 }
 
 /** App root: headline stat tiles, the APK banner, and tiles into each business section. */
-export function Dashboard({ onOpenQuotations, onOpenPricing }: Props) {
+export function Dashboard({ onOpenQuotations, onOpenPricing, onOpenBilling }: Props) {
   const { customers, loading: customersLoading } = useCustomers();
   const { quotes, loading: quotesLoading } = useAllQuotes();
+  const { invoices, loading: invoicesLoading } = useAllInvoices();
 
   // The four headline figures — recomputed whenever quotes or the customer count changes
   const stats = useMemo(() => {
@@ -40,6 +43,13 @@ export function Dashboard({ onOpenQuotations, onOpenPricing }: Props) {
     return { customers: customers.length, thisMonth, pending, acceptedValue };
   }, [quotes, customers.length]);
 
+  // Unpaid total across all invoices — the one Billing figure that belongs on the
+  // overview (everything else about an invoice is per-customer detail).
+  const unpaidTotal = useMemo(
+    () => invoices.reduce((s, inv) => s + (inv.paymentStatus !== "paid" ? inv.totalSale || 0 : 0), 0),
+    [invoices]
+  );
+
   return (
     <div className="db">
       <div className="db-stats">
@@ -61,6 +71,11 @@ export function Dashboard({ onOpenQuotations, onOpenPricing }: Props) {
         <StatTile
           label="Accepted Value"
           value={quotesLoading ? "—" : "₹" + formatINRShort(stats.acceptedValue)}
+          icon="rupee"
+        />
+        <StatTile
+          label="Unpaid Invoices"
+          value={invoicesLoading ? "—" : "₹" + formatINRShort(unpaidTotal)}
           icon="rupee"
         />
       </div>
@@ -97,9 +112,9 @@ export function Dashboard({ onOpenQuotations, onOpenPricing }: Props) {
         />
         <SectionTile
           title="Billing"
-          desc="Invoices — coming soon"
+          desc="Invoices — standalone or converted from a quote"
           icon="rupee"
-          disabled
+          onClick={onOpenBilling}
         />
       </div>
 

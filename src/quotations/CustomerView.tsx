@@ -25,6 +25,10 @@ export interface CustomerViewProps {
   onClose: () => void;
   customerName?: string;
   quoteName?: string;
+  /** "Quotation" (default) or "Invoice" — see docs/billing.md. */
+  documentTitle?: string;
+  /** Rendered under the title, invoices only (e.g. "INV-20261113-01"). */
+  invoiceNumber?: string;
   /** Start the share sheet as soon as the document is on screen. */
   autoShare?: boolean;
   onShareHandled?: () => void;
@@ -50,7 +54,8 @@ function discountLabel(d1: string, d2: string): string {
 
 export function CustomerView({
   lines, totals, company, onClose,
-  customerName = "", quoteName = "", autoShare = false, onShareHandled,
+  customerName = "", quoteName = "", documentTitle = "Quotation", invoiceNumber,
+  autoShare = false, onShareHandled,
 }: CustomerViewProps) {
   const [visible, setVisible] = useState<Set<ColKey>>(
     new Set(["qty", "listPrice", "discount", "rate", "amount"])
@@ -75,8 +80,8 @@ export function CustomerView({
     try {
       const outcome = await shareQuotePdf(docRef.current, {
         filename: pdfFilename(customerName, quoteName),
-        title: quoteName || "Quotation",
-        text: company.name ? `Quotation from ${company.name}` : undefined,
+        title: quoteName || documentTitle,
+        text: company.name ? `${documentTitle} from ${company.name}` : undefined,
       });
       if (outcome === "downloaded") {
         setShareMsg("PDF saved to your downloads — attach it in WhatsApp.");
@@ -155,7 +160,8 @@ export function CustomerView({
 
           <div className="cv-divider" />
 
-          <h1 className="cv-title">Quotation</h1>
+          {invoiceNumber && <p className="cv-invoice-number">{invoiceNumber}</p>}
+          <h1 className="cv-title">{documentTitle}</h1>
 
           <table className="cv-table">
             <thead>

@@ -21,6 +21,8 @@ interface Props {
   onNewQuote: () => void;
   onNewQuoteFromItems: (items: ReadItem[]) => void;
   onOpenQuote: (quote: QuoteDoc) => void;
+  /** Accepted quotes only — hands the quote's lines off to a new Invoice. See docs/billing.md. */
+  onConvertToInvoice: (quote: QuoteDoc) => void;
 }
 
 type Filter = "all" | QuoteStatus;
@@ -31,6 +33,7 @@ export function CustomerScreen({
   onNewQuote,
   onNewQuoteFromItems,
   onOpenQuote,
+  onConvertToInvoice,
 }: Props) {
   const { quotes, loading, deleteQuote } = useQuotes(customer.id);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -170,13 +173,24 @@ export function CustomerScreen({
                   </button>
                 </div>
               ) : (
-                <button
-                  className="cs-del-btn"
-                  onClick={() => setDeleteConfirm(q.id)}
-                  aria-label={`Delete quote ${q.name || "Untitled"}`}
-                >
-                  <TrashIcon />
-                </button>
+                <>
+                  {quoteStatus(q) === "accepted" && (
+                    <button
+                      className="cs-convert-btn"
+                      onClick={() => onConvertToInvoice(q)}
+                      aria-label={`Convert quote ${q.name || "Untitled"} to invoice`}
+                    >
+                      → Invoice
+                    </button>
+                  )}
+                  <button
+                    className="cs-del-btn"
+                    onClick={() => setDeleteConfirm(q.id)}
+                    aria-label={`Delete quote ${q.name || "Untitled"}`}
+                  >
+                    <TrashIcon />
+                  </button>
+                </>
               )}
             </div>
           ))}

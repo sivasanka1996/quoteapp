@@ -4,7 +4,7 @@ import { formatINR } from "../format";
 import { type ItemDoc } from "../types";
 import { usePricing, blankItem } from "./usePricing";
 import { toPriceMode } from "../shared/priceMode";
-import { PriceSide, type SidePatch } from "../quotations/QuoteEditor";
+import { PriceSide, type SidePatch } from "../shared/LineItemsEditor";
 import { ImageReaderPanel } from "../shared/ImageReader";
 import { type ReadItem } from "../readImage";
 import "./PricingScreen.css";

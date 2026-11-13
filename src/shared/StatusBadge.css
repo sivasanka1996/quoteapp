@@ -24,6 +24,19 @@
   background: var(--st-declined-bg);
 }
 
+.sb-pay-unpaid {
+  color: var(--pay-unpaid);
+  background: var(--pay-unpaid-bg);
+}
+.sb-pay-partial {
+  color: var(--pay-partial);
+  background: var(--pay-partial-bg);
+}
+.sb-pay-paid {
+  color: var(--pay-paid);
+  background: var(--pay-paid-bg);
+}
+
 /* --- Picker --- */
 
 .sp {
@@ -69,4 +82,20 @@
   color: var(--st-declined);
   background: var(--st-declined-bg);
   border-color: var(--st-declined);
+}
+
+.sp-btn.is-active.sp-pay-unpaid {
+  color: var(--pay-unpaid);
+  background: var(--pay-unpaid-bg);
+  border-color: var(--pay-unpaid);
+}
+.sp-btn.is-active.sp-pay-partial {
+  color: var(--pay-partial);
+  background: var(--pay-partial-bg);
+  border-color: var(--pay-partial);
+}
+.sp-btn.is-active.sp-pay-paid {
+  color: var(--pay-paid);
+  background: var(--pay-paid-bg);
+  border-color: var(--pay-paid);
 }

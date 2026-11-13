@@ -20,7 +20,8 @@ createdAt: timestamp          // written via serverTimestamp() — NOT a plain
                                // nothing reads/displays it today so this is
                                // latent, not yet a bug anyone's hit
 ```
-Read/written by `src/useCustomers.ts`.
+Read/written by `src/shared/useCustomers.ts`. Shared by Quotations and
+Billing — one customer directory for the whole business.
 
 ### `quotes/{id}`
 ```
@@ -38,8 +39,8 @@ status?: "draft" | "sent" | "accepted" | "declined"
 createdAt: number             // Date.now(), not serverTimestamp()
 updatedAt: number
 ```
-Read/written by `src/useQuotes.ts` (`useQuotes(customerId)` + `useAllQuotes()`
-for the home/dashboard stat tiles).
+Read/written by `src/shared/useQuotes.ts` (`useQuotes(customerId)` +
+`useAllQuotes()` for the home/dashboard stat tiles).
 
 ### `ideas/{id}`
 ```
@@ -52,8 +53,8 @@ service?: "dashboard" | "pricing" | "quotations" | "billing" | "general"
 createdAt: number             // Date.now(), not serverTimestamp()
 updatedAt: number
 ```
-Read/written by `src/useIdeas.ts`. No link to `customers`/`quotes` — this is
-the dev-facing build tracker, not a business collection.
+Read/written by `src/ideas/useIdeas.ts`. No link to `customers`/`quotes` —
+this is the dev-facing build tracker, not a business collection.
 
 ### `items/{id}` — Pricing catalog
 ```
@@ -71,22 +72,31 @@ customer stays entirely in the quote tool (`QuoteEditor.tsx`'s existing
 discount chains), not in this collection. Read/written by
 `src/pricing/usePricing.ts`.
 
-## Planned (not created yet — see [ROADMAP.md](ROADMAP.md) for build order)
-
 ### `invoices/{id}` — Billing (Step 6)
 ```
-customerId, customerName: string
-invoiceNumber: string          // placeholder scheme — see CONFIG.md / billing.md
-quoteId?: string                // set when converted from a quote
-lines: UILine[]                 // identical shape to quotes
-totalSale: number
+customerId: string
+customerName: string          // denormalized from customers/{id}.name
+name: string                  // invoice label, user-entered — mirrors quotes.name
+invoiceNumber: string         // "INV-YYYYMMDD-NN" — placeholder scheme,
+                               // NN = invoices already created today, read
+                               // fresh at save time; see billing.md
+quoteId?: string               // set when converted from an accepted quote;
+                               // otherwise absent (standalone invoice)
+lines: UILine[]                // identical shape to quotes.lines
+totalSale: number              // denormalized, for list display
 paymentStatus: "unpaid" | "partial" | "paid"
-createdAt, updatedAt: number
+createdAt: number              // Date.now(), not serverTimestamp()
+updatedAt: number
 ```
+Read/written by `src/shared/useInvoices.ts` (`useInvoices(customerId)` +
+`useAllInvoices()` for the Billing home screen and the Dashboard's
+"Unpaid Invoices" stat). No structural link back to the quote it was
+converted from beyond the stored `quoteId` — the quote itself is never
+mutated by a conversion.
 
 ## Shared types
 
-`UILine` (the per-line shape used by both `quotes.lines` and the planned
+`UILine` (the per-line shape used by both `quotes.lines` and
 `invoices.lines`) lives in `src/types.ts`. Every numeric field is a `string`
 — empty stays empty instead of becoming `"0"`; the calc engine
 (`src/calc/engine.ts`) does the `parseFloat(...) || 0` at its boundary, not
