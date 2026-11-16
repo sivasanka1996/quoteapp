@@ -92,9 +92,9 @@ or px spacing. Money uses `.tnum` for tabular numerals. Touch targets are
 - Discounts compound (never additive) — see [docs/BUSINESS.md](docs/BUSINESS.md)
 - Customer-facing documents hide cost/profit
 - Everything free — Firebase Spark plan, no Blaze — **except** the AI
-  Feedback Bot, a deliberate, noted exception that spends a paid
-  `ANTHROPIC_API_KEY` per feedback item; see
-  [docs/feedbackbot.md](docs/feedbackbot.md)
+  Feedback Bot, a deliberate, noted exception that runs against Siva's paid
+  Claude Pro subscription (via `CLAUDE_CODE_OAUTH_TOKEN`, not a metered API
+  key) per feedback item; see [docs/feedbackbot.md](docs/feedbackbot.md)
 - APK hosted on GitHub Releases, not Firebase (Spark blocks executables)
 - Idea Tracker, the AI Feedback Bot's `feedback` collection, and all current
   Firestore collections are open (`allow read, write: if true`) until the

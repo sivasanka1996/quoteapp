@@ -56,11 +56,14 @@ explicit choice (see below), not an oversight.
   true`. Siva's own words: "everything is public for now, the other things
   can change later" — revisit alongside the handover auth work in
   `CLAUDE.md`.
-- **Breaks the "everything free" lock.** `CLAUDE.md`'s locked decisions said
-  Spark-plan-only, no paid services. This feature needs a paid
-  `ANTHROPIC_API_KEY` (Siva already has one) — GitHub Actions minutes stay
-  free (public repo), but each feedback item now costs real API spend. Noted
-  as an explicit exception in `CLAUDE.md`, not a silent break of the rule.
+- **Softly breaks the "everything free" lock.** `CLAUDE.md`'s locked
+  decisions said Spark-plan-only, no paid services. This feature
+  authenticates via `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`),
+  which runs against Siva's existing **Claude Pro subscription** — not a
+  separate metered `ANTHROPIC_API_KEY`. GitHub Actions minutes stay free
+  (public repo) too. So there's no new per-call bill, but it does share Pro
+  usage limits with Siva's own Claude Code sessions. Noted as an explicit
+  exception in `CLAUDE.md`, not a silent break of the rule.
 - **Poll a Firestore collection, not a webhook.** Spark plan has no Cloud
   Functions, so there's no Firestore-trigger option. A `schedule`-triggered
   GitHub Actions workflow polling the public REST API is the free, no-new-
@@ -96,8 +99,8 @@ explicit choice (see below), not an oversight.
 
 ## Open questions / not yet decided
 - No rate limiting — a burst of feedback submissions (accidental or not)
-  queues up and each one costs a real Claude API run; worth a cap if this
-  turns out to matter.
+  queues up and each one runs against the same Pro usage limits Siva's own
+  Claude Code sessions share; worth a cap if this turns out to matter.
 - No visible audit trail beyond each `feedback` doc's own `result`/
   `commitSha` fields and the Actions run log — fine for now, revisit if this
   needs a proper history view.
