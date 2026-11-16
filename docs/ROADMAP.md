@@ -53,9 +53,13 @@ Step 4.
 
 **All six build-order steps are done.** Dashboard, Pricing, Quotations
 (with catalog autocomplete), and Billing are all built and wired together;
-the Idea Tracker has tracked the whole build. What's next is Dad actually
-using it and the pre-handover checklist in `CLAUDE.md` (auth, locking
-Firestore rules, etc.) — not a new module.
+the Idea Tracker has tracked the whole build. On top of that, an **AI
+Feedback Bot** has been added (outside the original five-area plan): a
+floating in-app button writes feedback to Firestore, and a GitHub Actions
+workflow runs Claude Code to fix it and push straight to `main`,
+fully automatically — see [feedbackbot.md](feedbackbot.md). What's next is
+Dad actually using it and the pre-handover checklist in `CLAUDE.md` (auth,
+locking Firestore rules, etc.) — not a new module.
 
 ## Build order
 
@@ -90,3 +94,4 @@ work, not batched later.
 - [quotations.md](quotations.md)
 - [billing.md](billing.md)
 - [ideas.md](ideas.md)
+- [feedbackbot.md](feedbackbot.md)

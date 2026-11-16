@@ -94,6 +94,21 @@ Read/written by `src/shared/useInvoices.ts` (`useInvoices(customerId)` +
 converted from beyond the stored `quoteId` — the quote itself is never
 mutated by a conversion.
 
+### `feedback/{id}` — AI Feedback Bot
+```
+text: string
+status: "pending" | "in_progress" | "applied" | "failed"
+page: string                  // pathname the feedback was submitted from
+createdAt: number             // Date.now()
+updatedAt: number
+result?: string               // short summary the agent writes back
+commitSha?: string            // set when status is "applied"
+```
+Read/written by `src/shared/useFeedback.ts` from the browser (add only), and
+by `scripts/ai-feedback/*.mjs` + the AI feedback agent itself from
+`.github/workflows/ai-feedback.yml` (claim/finalize). See
+[feedbackbot.md](feedbackbot.md).
+
 ## Shared types
 
 `UILine` (the per-line shape used by both `quotes.lines` and

@@ -134,6 +134,27 @@ export interface InvoiceDoc {
   updatedAt: number;
 }
 
+// Feedback submitted through the in-app AI Feedback Bot — see docs/feedbackbot.md
+export type FeedbackStatus = "pending" | "in_progress" | "applied" | "failed";
+
+export const FEEDBACK_STATUS_LABEL: Record<FeedbackStatus, string> = {
+  pending: "Waiting",
+  in_progress: "Working on it",
+  applied: "Fixed & live",
+  failed: "Couldn't fix",
+};
+
+export interface FeedbackDoc {
+  id: string;
+  text: string;
+  status: FeedbackStatus;
+  page: string; // pathname the feedback was submitted from — context for the agent
+  createdAt: number;
+  updatedAt: number;
+  result?: string; // short summary the agent writes back — what it did, or why it couldn't
+  commitSha?: string;
+}
+
 // A catalog entry in the Pricing module — see docs/pricing.md
 // Cost only: this is Dad's vendor price reference. Sell price to the
 // customer is decided per-quote via the existing discount tool in

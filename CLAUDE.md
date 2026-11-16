@@ -26,7 +26,7 @@ field, or env var was added.
 - [docs/CONFIG.md](docs/CONFIG.md) — every API key / secret / env var, where it lives
 - [docs/BUSINESS.md](docs/BUSINESS.md) — Dad's business domain, profit model, GST, discount math
 - [docs/DEPLOY.md](docs/DEPLOY.md) — release, APK build, key rotation, rollback
-- [docs/dashboard.md](docs/dashboard.md) / [pricing.md](docs/pricing.md) / [quotations.md](docs/quotations.md) / [billing.md](docs/billing.md) / [ideas.md](docs/ideas.md) — one file per module: status, what it does, key files, decisions, open questions
+- [docs/dashboard.md](docs/dashboard.md) / [pricing.md](docs/pricing.md) / [quotations.md](docs/quotations.md) / [billing.md](docs/billing.md) / [ideas.md](docs/ideas.md) / [feedbackbot.md](docs/feedbackbot.md) — one file per module: status, what it does, key files, decisions, open questions
 
 ---
 
@@ -91,10 +91,17 @@ or px spacing. Money uses `.tnum` for tabular numerals. Touch targets are
 - GST default 18%, editable per line, pass-through only — never profit
 - Discounts compound (never additive) — see [docs/BUSINESS.md](docs/BUSINESS.md)
 - Customer-facing documents hide cost/profit
-- Everything free — Firebase Spark plan, no Blaze
+- Everything free — Firebase Spark plan, no Blaze — **except** the AI
+  Feedback Bot, a deliberate, noted exception that spends a paid
+  `ANTHROPIC_API_KEY` per feedback item; see
+  [docs/feedbackbot.md](docs/feedbackbot.md)
 - APK hosted on GitHub Releases, not Firebase (Spark blocks executables)
-- Idea Tracker and all current Firestore collections are open
-  (`allow read, write: if true`) until the pre-handover auth work below
+- Idea Tracker, the AI Feedback Bot's `feedback` collection, and all current
+  Firestore collections are open (`allow read, write: if true`) until the
+  pre-handover auth work below
+- The AI Feedback Bot pushes straight to `main` with no human review —
+  Siva's explicit call, not an oversight; see
+  [docs/feedbackbot.md](docs/feedbackbot.md)'s "Decisions made"
 
 ---
 

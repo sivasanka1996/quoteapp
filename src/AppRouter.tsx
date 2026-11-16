@@ -9,6 +9,7 @@ import { BillingHomeScreen } from "./billing/BillingHomeScreen";
 import { BillingCustomerScreen } from "./billing/BillingCustomerScreen";
 import { InvoiceEditor } from "./billing/InvoiceEditor";
 import { AppHeader } from "./shared/AppHeader";
+import { FeedbackBot } from "./shared/FeedbackBot";
 import { CompanySettingsPanel } from "./shared/CompanySettings";
 import { useCompanySettings } from "./shared/useCompanySettings";
 import { useCustomers } from "./shared/useCustomers";
@@ -305,6 +306,8 @@ export function AppRouter() {
           onClose={() => setShowSettings(false)}
         />
       )}
+
+      <FeedbackBot />
     </>
   );
 }

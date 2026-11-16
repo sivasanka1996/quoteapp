@@ -48,6 +48,22 @@ npx wrangler secret put GEMINI_API_KEY
 **Read by:** `.github/workflows/deploy.yml`'s deploy step, to run
 `firebase-tools deploy --token "$FIREBASE_TOKEN"`.
 
+## `ANTHROPIC_API_KEY`
+
+**What:** a paid Claude API key, used to run Claude Code autonomously in CI.
+**Breaks the "everything free" lock in `CLAUDE.md`** — this is a deliberate,
+noted exception for the AI Feedback Bot, not every feature; see
+[feedbackbot.md](feedbackbot.md).
+**Stored as:** a GitHub Actions repo secret (Settings → Secrets → Actions).
+Not set up automatically — add it by hand in the repo's GitHub settings;
+Siva already holds the key.
+**Read by:** `.github/workflows/ai-feedback.yml`, passed to
+`anthropics/claude-code-action@v1` as its `anthropic_api_key` input.
+**Also requires:** the [Claude GitHub App](https://github.com/apps/claude)
+installed on this repo (Settings → GitHub Apps) with Contents/Issues/Pull
+requests write access — a one-time manual step, not something a workflow
+file can do for itself.
+
 ## Summary table
 
 | Secret / var | Lives in | Read by |
@@ -56,3 +72,4 @@ npx wrangler secret put GEMINI_API_KEY
 | `VITE_IMAGE_PROXY_URL` | `deploy.yml` (prod) / `.env.local` (dev, not committed) | `src/readImage.ts` |
 | `GEMINI_API_KEY` | Cloudflare Worker secret | `cf-worker/image-reader.js` |
 | `FIREBASE_TOKEN` | GitHub Actions secret | `.github/workflows/deploy.yml` |
+| `ANTHROPIC_API_KEY` | GitHub Actions secret | `.github/workflows/ai-feedback.yml` |

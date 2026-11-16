@@ -16,6 +16,9 @@ dist-ssr
 .firebase/
 firebase-debug.log
 
+# AI feedback bot scratch file (see scripts/ai-feedback, docs/feedbackbot.md)
+/ai-feedback/
+
 # Keystore files — never commit these
 *.jks
 *.b64
